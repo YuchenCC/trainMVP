@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { errors } from '../errors/index.js';
-import { Role, JwtPayload } from '@release-train/shared';
+import { Role, Operation, PERMISSION_MATRIX, JwtPayload } from '@release-train/shared';
 
 // ========== JWT认证中间件 ==========
 // 校验请求中的JWT Token，将用户信息挂载到 request.user
@@ -13,9 +13,10 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
   }
 }
 
-// ========== RBAC权限中间件工厂 ==========
-// 返回一个中间件函数，校验当前用户是否拥有指定角色
-export function rbacMiddleware(...allowedRoles: Role[]) {
+// ========== RBAC权限中间件工厂（基于操作权限） ==========
+// 传入 Operation 枚举值，自动从 PERMISSION_MATRIX 查询允许的角色
+// 推荐使用此方式，权限集中管理在 shared/constants 中
+export function rbacMiddleware(operation: Operation) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const user = request.user as JwtPayload | undefined;
 
@@ -28,8 +29,29 @@ export function rbacMiddleware(...allowedRoles: Role[]) {
       return;
     }
 
-    // 服务端二次校验角色权限（不依赖前端按钮控制）
-    if (!allowedRoles.includes(user.role)) {
+    // 从权限矩阵查询该操作允许的角色
+    const allowedRoles = PERMISSION_MATRIX[operation];
+    if (!allowedRoles || !allowedRoles.includes(user.role as Role)) {
+      throw errors.forbidden();
+    }
+  };
+}
+
+// ========== RBAC权限中间件工厂（基于角色白名单，兼容旧用法） ==========
+// 直接传入角色列表，适用于简单的角色校验场景
+export function rbacRolesMiddleware(...allowedRoles: Role[]) {
+  return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const user = request.user as JwtPayload | undefined;
+
+    if (!user) {
+      throw errors.unauthorized();
+    }
+
+    if (user.role === Role.SUPER_ADMIN) {
+      return;
+    }
+
+    if (!allowedRoles.includes(user.role as Role)) {
       throw errors.forbidden();
     }
   };

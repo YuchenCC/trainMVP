@@ -2,6 +2,7 @@
 // 使用 Zustand 管理用户登录状态、Token 和用户信息
 import { create } from 'zustand';
 import type { SafeUser } from '@release-train/shared';
+import { hasPermission, Operation, Role } from '@release-train/shared';
 import api from '../services/api';
 
 // ========== 用户状态类型 ==========
@@ -13,6 +14,7 @@ interface AuthState {
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
   fetchUser: () => Promise<void>;
+  checkPermission: (operation: Operation) => boolean;
 }
 
 // ========== 从localStorage恢复初始状态 ==========
@@ -79,5 +81,13 @@ export const useAuthStore = create<AuthState>((set) => ({
       localStorage.removeItem('user');
       set({ token: null, user: null, isAuthenticated: false });
     }
+  },
+
+  // 基于权限矩阵校验当前用户是否拥有指定操作权限
+  // 前端用于控制按钮/菜单的显示隐藏，服务端仍需二次校验
+  checkPermission: (operation: Operation): boolean => {
+    const state = useAuthStore.getState();
+    if (!state.user) return false;
+    return hasPermission(state.user.role as Role, operation);
   },
 }));
