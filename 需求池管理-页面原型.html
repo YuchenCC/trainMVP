@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>需求池管理</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #ffffff;
+  color: #1f1f1f;
+  min-width: 1200px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+a { color: #1677ff; text-decoration: none; }
+a:hover { color: #4096ff; }
+
+/* ===== Layout ===== */
+.app-container { max-width: 1400px; margin: 0 auto; padding: 0 24px 40px; }
+
+/* ===== Top Header ===== */
+.top-header {
+  background: #1677ff;
+  color: #fff;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.top-header h1 { font-size: 20px; font-weight: 600; }
+
+/* ===== Tabs ===== */
+.tab-bar {
+  display: flex;
+  border-bottom: 2px solid #e6f4ff;
+  background: #fff;
+  padding: 0 24px;
+}
+.tab-item {
+  padding: 12px 24px;
+  cursor: pointer;
+  font-size: 15px;
+  color: #666;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all .2s;
+  user-select: none;
+}
+.tab-item:hover { color: #1677ff; }
+.tab-item.active {
+  color: #1677ff;
+  border-bottom-color: #1677ff;
+  font-weight: 600;
+}
+
+/* ===== Page Sections ===== */
+.page-section { display: none; }
+.page-section.active { display: block; }
+
+/* ===== Toolbar ===== */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+}
+.toolbar-title { font-size: 18px; font-weight: 600; }
+
+/* ===== Buttons ===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  color: #1f1f1f;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .2s;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.btn:hover { border-color: #4096ff; color: #4096ff; }
+.btn-primary {
+  background: #1677ff;
+  color: #fff;
+  border-color: #1677ff;
+}
+.btn-primary:hover { background: #4096ff; border-color: #4096ff; color: #fff; }
+.btn-success { background: #52c41a; color: #fff; border-color: #52c41a; }
+.btn-success:hover { background: #73d13d; border-color: #73d13d; color: #fff; }
+.btn-danger { background: #ff4d4f; color: #fff; border-color: #ff4d4f; }
+.btn-danger:hover { background: #ff7875; border-color: #ff7875; color: #fff; }
+.btn-warning { background: #fa8c16; color: #fff; border-color: #fa8c16; }
+.btn-warning:hover { background: #ffa940; border-color: #ffa940; color: #fff; }
+.btn-link {
+  border: none;
+  background: none;
+  color: #1677ff;
+  padding: 4px 8px;
+}
+.btn-link:hover { color: #4096ff; }
+.btn-link.success { color: #52c41a; }
+.btn-link.success:hover { color: #73d13d; }
+.btn-link.danger { color: #ff4d4f; }
+.btn-link.danger:hover { color: #ff7875; }
+.btn-link.warning { color: #fa8c16; }
+.btn-link.warning:hover { color: #ffa940; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+
+/* ===== Filters ===== */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+.filter-bar label { font-size: 13px; color: #666; white-space: nowrap; }
+.filter-bar select {
+  padding: 6px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  color: #1f1f1f;
+  cursor: pointer;
+  font-family: inherit;
+  min-width: 140px;
+}
+.filter-bar select:focus { outline: none; border-color: #1677ff; }
+
+/* ===== Table ===== */
+.table-wrapper {
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  overflow: hidden;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+thead { background: #fafafa; }
+th {
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 13px;
+  color: #333;
+  border-bottom: 1px solid #e8e8e8;
+  white-space: nowrap;
+}
+td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13px;
+  vertical-align: middle;
+}
+tbody tr:nth-child(even) { background: #fafafa; }
+tbody tr:hover { background: #e6f4ff; }
+.col-check { width: 40px; text-align: center; }
+.col-id { width: 90px; }
+.col-title { width: auto; }
+.col-status { width: 110px; }
+.col-priority { width: 70px; text-align: center; }
+.col-creator { width: 80px; }
+.col-date { width: 100px; }
+.col-action { width: 200px; }
+.col-title .req-title-link {
+  color: #1677ff;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+.col-title .req-title-link:hover { color: #4096ff; text-decoration: underline; }
+
+/* ===== Tags ===== */
+.tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.tag-default { background: #f5f5f5; color: #999; border: 1px solid #d9d9d9; }
+.tag-blue { background: #e6f4ff; color: #1677ff; border: 1px solid #91caff; }
+.tag-green { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
+.tag-red { background: #fff2f0; color: #ff4d4f; border: 1px solid #ffccc7; }
+.tag-orange { background: #fff7e6; color: #fa8c16; border: 1px solid #ffd591; }
+.tag-gray { background: #f5f5f5; color: #999; border: 1px solid #d9d9d9; }
+
+/* Priority */
+.priority {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.priority-P0 { background: #fff2f0; color: #ff4d4f; }
+.priority-P1 { background: #fff7e6; color: #fa8c16; }
+.priority-P2 { background: #e6f4ff; color: #1677ff; }
+.priority-P3 { background: #f5f5f5; color: #999; }
+
+/* ===== Pagination ===== */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  font-size: 13px;
+  color: #666;
+}
+.pagination-btns { display: flex; gap: 4px; }
+.page-btn {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  color: #1f1f1f;
+  transition: all .2s;
+  font-family: inherit;
+}
+.page-btn:hover { border-color: #1677ff; color: #1677ff; }
+.page-btn.active { background: #1677ff; color: #fff; border-color: #1677ff; }
+.page-btn:disabled { color: #d9d9d9; cursor: not-allowed; }
+.page-btn:disabled:hover { border-color: #d9d9d9; color: #d9d9d9; }
+
+/* ===== Detail Page ===== */
+.detail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #1677ff;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 12px 0;
+  user-select: none;
+}
+.detail-back:hover { color: #4096ff; }
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 20px;
+}
+.detail-header h2 { font-size: 20px; font-weight: 600; }
+.card {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.info-item label {
+  display: block;
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 4px;
+}
+.info-item span {
+  font-size: 14px;
+  color: #1f1f1f;
+}
+.desc-text {
+  font-size: 14px;
+  line-height: 1.8;
+  color: #333;
+}
+
+/* Dependency */
+.dep-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  transition: background .2s;
+}
+.dep-item:hover { background: #fafafa; }
+.dep-left { display: flex; align-items: center; gap: 16px; }
+.dep-id { color: #1677ff; font-weight: 600; font-size: 13px; }
+.dep-title { font-size: 14px; }
+.dep-meta { font-size: 12px; color: #999; }
+.dep-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.dep-satisfied { color: #52c41a; }
+.dep-unsatisfied { color: #fa8c16; }
+
+/* Timeline */
+.timeline { position: relative; padding-left: 24px; }
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: #e8e8e8;
+}
+.timeline-item {
+  position: relative;
+  padding-bottom: 20px;
+}
+.timeline-item:last-child { padding-bottom: 0; }
+.timeline-dot {
+  position: absolute;
+  left: -20px;
+  top: 6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #1677ff;
+  border: 2px solid #e6f4ff;
+}
+.timeline-time { font-size: 12px; color: #999; margin-bottom: 4px; }
+.timeline-content { font-size: 14px; color: #333; }
+.timeline-user { color: #1677ff; font-weight: 500; }
+
+/* Bottom Actions */
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 0;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* ===== Review Page ===== */
+.review-layout {
+  display: flex;
+  gap: 20px;
+  padding: 16px 0;
+}
+.review-list {
+  width: 360px;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.review-list-header {
+  padding: 14px 16px;
+  font-weight: 600;
+  font-size: 15px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+.review-list-body { max-height: 520px; overflow-y: auto; }
+.review-item {
+  padding: 14px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background .2s;
+}
+.review-item:hover { background: #e6f4ff; }
+.review-item.active { background: #e6f4ff; border-left: 3px solid #1677ff; }
+.review-item-id { font-size: 12px; color: #1677ff; font-weight: 600; }
+.review-item-title { font-size: 14px; font-weight: 500; margin: 4px 0; }
+.review-item-meta { font-size: 12px; color: #999; display: flex; gap: 12px; }
+
+.review-detail {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.review-detail-header {
+  padding: 14px 20px;
+  font-weight: 600;
+  font-size: 15px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.review-detail-body { padding: 20px; max-height: 420px; overflow-y: auto; }
+
+.review-bottom {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 16px;
+}
+.review-bottom-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+.review-textarea {
+  width: 100%;
+  min-height: 80px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  line-height: 1.6;
+}
+.review-textarea:focus { outline: none; border-color: #1677ff; box-shadow: 0 0 0 2px rgba(22,119,255,0.1); }
+.review-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px; }
+
+/* ===== Checkbox ===== */
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #1677ff;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #bbb; }
+
+/* ===== Empty state ===== */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
+  font-size: 14px;
+}
+</style>
+</head>
+<body>
+
+<!-- ===== Top Header ===== -->
+<div class="top-header">
+  <h1>需求池管理</h1>
+  <div style="font-size:13px;opacity:0.85;">产品需求管理平台</div>
+</div>
+
+<!-- ===== Tabs ===== -->
+<div class="tab-bar" id="tabBar">
+  <div class="tab-item active" data-tab="list">需求列表</div>
+  <div class="tab-item" data-tab="detail">需求详情</div>
+  <div class="tab-item" data-tab="review">需求评审</div>
+</div>
+
+<div class="app-container">
+
+<!-- ==================== PAGE 1: 需求列表 ==================== -->
+<div class="page-section active" id="page-list">
+  <div class="toolbar">
+    <div class="toolbar-title">需求列表</div>
+    <button class="btn btn-primary" onclick="alert('新增需求弹窗（原型演示）')">+ 新增需求</button>
+  </div>
+
+  <!-- Filters -->
+  <div class="filter-bar">
+    <label>归属系统：</label>
+    <select id="filterSystem" onchange="applyFilters()">
+      <option value="">全部</option>
+      <option value="用户中心">用户中心</option>
+      <option value="订单系统">订单系统</option>
+      <option value="支付系统">支付系统</option>
+    </select>
+    <label>状态：</label>
+    <select id="filterStatus" onchange="applyFilters()">
+      <option value="">全部</option>
+      <option value="草稿">草稿</option>
+      <option value="待评审">待评审</option>
+      <option value="已就绪">已就绪</option>
+      <option value="已拒绝">已拒绝</option>
+      <option value="已纳版-开发中">已纳版-开发中</option>
+      <option value="已纳版-SIT测试">已纳版-SIT测试</option>
+      <option value="已纳版-UAT测试">已纳版-UAT测试</option>
+      <option value="已纳版-封板">已纳版-封板</option>
+      <option value="已投产">已投产</option>
+      <option value="已取消">已取消</option>
+    </select>
+    <label>创建人：</label>
+    <select id="filterCreator" onchange="applyFilters()">
+      <option value="">全部</option>
+      <option value="张三">张三</option>
+      <option value="李四">李四</option>
+      <option value="王五">王五</option>
+      <option value="赵六">赵六</option>
+    </select>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th class="col-check"><input type="checkbox" id="checkAll" onclick="toggleCheckAll()"></th>
+          <th class="col-id">需求ID</th>
+          <th class="col-title">需求标题</th>
+          <th class="col-status">状态</th>
+          <th class="col-priority">优先级</th>
+          <th class="col-creator">创建人</th>
+          <th class="col-date">提出时间</th>
+          <th class="col-action">操作</th>
+        </tr>
+      </thead>
+      <tbody id="reqTableBody">
+        <!-- Rendered by JS -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <div class="pagination">
+    <span id="paginationInfo">共 0 条</span>
+    <div class="pagination-btns" id="paginationBtns"></div>
+  </div>
+</div>
+
+<!-- ==================== PAGE 2: 需求详情 ==================== -->
+<div class="page-section" id="page-detail">
+  <div class="detail-back" onclick="switchTab('list')">&#8592; 返回列表</div>
+
+  <div class="detail-header">
+    <h2 id="detailTitle">REQ-001 用户登录优化</h2>
+    <span class="tag tag-default" id="detailStatus">草稿</span>
+  </div>
+
+  <!-- 基本信息 -->
+  <div class="card">
+    <div class="card-title">基本信息</div>
+    <div class="info-grid">
+      <div class="info-item"><label>归属系统</label><span id="detailSystem">用户中心</span></div>
+      <div class="info-item"><label>优先级</label><span id="detailPriority"><span class="priority priority-P1">P1</span></span></div>
+      <div class="info-item"><label>业务归属人</label><span id="detailOwner">张三</span></div>
+      <div class="info-item"><label>产品经理</label><span id="detailPM">张三</span></div>
+      <div class="info-item"><label>创建人</label><span id="detailCreator">张三</span></div>
+      <div class="info-item"><label>提出时间</label><span id="detailDate">2026-05-08</span></div>
+    </div>
+  </div>
+
+  <!-- 需求描述 -->
+  <div class="card">
+    <div class="card-title">需求描述</div>
+    <div class="desc-text" id="detailDesc">
+      优化用户登录流程，支持手机号+验证码快捷登录方式，提升用户登录体验。当前登录方式仅支持账号密码，用户反馈操作繁琐，转化率较低。本次优化将新增手机号验证码登录、第三方快捷登录（微信/支付宝），并优化登录页面的UI交互。
+    </div>
+  </div>
+
+  <!-- 依赖需求 -->
+  <div class="card">
+    <div class="card-title">
+      依赖需求
+      <button class="btn btn-sm btn-primary" onclick="alert('添加依赖弹窗（原型演示）')">+ 添加依赖</button>
+    </div>
+    <div class="dep-item">
+      <div class="dep-left">
+        <span class="dep-id">REQ-102</span>
+        <span class="dep-title">支付接口升级</span>
+        <span class="dep-meta">支付系统 &middot; <span class="priority priority-P0" style="font-size:11px;">P0</span> &middot; 已纳版</span>
+      </div>
+      <div class="dep-status dep-satisfied">&#10003; 依赖已满足</div>
+    </div>
+    <div class="dep-item">
+      <div class="dep-left">
+        <span class="dep-id">REQ-205</span>
+        <span class="dep-title">用户数据同步</span>
+        <span class="dep-meta">数据平台 &middot; <span class="priority priority-P1" style="font-size:11px;">P1</span> &middot; 已就绪</span>
+      </div>
+      <div class="dep-status dep-unsatisfied">&#9888; 依赖未满足</div>
+    </div>
+  </div>
+
+  <!-- 操作历史 -->
+  <div class="card">
+    <div class="card-title">操作历史</div>
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-dot"></div>
+        <div class="timeline-time">2026-05-08 14:30</div>
+        <div class="timeline-content"><span class="timeline-user">张三</span> 创建了需求</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-dot" style="background:#52c41a;"></div>
+        <div class="timeline-time">2026-05-08 15:00</div>
+        <div class="timeline-content"><span class="timeline-user">张三</span> 编辑了需求描述，补充了第三方登录方案</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-dot" style="background:#fa8c16;"></div>
+        <div class="timeline-time">2026-05-08 16:20</div>
+        <div class="timeline-content"><span class="timeline-user">李四</span> 添加了依赖需求 REQ-102、REQ-205</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部操作 -->
+  <div class="detail-actions" id="detailActions">
+    <button class="btn btn-primary" onclick="alert('编辑需求（原型演示）')">编辑</button>
+    <button class="btn btn-primary" onclick="alert('发起评审（原型演示）')">发起评审</button>
+    <button class="btn btn-danger" onclick="alert('取消需求（原型演示）')">取消需求</button>
+  </div>
+</div>
+
+<!-- ==================== PAGE 3: 需求评审 ==================== -->
+<div class="page-section" id="page-review">
+  <div class="toolbar">
+    <div class="toolbar-title">需求评审</div>
+  </div>
+
+  <div class="review-layout">
+    <!-- Left: Review List -->
+    <div class="review-list">
+      <div class="review-list-header">待评审需求（3）</div>
+      <div class="review-list-body" id="reviewListBody">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- Right: Review Detail -->
+    <div class="review-detail">
+      <div class="review-detail-header" id="reviewDetailHeader">
+        <span id="reviewDetailId">REQ-002</span>
+        <span class="tag tag-blue" id="reviewDetailStatus">待评审</span>
+      </div>
+      <div class="review-detail-body" id="reviewDetailBody">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom: Review Actions -->
+  <div class="review-bottom">
+    <div class="review-bottom-title">评审意见</div>
+    <textarea class="review-textarea" id="reviewComment" placeholder="请输入评审意见..."></textarea>
+    <div class="review-actions">
+      <button class="btn btn-success" onclick="handleReview('pass')">评审通过</button>
+      <button class="btn btn-danger" onclick="handleReview('reject')">评审拒绝</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /app-container -->
+
+<script>
+// ===== Data =====
+const requirements = [
+  { id:'REQ-001', title:'用户登录优化', system:'用户中心', status:'草稿', priority:'P1', creator:'张三', date:'2026-05-08', desc:'优化用户登录流程，支持手机号+验证码快捷登录方式，提升用户登录体验。当前登录方式仅支持账号密码，用户反馈操作繁琐，转化率较低。本次优化将新增手机号验证码登录、第三方快捷登录（微信/支付宝），并优化登录页面的UI交互。' },
+  { id:'REQ-002', title:'支付功能重构', system:'订单系统', status:'待评审', priority:'P0', creator:'李四', date:'2026-05-07', desc:'重构现有支付模块，支持多种支付渠道聚合，提升支付成功率和系统稳定性。当前支付模块架构老旧，扩展性差，无法快速接入新的支付渠道。本次重构将采用策略模式设计，统一支付接口，支持微信支付、支付宝、银联等多种渠道。' },
+  { id:'REQ-003', title:'订单导出功能', system:'订单系统', status:'已就绪', priority:'P2', creator:'王五', date:'2026-05-06', desc:'新增订单数据批量导出功能，支持按时间范围、订单状态、商品类型等条件筛选导出。导出格式支持Excel和CSV，单次最大导出10万条记录。' },
+  { id:'REQ-004', title:'积分商城功能', system:'支付系统', status:'已拒绝', priority:'P3', creator:'赵六', date:'2026-05-05', desc:'建设积分商城模块，用户可使用积分兑换商品或优惠券。包含积分商品管理、兑换订单、物流跟踪等功能模块。' },
+  { id:'REQ-005', title:'用户注册优化', system:'用户中心', status:'已纳版-开发中', priority:'P1', creator:'张三', date:'2026-05-04', desc:'优化用户注册流程，简化注册步骤，新增手机号一键注册功能，减少用户流失率。' },
+  { id:'REQ-006', title:'订单列表筛选', system:'订单系统', status:'已纳版-SIT测试', priority:'P2', creator:'王五', date:'2026-05-03', desc:'优化订单列表页的筛选功能，新增多条件组合筛选、保存筛选条件、快捷筛选标签等功能。' },
+  { id:'REQ-007', title:'库存预警优化', system:'订单系统', status:'已纳版-UAT测试', priority:'P1', creator:'李四', date:'2026-05-02', desc:'优化库存预警机制，支持多级预警阈值配置，新增预警消息推送和自动补货建议功能。' },
+  { id:'REQ-008', title:'支付对账功能', system:'支付系统', status:'已纳版-封板', priority:'P1', creator:'赵六', date:'2026-05-01', desc:'新增支付对账功能，支持自动对账和手动对账两种模式，对账差异自动标记并生成差异报告。' },
+  { id:'REQ-009', title:'消息通知优化', system:'用户中心', status:'已投产', priority:'P2', creator:'张三', date:'2026-04-30', desc:'优化站内消息通知系统，支持消息分类、已读未读标记、消息免打扰设置等功能。' },
+  { id:'REQ-010', title:'报表导出功能', system:'用户中心', status:'已取消', priority:'P2', creator:'李四', date:'2026-04-29', desc:'新增业务报表导出功能，支持日报、周报、月报等多种报表类型的自动生成和导出。' },
+  { id:'REQ-011', title:'退款流程优化', system:'支付系统', status:'待评审', priority:'P0', creator:'赵六', date:'2026-05-09', desc:'优化退款审核流程，支持自动审核和人工审核相结合，缩短退款处理时长，提升用户满意度。' },
+  { id:'REQ-012', title:'商品搜索优化', system:'订单系统', status:'待评审', priority:'P1', creator:'王五', date:'2026-05-10', desc:'优化商品搜索功能，引入ES搜索引擎，支持模糊搜索、拼音搜索、搜索联想和热搜推荐。' },
+];
+
+// ===== Status Config =====
+const statusTagMap = {
+  '草稿': 'tag-default',
+  '待评审': 'tag-blue',
+  '已就绪': 'tag-green',
+  '已拒绝': 'tag-red',
+  '已纳版-开发中': 'tag-blue',
+  '已纳版-SIT测试': 'tag-blue',
+  '已纳版-UAT测试': 'tag-blue',
+  '已纳版-封板': 'tag-blue',
+  '已投产': 'tag-green',
+  '已取消': 'tag-gray',
+};
+
+// ===== Action Buttons by Status =====
+function getActionButtons(req) {
+  const s = req.status;
+  let btns = [];
+  const viewBtn = `<button class="btn btn-link" onclick="viewDetail('${req.id}')">查看</button>`;
+  switch(s) {
+    case '草稿':
+      btns = [
+        `<button class="btn btn-link" onclick="alert('编辑 ${req.id}（原型演示）')">编辑</button>`,
+        `<button class="btn btn-link" onclick="alert('发起评审 ${req.id}（原型演示）')">发起评审</button>`,
+        `<button class="btn btn-link danger" onclick="alert('取消 ${req.id}（原型演示）')">取消</button>`
+      ];
+      break;
+    case '待评审':
+      btns = [
+        viewBtn,
+        `<button class="btn btn-link success" onclick="alert('评审通过 ${req.id}（原型演示）')">评审通过</button>`,
+        `<button class="btn btn-link danger" onclick="alert('评审拒绝 ${req.id}（原型演示）')">评审拒绝</button>`
+      ];
+      break;
+    case '已就绪':
+      btns = [
+        viewBtn,
+        `<button class="btn btn-link warning" onclick="alert('需求变更 ${req.id}（原型演示）')">需求变更</button>`,
+        `<button class="btn btn-link danger" onclick="alert('取消 ${req.id}（原型演示）')">取消</button>`
+      ];
+      break;
+    case '已拒绝':
+      btns = [
+        viewBtn,
+        `<button class="btn btn-link" onclick="alert('重新编辑 ${req.id}（原型演示）')">重新编辑</button>`
+      ];
+      break;
+    case '已纳版-开发中':
+      btns = [
+        viewBtn,
+        `<button class="btn btn-link warning" onclick="alert('需求变更 ${req.id}（原型演示）')">需求变更</button>`,
+        `<button class="btn btn-link success" onclick="alert('开发完成 ${req.id}（原型演示）')">开发完成</button>`
+      ];
+      break;
+    case '已纳版-SIT测试':
+      btns = [
+        viewBtn,
+        `<button class="btn btn-link warning" onclick="alert('需求变更 ${req.id}（原型演示）')">需求变更</button>`,
+        `<button class="btn btn-link success" onclick="alert('SIT通过 ${req.id}（原型演示）')">SIT通过</button>`
+      ];
+      break;
+    case '已纳版-UAT测试':
+      btns = [
+        viewBtn,
+        `<button class="btn btn-link warning" onclick="alert('需求变更 ${req.id}（原型演示）')">需求变更</button>`,
+        `<button class="btn btn-link success" onclick="alert('UAT通过 ${req.id}（原型演示）')">UAT通过</button>`
+      ];
+      break;
+    case '已纳版-封板':
+      btns = [
+        viewBtn,
+        `<button class="btn btn-link danger" onclick="alert('紧急变更 ${req.id}（原型演示）')">紧急变更</button>`
+      ];
+      break;
+    case '已投产':
+      btns = [viewBtn];
+      break;
+    case '已取消':
+      btns = [viewBtn];
+      break;
+  }
+  return btns.join('');
+}
+
+// ===== Filter & Render =====
+let filteredData = [...requirements];
+const PAGE_SIZE = 10;
+let currentPage = 1;
+
+function applyFilters() {
+  const sys = document.getElementById('filterSystem').value;
+  const sta = document.getElementById('filterStatus').value;
+  const cre = document.getElementById('filterCreator').value;
+  filteredData = requirements.filter(r => {
+    if (sys && r.system !== sys) return false;
+    if (sta && r.status !== sta) return false;
+    if (cre && r.creator !== cre) return false;
+    return true;
+  });
+  currentPage = 1;
+  renderTable();
+}
+
+function renderTable() {
+  const tbody = document.getElementById('reqTableBody');
+  const total = filteredData.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if (currentPage > totalPages) currentPage = totalPages;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageData = filteredData.slice(start, start + PAGE_SIZE);
+
+  if (pageData.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">暂无数据</td></tr>';
+  } else {
+    tbody.innerHTML = pageData.map(r => `
+      <tr>
+        <td class="col-check" style="text-align:center;"><input type="checkbox" class="row-check"></td>
+        <td class="col-id">${r.id}</td>
+        <td class="col-title"><span class="req-title-link" onclick="viewDetail('${r.id}')">${r.title}</span></td>
+        <td class="col-status"><span class="tag ${statusTagMap[r.status] || 'tag-default'}">${r.status}</span></td>
+        <td class="col-priority" style="text-align:center;"><span class="priority priority-${r.priority}">${r.priority}</span></td>
+        <td class="col-creator">${r.creator}</td>
+        <td class="col-date">${r.date}</td>
+        <td class="col-action">${getActionButtons(r)}</td>
+      </tr>
+    `).join('');
+  }
+
+  // Pagination info
+  document.getElementById('paginationInfo').textContent = `共 ${total} 条`;
+
+  // Pagination buttons
+  const btnsEl = document.getElementById('paginationBtns');
+  let btnsHtml = `<button class="page-btn" onclick="goPage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>&lt;</button>`;
+  for (let i = 1; i <= totalPages; i++) {
+    btnsHtml += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  btnsHtml += `<button class="page-btn" onclick="goPage(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>&gt;</button>`;
+  btnsEl.innerHTML = btnsHtml;
+
+  // Reset check all
+  document.getElementById('checkAll').checked = false;
+}
+
+function goPage(p) {
+  const totalPages = Math.max(1, Math.ceil(filteredData.length / PAGE_SIZE));
+  if (p < 1 || p > totalPages) return;
+  currentPage = p;
+  renderTable();
+}
+
+function toggleCheckAll() {
+  const checked = document.getElementById('checkAll').checked;
+  document.querySelectorAll('.row-check').forEach(cb => cb.checked = checked);
+}
+
+// ===== View Detail =====
+function viewDetail(id) {
+  const req = requirements.find(r => r.id === id);
+  if (!req) return;
+  document.getElementById('detailTitle').textContent = `${req.id} ${req.title}`;
+  const statusEl = document.getElementById('detailStatus');
+  statusEl.textContent = req.status;
+  statusEl.className = `tag ${statusTagMap[req.status] || 'tag-default'}`;
+  document.getElementById('detailSystem').textContent = req.system;
+  document.getElementById('detailPriority').innerHTML = `<span class="priority priority-${req.priority}">${req.priority}</span>`;
+  document.getElementById('detailOwner').textContent = req.creator;
+  document.getElementById('detailPM').textContent = req.creator;
+  document.getElementById('detailCreator').textContent = req.creator;
+  document.getElementById('detailDate').textContent = req.date;
+  document.getElementById('detailDesc').textContent = req.desc;
+
+  // Update detail actions based on status
+  const actionsEl = document.getElementById('detailActions');
+  const s = req.status;
+  let actions = '';
+  switch(s) {
+    case '草稿':
+      actions = `<button class="btn btn-primary" onclick="alert('编辑需求（原型演示）')">编辑</button>
+                 <button class="btn btn-primary" onclick="alert('发起评审（原型演示）')">发起评审</button>
+                 <button class="btn btn-danger" onclick="alert('取消需求（原型演示）')">取消需求</button>`;
+      break;
+    case '待评审':
+      actions = `<button class="btn btn-success" onclick="alert('评审通过（原型演示）')">评审通过</button>
+                 <button class="btn btn-danger" onclick="alert('评审拒绝（原型演示）')">评审拒绝</button>`;
+      break;
+    case '已就绪':
+      actions = `<button class="btn btn-warning" onclick="alert('需求变更（原型演示）')">需求变更</button>
+                 <button class="btn btn-danger" onclick="alert('取消需求（原型演示）')">取消需求</button>`;
+      break;
+    case '已拒绝':
+      actions = `<button class="btn btn-primary" onclick="alert('重新编辑（原型演示）')">重新编辑</button>`;
+      break;
+    case '已纳版-开发中':
+      actions = `<button class="btn btn-warning" onclick="alert('需求变更（原型演示）')">需求变更</button>
+                 <button class="btn btn-success" onclick="alert('开发完成（原型演示）')">开发完成</button>`;
+      break;
+    case '已纳版-SIT测试':
+      actions = `<button class="btn btn-warning" onclick="alert('需求变更（原型演示）')">需求变更</button>
+                 <button class="btn btn-success" onclick="alert('SIT通过（原型演示）')">SIT通过</button>`;
+      break;
+    case '已纳版-UAT测试':
+      actions = `<button class="btn btn-warning" onclick="alert('需求变更（原型演示）')">需求变更</button>
+                 <button class="btn btn-success" onclick="alert('UAT通过（原型演示）')">UAT通过</button>`;
+      break;
+    case '已纳版-封板':
+      actions = `<button class="btn btn-danger" onclick="alert('紧急变更（原型演示）')">紧急变更</button>`;
+      break;
+    default:
+      actions = '';
+  }
+  actionsEl.innerHTML = actions;
+
+  switchTab('detail');
+}
+
+// ===== Tab Switching =====
+function switchTab(tabName) {
+  document.querySelectorAll('.tab-item').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+  document.querySelectorAll('.page-section').forEach(p => p.classList.toggle('active', p.id === 'page-' + tabName));
+}
+
+document.getElementById('tabBar').addEventListener('click', function(e) {
+  if (e.target.classList.contains('tab-item')) {
+    switchTab(e.target.dataset.tab);
+  }
+});
+
+// ===== Review Page =====
+const reviewItems = requirements.filter(r => r.status === '待评审');
+let activeReviewIdx = 0;
+
+function renderReviewList() {
+  const body = document.getElementById('reviewListBody');
+  body.innerHTML = reviewItems.map((r, i) => `
+    <div class="review-item ${i === activeReviewIdx ? 'active' : ''}" onclick="selectReview(${i})">
+      <div class="review-item-id">${r.id}</div>
+      <div class="review-item-title">${r.title}</div>
+      <div class="review-item-meta">
+        <span>${r.system}</span>
+        <span><span class="priority priority-${r.priority}" style="font-size:11px;">${r.priority}</span></span>
+        <span>${r.creator}</span>
+        <span>${r.date}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectReview(idx) {
+  activeReviewIdx = idx;
+  renderReviewList();
+  renderReviewDetail();
+}
+
+function renderReviewDetail() {
+  const r = reviewItems[activeReviewIdx];
+  if (!r) return;
+  document.getElementById('reviewDetailId').textContent = `${r.id} ${r.title}`;
+  const statusEl = document.getElementById('reviewDetailStatus');
+  statusEl.textContent = r.status;
+  statusEl.className = `tag ${statusTagMap[r.status] || 'tag-default'}`;
+
+  document.getElementById('reviewDetailBody').innerHTML = `
+    <div class="info-grid" style="margin-bottom:16px;">
+      <div class="info-item"><label>归属系统</label><span>${r.system}</span></div>
+      <div class="info-item"><label>优先级</label><span><span class="priority priority-${r.priority}">${r.priority}</span></span></div>
+      <div class="info-item"><label>创建人</label><span>${r.creator}</span></div>
+      <div class="info-item"><label>提出时间</label><span>${r.date}</span></div>
+    </div>
+    <div style="font-size:14px;font-weight:600;margin-bottom:8px;">需求描述</div>
+    <div class="desc-text">${r.desc}</div>
+  `;
+  document.getElementById('reviewComment').value = '';
+}
+
+function handleReview(action) {
+  const r = reviewItems[activeReviewIdx];
+  if (!r) return;
+  const comment = document.getElementById('reviewComment').value.trim();
+  const actionText = action === 'pass' ? '评审通过' : '评审拒绝';
+  if (!comment) {
+    alert(`请输入评审意见`);
+    return;
+  }
+  alert(`${actionText}：${r.id} ${r.title}\n评审意见：${comment}\n（原型演示）`);
+}
+
+// ===== Init =====
+renderTable();
+renderReviewList();
+renderReviewDetail();
+</script>
+</body>
+</html>
