@@ -1,0 +1,219 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========== 用户 ==========
+model User {
+  id          String   @id @default(cuid())       // 用户ID
+  username    String   @unique                      // 用户名
+  displayName String                                // 显示名称
+  email       String   @unique                      // 邮箱
+  password    String?                               // 密码（本地开发用，生产走SSO）
+  role        Role     @default(BA)                 // 角色
+  ssoId       String?  @unique                      // SSO对接ID
+  createdAt   DateTime @default(now())              // 创建时间
+  updatedAt   DateTime @updatedAt                   // 更新时间
+
+  ownedRequirements   Requirement[]  @relation("BAOwner")   // 作为业务归属人的需求
+  pmRequirements      Requirement[]  @relation("PM")        // 作为产品经理的需求
+  createdRequirements Requirement[]  @relation("Creator")   // 创建的需求
+  createdTrains       Train[]        @relation("TrainCreator") // 创建的火车
+  statusLogs          StatusLog[]    @relation("StatusOperator") // 操作的状态日志
+  emergencyApprovals  EmergencyChange[] @relation("Approver")     // 审批的紧急变更
+  systemMembers       SystemMember[]                       // 所属系统成员
+}
+
+enum Role {
+  BA             // 业务BA
+  PM             // 产品经理
+  PROJECT_MGR    // 项目经理
+  TECH_MGR       // 技术经理
+  TEST_MGR       // 测试经理
+  TRAIN_ADMIN    // 火车管理员
+  SUPER_ADMIN    // 超级管理员
+}
+
+// ========== 系统 ==========
+model System {
+  id          String   @id @default(cuid())       // 系统ID
+  name        String   @unique                      // 系统名称
+  description String?                               // 系统描述
+  createdAt   DateTime @default(now())              // 创建时间
+  updatedAt   DateTime @updatedAt                   // 更新时间
+
+  requirements Requirement[]                         // 系统下的需求
+  trainSystems TrainSystem[]                        // 系统参与的火车
+  members      SystemMember[]                      // 系统成员
+}
+
+// ========== 系统成员 ==========
+model SystemMember {
+  id       String     @id @default(cuid())         // 成员ID
+  systemId String                                   // 所属系统ID
+  userId   String                                   // 用户ID
+  role     SystemRole @default(DEV)                 // 成员角色
+
+  system   System     @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([systemId, userId, role])               // 同一系统同一用户同一角色唯一
+}
+
+enum SystemRole {
+  BA            // 业务BA
+  PM            // 产品经理
+  PROJECT_MGR   // 项目经理
+  TECH_MGR      // 技术经理
+  TEST_MGR      // 测试经理
+  DEV           // 开发人员
+  QA            // 测试人员
+}
+
+// ========== 需求 ==========
+model Requirement {
+  id            String        @id @default(cuid())       // 需求ID
+  title         String                                    // 需求标题
+  description   String        @db.Text                   // 需求描述
+  status        ReqStatus     @default(DRAFT)            // 需求状态
+  subStatus     ReqSubStatus?                             // 需求子状态（已纳版时）
+  priority      Int           @default(3)                 // 优先级（1最高5最低）
+  storyPoints   Int           @default(0)                 // 工作量点数
+  dependencies  Json?                                     // 依赖需求ID列表
+
+  systemId      String                                    // 归属系统ID
+  system        System        @relation(fields: [systemId], references: [id])
+  baOwnerId     String                                    // 业务归属人（BA）ID
+  baOwner       User          @relation("BAOwner", fields: [baOwnerId], references: [id])
+  pmId          String?                                   // 产品经理ID
+  pm            User?         @relation("PM", fields: [pmId], references: [id])
+  creatorId     String                                    // 创建人ID
+  creator       User          @relation("Creator", fields: [creatorId], references: [id])
+  trainId       String?                                   // 所属火车ID
+  train         Train?        @relation(fields: [trainId], references: [id])
+
+  createdAt     DateTime      @default(now())              // 创建时间
+  updatedAt     DateTime      @updatedAt                   // 更新时间
+
+  statusLogs        StatusLog[]                               // 状态变更记录
+  emergencyChanges  EmergencyChange[]                       // 紧急变更记录
+
+  @@index([status])                                      // 按状态筛选需求列表
+  @@index([trainId, status])                             // 火车看板按状态分组
+  @@index([systemId, status])                            // 按系统+状态筛选
+  @@index([baOwnerId, status])                           // BA查看自己的需求
+  @@index([creatorId])                                   // 按创建人筛选
+}
+
+enum ReqStatus {
+  DRAFT           // 草稿
+  PENDING_REVIEW  // 待评审
+  READY           // 已就绪
+  REJECTED        // 已拒绝
+  ONBOARDED       // 已纳版
+  RELEASED        // 已投产
+  CANCELLED       // 已取消
+}
+
+enum ReqSubStatus {
+  DEV_IN_PROGRESS  // 开发中
+  SIT_TESTING      // SIT测试
+  UAT_TESTING      // UAT测试
+  FROZEN           // 封板
+}
+
+// ========== 状态变更记录 ==========
+model StatusLog {
+  id             String     @id @default(cuid())         // 日志ID
+  requirementId  String                                     // 需求ID
+  requirement    Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  fromStatus     ReqStatus?                                // 变更前状态
+  toStatus       ReqStatus                                 // 变更后状态
+  fromSubStatus  ReqSubStatus?                             // 变更前子状态
+  toSubStatus    ReqSubStatus?                             // 变更后子状态
+  reason         String?    @db.Text                      // 变更原因
+  operatorId     String                                     // 操作人ID
+  operator       User       @relation("StatusOperator", fields: [operatorId], references: [id]) // 操作人
+  createdAt      DateTime   @default(now())               // 操作时间
+
+  @@index([requirementId, createdAt(sort: Desc)])         // 需求时间线（按时间倒序）
+}
+
+// ========== 版本火车 ==========
+model Train {
+  id            String       @id @default(cuid())         // 火车ID
+  name          String                                     // 火车名称
+  cycleWeeks    Int          @default(4)                   // 版本周期（周）
+  status        TrainStatus  @default(PLANNING)            // 火车状态
+  description   String?      @db.Text                     // 火车描述
+
+  startDate     DateTime                                   // 开始日期
+  endDate       DateTime                                   // 结束日期
+  boardingDate  DateTime?                                  // 统一纳版日（自动计算）
+  lockdownDate  DateTime?                                  // 统一封板日（自动计算）
+  releaseDate   DateTime?                                  // 统一投产日（自动计算）
+
+  createdById   String                                     // 创建人ID
+  createdBy     User         @relation("TrainCreator", fields: [createdById], references: [id]) // 创建人
+  createdAt     DateTime     @default(now())              // 创建时间
+  updatedAt     DateTime     @updatedAt                   // 更新时间
+
+  requirements  Requirement[]                            // 火车下的需求
+  trainSystems  TrainSystem[]                            // 火车-系统关联
+
+  @@index([status])                                      // 按火车状态筛选
+  @@index([startDate])                                   // 按时间范围查询火车
+}
+
+enum TrainStatus {
+  PLANNING      // 规划中
+  IN_PROGRESS   // 进行中
+  COMPLETED     // 已完成
+  CANCELLED     // 已取消
+}
+
+// ========== 火车-系统关联 ==========
+model TrainSystem {
+  id             String  @id @default(cuid())             // 关联ID
+  trainId        String                                     // 火车ID
+  systemId       String                                     // 系统ID
+  capacityPoints Int     @default(0)                       // 容量点数（系统可承接的最大工作量）
+  usedPoints     Int     @default(0)                       // 已用点数（已分配的需求工作量）
+
+  train          Train   @relation(fields: [trainId], references: [id], onDelete: Cascade) // 所属火车
+  system         System  @relation(fields: [systemId], references: [id], onDelete: Cascade) // 所属系统
+
+  @@unique([trainId, systemId])                            // 同一火车同一系统唯一
+}
+
+// ========== 紧急变更审批 ==========
+model EmergencyChange {
+  id             String          @id @default(cuid())       // 变更ID
+  requirementId  String                                     // 关联需求ID
+  requirement    Requirement     @relation(fields: [requirementId], references: [id], onDelete: Cascade) // 关联需求
+  urgency        UrgencyLevel                               // 紧急程度
+  reason         String          @db.Text                   // 变更原因
+  status         ApprovalStatus  @default(PENDING)          // 审批状态
+  approverId     String?                                    // 审批人ID
+  approver       User?            @relation("Approver", fields: [approverId], references: [id]) // 审批人
+  approvedAt     DateTime?                                  // 审批时间
+  rejectReason   String?         @db.Text                   // 驳回原因
+  createdAt      DateTime        @default(now())            // 创建时间
+
+  @@index([status, approverId])                           // 审批人查看待审批列表
+}
+
+enum UrgencyLevel {
+  P0              // 最高紧急（线上故障）
+  P1              // 高紧急（业务阻断）
+}
+
+enum ApprovalStatus {
+  PENDING         // 待审批
+  APPROVED        // 已通过
+  REJECTED        // 已驳回
+}

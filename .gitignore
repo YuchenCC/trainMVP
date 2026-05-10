@@ -1,38 +1,63 @@
-# OS
-.DS_Store
-Thumbs.db
-Desktop.ini
+# ========== 环境变量（安全规范：禁止提交） ==========
+.env
+.env.local
+.env.*.local
+.env.production
+!.env.example
 
-# Editor / IDE
+# ========== 密钥文件（安全规范：禁止提交） ==========
+*.pem
+*.key
+*.p12
+*.jks
+
+# ========== IDE ==========
 .idea/
+.vscode/
 *.swp
 *.swo
 *~
 
-# Environment & secrets
-.env
-.env.*
-!.env.example
+# ========== 系统文件 ==========
+.DS_Store
+Thumbs.db
+Desktop.ini
 
-# Logs & temp
+# ========== 日志和临时文件 ==========
 *.log
 *.tmp
 *.temp
 .cache/
 
-# Python (if added later)
+# ========== 依赖 ==========
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ========== pnpm store ==========
+.pnpm-store/
+
+# ========== 构建产物 ==========
+dist/
+build/
+*.egg-info/
+
+# ========== Prisma ==========
+apps/server/prisma/migrations/
+
+# ========== Python ==========
 __pycache__/
 *.py[cod]
 .venv/
 venv/
 .Python
 
-# Node (if added later)
-node_modules/
-npm-debug.log*
-yarn-error.log*
+# ========== 截图/临时文件 ==========
+*.png
+*.jpg
+*.jpeg
 
-# Build outputs (if added later)
-dist/
-build/
-*.egg-info/
+# ========== PostgreSQL 本地数据 ==========
+pgdata/
+pg16/
+*.zip
