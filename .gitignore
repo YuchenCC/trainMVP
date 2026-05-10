@@ -42,6 +42,9 @@ dist/
 build/
 *.egg-info/
 
+# ========== Vite 缓存 ==========
+.vite/
+
 # ========== Prisma ==========
 apps/server/prisma/migrations/
 
