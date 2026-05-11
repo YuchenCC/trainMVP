@@ -10,8 +10,10 @@ async function main() {
 
   try {
     await app.listen({ port: PORT, host: '0.0.0.0' });
-    console.log(`🚀 Server running at http://localhost:${PORT}`);
-    console.log(`📚 API docs at http://localhost:${PORT}/documentation`);
+    app.log.info(`Server running at http://localhost:${PORT}`);
+    if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_SWAGGER === 'true') {
+      app.log.info(`API docs at http://localhost:${PORT}/documentation`);
+    }
   } catch (err) {
     app.log.error(err);
     process.exit(1);

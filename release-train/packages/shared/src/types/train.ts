@@ -1,5 +1,5 @@
 // ========== 版本火车相关类型定义 ==========
-import { TrainStatus } from '../constants';
+import type { TrainStatus } from '../constants';
 
 // 版本火车实体类型（对应 Prisma Train 模型）
 export interface Train {

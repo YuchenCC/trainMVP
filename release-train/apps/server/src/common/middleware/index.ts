@@ -1,10 +1,10 @@
-import { FastifyRequest, FastifyReply } from 'fastify';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { errors } from '../errors/index.js';
-import { Role, Operation, PERMISSION_MATRIX, JwtPayload } from '@release-train/shared';
+import { PERMISSION_MATRIX, Role, type JwtPayload, type Operation } from '@release-train/shared';
 
 // ========== JWT认证中间件 ==========
 // 校验请求中的JWT Token，将用户信息挂载到 request.user
-export async function authMiddleware(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+export async function authMiddleware(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   try {
     // @fastify/jwt 会自动验证并注入 request.user
     await request.jwtVerify<JwtPayload>();
@@ -17,7 +17,7 @@ export async function authMiddleware(request: FastifyRequest, reply: FastifyRepl
 // 传入 Operation 枚举值，自动从 PERMISSION_MATRIX 查询允许的角色
 // 推荐使用此方式，权限集中管理在 shared/constants 中
 export function rbacMiddleware(operation: Operation) {
-  return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+  return async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
     const user = request.user as JwtPayload | undefined;
 
     if (!user) {
@@ -40,7 +40,7 @@ export function rbacMiddleware(operation: Operation) {
 // ========== RBAC权限中间件工厂（基于角色白名单，兼容旧用法） ==========
 // 直接传入角色列表，适用于简单的角色校验场景
 export function rbacRolesMiddleware(...allowedRoles: Role[]) {
-  return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+  return async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
     const user = request.user as JwtPayload | undefined;
 
     if (!user) {

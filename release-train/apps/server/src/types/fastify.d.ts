@@ -2,6 +2,8 @@
 // 为 @fastify/jwt 插件注册的装饰器补充 TypeScript 类型声明
 
 import '@fastify/jwt';
+import type { FastifyReply } from 'fastify';
+import type { JwtPayload } from '@release-train/shared';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -11,10 +13,6 @@ declare module 'fastify' {
 
   interface FastifyRequest {
     // JWT 解码后的用户信息，由 authenticate 中间件注入
-    user?: {
-      sub: string;    // 用户 ID
-      username: string;
-      role: string;   // 用户角色（对应 Role 枚举）
-    };
+    user?: JwtPayload;
   }
 }

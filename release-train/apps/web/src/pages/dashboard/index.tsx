@@ -8,9 +8,7 @@ const DashboardPage: React.FC = () => {
   return (
     <div>
       <Title level={4}>仪表盘</Title>
-      <Paragraph type="secondary">
-        欢迎使用版本火车需求管理系统，功能开发中...
-      </Paragraph>
+      <Paragraph type="secondary">欢迎使用版本火车需求管理系统，功能开发中...</Paragraph>
     </div>
   );
 };

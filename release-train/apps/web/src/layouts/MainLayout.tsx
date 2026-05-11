@@ -3,15 +3,10 @@
 import React from 'react';
 import { Layout, Menu, Dropdown, Avatar, Space } from 'antd';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import {
-  FileTextOutlined,
-  CarOutlined,
-  AppstoreOutlined,
-  UserOutlined,
-  LogoutOutlined,
-} from '@ant-design/icons';
+import { UserOutlined, LogoutOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../stores/auth';
 import { ROLE_LABELS } from '@release-train/shared';
+import { getVisibleMenuItems } from './menu';
 import type { MenuProps } from 'antd';
 
 const { Header, Sider, Content } = Layout;
@@ -23,23 +18,7 @@ const MainLayout: React.FC = () => {
   const { user, logout } = useAuthStore();
 
   // 侧边栏菜单配置（key 对应路由路径）
-  const menuItems = [
-    {
-      key: '/requirements',
-      icon: <FileTextOutlined />,
-      label: '需求池',
-    },
-    {
-      key: '/trains',
-      icon: <CarOutlined />,
-      label: '版本火车',
-    },
-    {
-      key: '/systems',
-      icon: <AppstoreOutlined />,
-      label: '系统管理',
-    },
-  ];
+  const menuItems = getVisibleMenuItems(user);
 
   // 右上角用户下拉菜单
   const userMenuItems: MenuProps['items'] = [

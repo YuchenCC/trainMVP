@@ -1,4 +1,4 @@
-import { FastifyError, FastifyReply } from 'fastify';
+import type { FastifyError, FastifyReply } from 'fastify';
 
 // ========== 业务错误基类 ==========
 export class AppError extends Error {
@@ -15,23 +15,17 @@ export class AppError extends Error {
 
 // ========== 常用错误工厂 ==========
 export const errors = {
-  unauthorized: (message = '未登录或登录已过期') =>
-    new AppError(401, message, 'UNAUTHORIZED'),
+  unauthorized: (message = '未登录或登录已过期') => new AppError(401, message, 'UNAUTHORIZED'),
 
-  forbidden: (message = '无权限执行此操作') =>
-    new AppError(403, message, 'FORBIDDEN'),
+  forbidden: (message = '无权限执行此操作') => new AppError(403, message, 'FORBIDDEN'),
 
-  notFound: (resource = '资源') =>
-    new AppError(404, `${resource}不存在`, 'NOT_FOUND'),
+  notFound: (resource = '资源') => new AppError(404, `${resource}不存在`, 'NOT_FOUND'),
 
-  badRequest: (message = '请求参数错误') =>
-    new AppError(400, message, 'BAD_REQUEST'),
+  badRequest: (message = '请求参数错误') => new AppError(400, message, 'BAD_REQUEST'),
 
-  conflict: (message = '数据冲突') =>
-    new AppError(409, message, 'CONFLICT'),
+  conflict: (message = '数据冲突') => new AppError(409, message, 'CONFLICT'),
 
-  internal: (message = '服务器内部错误') =>
-    new AppError(500, message, 'INTERNAL_ERROR'),
+  internal: (message = '服务器内部错误') => new AppError(500, message, 'INTERNAL_ERROR'),
 };
 
 // ========== 错误处理函数（生产环境不暴露堆栈） ==========

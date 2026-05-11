@@ -19,7 +19,7 @@ dotenv.config({ path: path.join(monorepoRoot, '.env') });
 
 import { authMiddleware } from './common/middleware/index.js';
 import { handleError } from './common/errors/index.js';
-import { loginRoute, meRoute, seedRoute } from './modules/auth/index.js';
+import { authRoutes } from './modules/auth/index.js';
 
 // 兜底加载当前目录的 .env（兼容 apps/server/.env 符号链接）
 dotenv.config();
@@ -50,15 +50,15 @@ export async function createApp() {
         version: '0.1.0',
         description: '版本火车需求管理系统后端API文档',
       },
-      tags: [
-        { name: 'auth', description: '认证相关接口' },
-      ],
+      tags: [{ name: 'auth', description: '认证相关接口' }],
     },
   });
 
-  await app.register(swaggerUI, {
-    routePrefix: '/documentation',
-  });
+  if (process.env.NODE_ENV !== 'production' || process.env.ENABLE_SWAGGER === 'true') {
+    await app.register(swaggerUI, {
+      routePrefix: '/documentation',
+    });
+  }
 
   // ========== 注册CORS（白名单限定，禁止使用*） ==========
   const corsOrigins = process.env.CORS_ORIGINS
@@ -83,21 +83,19 @@ export async function createApp() {
   // ========== 注册认证中间件装饰器 ==========
   app.decorate('authenticate', authMiddleware);
 
+  // ========== 全局错误处理 ==========
+  app.setErrorHandler((error, _request, reply) => {
+    handleError(error, reply);
+  });
+
   // ========== 注册路由 ==========
-  await app.register(loginRoute);
-  await app.register(meRoute);
-  await app.register(seedRoute);
+  await app.register(authRoutes);
 
   // ========== 健康检查 ==========
   app.get('/api/health', async () => ({
     success: true,
     data: { status: 'ok', timestamp: new Date().toISOString() },
   }));
-
-  // ========== 全局错误处理 ==========
-  app.setErrorHandler((error, request, reply) => {
-    handleError(error, reply);
-  });
 
   return app;
 }

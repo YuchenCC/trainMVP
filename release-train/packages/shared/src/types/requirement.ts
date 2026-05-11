@@ -1,5 +1,5 @@
 // ========== 需求相关类型定义 ==========
-import { ReqStatus, ReqSubStatus } from '../constants';
+import type { ReqStatus, ReqSubStatus } from '../constants';
 
 // 需求实体类型（对应 Prisma Requirement 模型）
 export interface Requirement {

@@ -2,13 +2,22 @@
   "name": "release-train",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "版本火车需求管理系统",
+  "packageManager": "pnpm@8.15.9",
   "scripts": {
-    "dev:web": "pnpm --filter web dev",
-    "dev:server": "pnpm --filter server dev",
+    "install:all": "pnpm install",
+    "dev:web": "pnpm --filter @release-train/shared build && pnpm --filter web dev",
+    "dev:server": "pnpm --filter @release-train/shared build && pnpm --filter server dev",
+    "build": "pnpm --filter @release-train/shared build && pnpm --filter server build && pnpm --filter web build",
     "build:shared": "pnpm --filter shared build",
     "build:web": "pnpm --filter web build",
     "build:server": "pnpm --filter server build",
+    "lint": "eslint .",
+    "format": "prettier --check .",
+    "format:write": "prettier --write .",
+    "test": "pnpm --filter @release-train/shared test && pnpm --filter server test && pnpm --filter web test",
+    "typecheck": "pnpm --filter @release-train/shared build && pnpm --filter server typecheck && pnpm --filter web typecheck",
     "db:push": "pnpm --filter server db:push",
     "db:generate": "pnpm --filter server db:generate",
     "db:studio": "pnpm --filter server db:studio"
@@ -18,6 +27,14 @@
     "pnpm": ">=8.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "eslint": "^9.13.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.14",
+    "globals": "^15.11.0",
+    "prettier": "^3.3.3",
+    "typescript-eslint": "^8.10.0",
+    "vitest": "^1.6.0",
     "playwright": "^1.59.1"
   }
 }

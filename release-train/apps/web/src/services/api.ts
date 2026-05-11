@@ -2,6 +2,7 @@
 // 统一配置 baseURL、超时、请求/响应拦截器
 import axios from 'axios';
 import type { ApiResponse } from '@release-train/shared';
+import { getStoredToken } from '../utils/authStorage';
 
 // ========== Axios实例 ==========
 const api = axios.create({
@@ -14,7 +15,7 @@ const api = axios.create({
 
 // ========== 请求拦截器：自动注入JWT Token ==========
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = getStoredToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -35,10 +36,10 @@ api.interceptors.response.use(
     if (error.response) {
       const status = error.response.status;
       if (status === 401) {
-        // Token过期或无效，清除登录状态并跳转登录页
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('auth:unauthorized'));
+        }
+        return Promise.reject(new Error('未登录或登录已过期'));
       } else if (status === 403) {
         return Promise.reject(new Error('无权限执行此操作'));
       } else {

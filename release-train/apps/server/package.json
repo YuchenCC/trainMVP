@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/main.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "prisma generate && vitest run",
     "start": "node dist/main.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
@@ -26,8 +28,11 @@
   "devDependencies": {
     "@types/bcrypt": "^5.0.0",
     "@types/node": "^20.14.0",
+    "@types/supertest": "^6.0.2",
     "prisma": "^5.20.0",
+    "supertest": "^7.0.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
   }
 }

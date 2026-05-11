@@ -1,5 +1,5 @@
 // ========== 认证相关类型定义 ==========
-import { Role } from '../constants';
+import type { Role } from '../constants';
 
 // 登录请求参数
 export interface LoginRequest {
@@ -24,9 +24,9 @@ export interface SafeUser {
 
 // JWT Token 载荷结构
 export interface JwtPayload {
-  sub: string;       // 用户ID
-  username: string;  // 用户名
-  role: Role;        // 角色
-  iat?: number;      // 签发时间
-  exp?: number;      // 过期时间
+  sub: string; // 用户ID
+  username: string; // 用户名
+  role: Role; // 角色
+  iat?: number; // 签发时间
+  exp?: number; // 过期时间
 }
