@@ -1,3 +1,49 @@
+// ========== 优先级枚举 ==========
+export enum Priority {
+  P0 = 'P0',                          // 最高优先级（线上故障/业务阻断）
+  P1 = 'P1',                          // 高优先级（核心功能/重要需求）
+  P2 = 'P2',                          // 中优先级（常规需求）
+  P3 = 'P3',                          // 低优先级（优化/体验类）
+}
+
+// ========== 需求类型枚举 ==========
+export enum ReqType {
+  NEW_FEATURE = 'NEW_FEATURE',        // 新功能：全新开发的业务功能
+  OPTIMIZATION = 'OPTIMIZATION',      // 优化：已有功能的改进提升
+  BUG = 'BUG',                        // 缺陷：需要修复的问题
+}
+
+// ========== 来源渠道枚举 ==========
+export enum SourceChannel {
+  BUSINESS = 'BUSINESS',              // 业务提出：业务方直接提出
+  USER_FEEDBACK = 'USER_FEEDBACK',    // 用户反馈：终端用户反馈
+  DATA_ANALYSIS = 'DATA_ANALYSIS',    // 数据分析：基于数据洞察提出
+  COMPETITOR = 'COMPETITOR',          // 竞品分析：参考竞品功能提出
+}
+
+// ========== 操作类型枚举 ==========
+export enum OperationType {
+  CREATE = 'CREATE',                          // 创建需求
+  UPDATE = 'UPDATE',                          // 编辑需求（草稿状态）
+  SUBMIT_REVIEW = 'SUBMIT_REVIEW',            // 发起评审
+  REVIEW_PASS = 'REVIEW_PASS',                // 评审通过
+  REVIEW_REJECT = 'REVIEW_REJECT',            // 评审拒绝
+  RE_EDIT = 'RE_EDIT',                        // 重新编辑（已拒绝→草稿）
+  CANCEL = 'CANCEL',                          // 取消需求
+  CHANGE_REQUIREMENT = 'CHANGE_REQUIREMENT',  // 需求变更
+  EMERGENCY_CHANGE = 'EMERGENCY_CHANGE',      // 紧急变更
+  DEV_COMPLETE = 'DEV_COMPLETE',              // 开发完成
+  SIT_PASS = 'SIT_PASS',                      // SIT通过
+  UAT_PASS = 'UAT_PASS',                      // UAT通过
+  BATCH_SUBMIT_REVIEW = 'BATCH_SUBMIT_REVIEW', // 批量发起评审
+  BATCH_CANCEL = 'BATCH_CANCEL',              // 批量取消
+  BATCH_CHANGE_PRIORITY = 'BATCH_CHANGE_PRIORITY', // 批量修改优先级
+  ONBOARD = 'ONBOARD',                        // 纳版
+  REMOVE = 'REMOVE',                          // 从火车移除
+  RELEASE = 'RELEASE',                        // 投产
+  ROLLBACK = 'ROLLBACK',                      // 回滚
+}
+
 // ========== 角色枚举 ==========
 export enum Role {
   BA = 'BA',                          // 业务BA
@@ -103,11 +149,11 @@ export const OPERATION_LABELS: Record<Operation, string> = {
 // 定义每个操作允许的角色列表，与 PRD 权限矩阵一一对应
 // 超级管理员在中间件中自动放行，此处无需列出
 export const PERMISSION_MATRIX: Record<Operation, Role[]> = {
-  [Operation.CREATE_REQ]:       [Role.BA, Role.PM],
-  [Operation.EDIT_REQ]:         [Role.BA, Role.PM],
-  [Operation.SUBMIT_REVIEW]:    [Role.BA],
+  [Operation.CREATE_REQ]:       [Role.BA, Role.PM, Role.PROJECT_MGR],
+  [Operation.EDIT_REQ]:         [Role.BA, Role.PM, Role.PROJECT_MGR],
+  [Operation.SUBMIT_REVIEW]:    [Role.BA, Role.PM, Role.PROJECT_MGR],
   [Operation.REVIEW_REQ]:       [Role.PM, Role.PROJECT_MGR, Role.TECH_MGR],
-  [Operation.CANCEL_REQ]:       [Role.BA, Role.TRAIN_ADMIN],
+  [Operation.CANCEL_REQ]:       [Role.BA, Role.PROJECT_MGR, Role.TRAIN_ADMIN],
   [Operation.CHANGE_REQ]:       [Role.BA, Role.TRAIN_ADMIN],
   [Operation.EMERGENCY_CHANGE]: [Role.BA, Role.TRAIN_ADMIN],
   [Operation.APPROVE_EMERGENCY]:[Role.PROJECT_MGR, Role.TRAIN_ADMIN],
@@ -126,6 +172,29 @@ export function hasPermission(role: Role, operation: Operation): boolean {
   if (role === Role.SUPER_ADMIN) return true;
   return PERMISSION_MATRIX[operation]?.includes(role) ?? false;
 }
+
+// ========== 优先级显示名称映射 ==========
+export const PRIORITY_LABELS: Record<Priority, string> = {
+  [Priority.P0]: 'P0-最高',
+  [Priority.P1]: 'P1-高',
+  [Priority.P2]: 'P2-中',
+  [Priority.P3]: 'P3-低',
+};
+
+// ========== 需求类型显示名称映射 ==========
+export const REQ_TYPE_LABELS: Record<ReqType, string> = {
+  [ReqType.NEW_FEATURE]: '新功能',
+  [ReqType.OPTIMIZATION]: '优化',
+  [ReqType.BUG]: '缺陷',
+};
+
+// ========== 来源渠道显示名称映射 ==========
+export const SOURCE_CHANNEL_LABELS: Record<SourceChannel, string> = {
+  [SourceChannel.BUSINESS]: '业务提出',
+  [SourceChannel.USER_FEEDBACK]: '用户反馈',
+  [SourceChannel.DATA_ANALYSIS]: '数据分析',
+  [SourceChannel.COMPETITOR]: '竞品分析',
+};
 
 // ========== 角色显示名称映射 ==========
 export const ROLE_LABELS: Record<Role, string> = {

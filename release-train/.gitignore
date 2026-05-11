@@ -30,3 +30,4 @@ build/
 
 # Prisma
 apps/server/prisma/migrations/
+apps/web/tsconfig.tsbuildinfo
