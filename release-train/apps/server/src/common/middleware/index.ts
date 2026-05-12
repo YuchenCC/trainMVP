@@ -1,15 +1,22 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { errors } from '../errors/index.js';
 import { Role, Operation, PERMISSION_MATRIX, JwtPayload } from '@release-train/shared';
+import { isTokenRevoked } from '../token-blacklist/index.js';
 
 // ========== JWT认证中间件 ==========
 // 校验请求中的JWT Token，将用户信息挂载到 request.user
+// 同时检查 Token 是否已被吊销
 export async function authMiddleware(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
-    // @fastify/jwt 会自动验证并注入 request.user
     await request.jwtVerify<JwtPayload>();
   } catch {
     throw errors.unauthorized();
+  }
+
+  // 检查 Token 是否已被吊销（登出、密码修改等场景）
+  const payload = request.user as JwtPayload;
+  if (payload.jti && isTokenRevoked(payload.jti)) {
+    throw errors.unauthorized('登录已失效，请重新登录');
   }
 }
 

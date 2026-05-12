@@ -27,6 +27,7 @@ export interface JwtPayload {
   sub: string;       // 用户ID
   username: string;  // 用户名
   role: Role;        // 角色
+  jti?: string;      // Token唯一标识（用于吊销）
   iat?: number;      // 签发时间
   exp?: number;      // 过期时间
 }

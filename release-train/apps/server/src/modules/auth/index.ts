@@ -6,6 +6,14 @@ import { errors } from '../../common/errors/index.js';
 import { Role, SafeUser, LoginRequest, LoginResponse, ApiResponse } from '@release-train/shared';
 import bcrypt from 'bcrypt';
 
+// ========== 输入清理工具 ==========
+// 移除控制字符和非法 Unicode，防止注入和解析异常
+function sanitizeInput(input: string): string {
+  return input
+    .replace(/[\x00-\x1F\x7F]/g, '')
+    .replace(/[\uD800-\uDFFF]/g, '');
+}
+
 // ========== 登录接口 ==========
 export async function loginRoute(fastify: FastifyInstance): Promise<void> {
   fastify.post<{
@@ -19,28 +27,29 @@ export async function loginRoute(fastify: FastifyInstance): Promise<void> {
           type: 'object',
           required: ['username', 'password'],
           properties: {
-            username: { type: 'string', minLength: 1 },
-            password: { type: 'string', minLength: 1 },
+            username: { type: 'string', minLength: 1, maxLength: 100 },
+            password: { type: 'string', minLength: 1, maxLength: 200 },
           },
         },
       },
     },
     async (request, reply) => {
-      const { username, password } = request.body;
+      const { username: rawUsername, password: rawPassword } = request.body;
+      const username = sanitizeInput(rawUsername);
+      const password = sanitizeInput(rawPassword);
 
-      // 查询用户（Prisma 内置参数化查询，防止 SQL 注入）
       const user = await prisma.user.findUnique({
         where: { username },
       });
 
-      // 用户不存在或未设置密码（SSO 用户无本地密码）
-      if (!user || !user.password) {
-        throw errors.unauthorized('用户名或密码错误');
-      }
+      // 防止时序攻击：无论用户是否存在，都执行 bcrypt.compare
+      // 用户不存在时使用 dummy hash，保证耗时一致
+      const dummyHash = '$2b$10$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
+      const storedHash = user?.password || dummyHash;
 
-      // bcrypt 校验密码（防止时序攻击）
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-      if (!isPasswordValid) {
+      const isPasswordValid = await bcrypt.compare(password, storedHash);
+
+      if (!user || !user.password || !isPasswordValid) {
         throw errors.unauthorized('用户名或密码错误');
       }
 
@@ -115,25 +124,43 @@ export async function meRoute(fastify: FastifyInstance): Promise<void> {
 // ========== 创建初始管理员（仅开发环境使用） ==========
 export async function seedRoute(fastify: FastifyInstance): Promise<void> {
   fastify.post<{
-    Body: { username: string; password: string; displayName: string; email: string };
+    Body: { username: string; password: string; displayName: string; email: string; role?: string };
     Reply: ApiResponse<SafeUser>;
   }>(
     '/api/auth/seed',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['username', 'password', 'displayName', 'email'],
+          properties: {
+            username: { type: 'string', minLength: 1, maxLength: 100 },
+            password: { type: 'string', minLength: 1, maxLength: 200 },
+            displayName: { type: 'string', minLength: 1, maxLength: 200 },
+            email: { type: 'string', minLength: 1, maxLength: 200 },
+            role: { type: 'string', enum: ['BA', 'PM', 'PROJECT_MGR', 'TECH_MGR', 'TEST_MGR', 'TRAIN_ADMIN', 'SUPER_ADMIN'] },
+          },
+        },
+      },
+    },
     async (request, reply) => {
-      // 仅开发环境可用
       if (process.env.NODE_ENV === 'production') {
         throw errors.forbidden('生产环境禁止使用此接口');
       }
 
-      const { username, password, displayName, email } = request.body;
+      const { username: rawUsername, password: rawPassword, displayName: rawDisplayName, email: rawEmail } = request.body;
+      const username = sanitizeInput(rawUsername);
+      const password = sanitizeInput(rawPassword);
+      const displayName = sanitizeInput(rawDisplayName);
+      const email = sanitizeInput(rawEmail);
 
-      // 检查用户名是否已存在
+      const role = (request.body.role as Role) || 'SUPER_ADMIN';
+
       const existing = await prisma.user.findUnique({ where: { username } });
       if (existing) {
         throw errors.conflict('用户名已存在');
       }
 
-      // bcrypt 加密密码（cost factor ≥ 10，符合安全规范）
       const hashedPassword = await bcrypt.hash(password, 10);
 
       const user = await prisma.user.create({
@@ -142,7 +169,7 @@ export async function seedRoute(fastify: FastifyInstance): Promise<void> {
           password: hashedPassword,
           displayName,
           email,
-          role: 'SUPER_ADMIN',
+          role: role,
         },
         select: {
           id: true,

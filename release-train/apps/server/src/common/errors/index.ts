@@ -45,13 +45,45 @@ export function handleError(error: unknown, reply: FastifyReply): void {
     return;
   }
 
-  // Fastify内置错误
+  // Fastify内置错误（包括 schema 验证、rate-limit 等）
   const fastifyError = error as FastifyError;
   if (fastifyError.statusCode) {
+    // 速率限制错误：返回自定义格式
+    if (fastifyError.statusCode === 429) {
+      reply.status(429).send({
+        success: false,
+        message: '请求过于频繁，请稍后再试',
+        code: 'RATE_LIMIT_EXCEEDED',
+      });
+      return;
+    }
+
+    // Schema 验证错误：返回 400，不暴露内部细节
+    if (fastifyError.statusCode === 400 && fastifyError.code === 'FST_ERR_VALIDATION') {
+      reply.status(400).send({
+        success: false,
+        message: '请求参数验证失败',
+        code: 'VALIDATION_ERROR',
+      });
+      return;
+    }
+
+    // 其他 Fastify 错误
     reply.status(fastifyError.statusCode).send({
       success: false,
       message: fastifyError.message,
       code: fastifyError.code || 'FASTIFY_ERROR',
+    });
+    return;
+  }
+
+  // Rate-limit 抛出的错误可能没有 statusCode（通过 errorResponseBuilder 处理）
+  // 检查是否为 rate-limit 相关错误
+  if ((error as any)?.code === 'RATE_LIMIT_EXCEEDED') {
+    reply.status(429).send({
+      success: false,
+      message: (error as any)?.message || '请求过于频繁，请稍后再试',
+      code: 'RATE_LIMIT_EXCEEDED',
     });
     return;
   }

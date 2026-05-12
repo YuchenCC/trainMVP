@@ -3,6 +3,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
+import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import dotenv from 'dotenv';
@@ -17,9 +18,10 @@ const monorepoRoot = path.resolve(__dirname, '..', '..', '..');
 // 优先从 monorepo 根目录加载 .env 文件
 dotenv.config({ path: path.join(monorepoRoot, '.env') });
 
-import { authMiddleware } from './common/middleware/index.js';
+import { authMiddleware, rbacMiddleware } from './common/middleware/index.js';
 import { handleError } from './common/errors/index.js';
 import { loginRoute, meRoute, seedRoute } from './modules/auth/index.js';
+import { Operation } from '@release-train/shared';
 
 // 兜底加载当前目录的 .env（兼容 apps/server/.env 符号链接）
 dotenv.config();
@@ -29,15 +31,22 @@ export async function createApp() {
   const app = Fastify({
     logger: {
       level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
-      // 日志中不打印敏感信息
       serializers: {
         req(request) {
           return {
             method: request.method,
             url: request.url,
-            // 不记录请求体中的密码等敏感字段
           };
         },
+        res(reply) {
+          return {
+            statusCode: reply.statusCode,
+          };
+        },
+      },
+      redact: {
+        paths: ['req.headers.authorization', 'req.headers.cookie', '*.password', '*.token'],
+        censor: '[REDACTED]',
       },
     },
   });
@@ -70,6 +79,33 @@ export async function createApp() {
     credentials: true,
   });
 
+  // ========== 注册速率限制（防暴力破解） ==========
+  // 测试环境放宽限制，避免测试间互相影响
+  const isTest = process.env.NODE_ENV === 'test';
+  await app.register(rateLimit, {
+    max: isTest ? 1000 : 10,
+    timeWindow: '1 minute',
+    keyGenerator: (request) => {
+      return request.ip;
+    },
+    errorResponseBuilder: () => ({
+      success: false,
+      message: '请求过于频繁，请稍后再试',
+      code: 'RATE_LIMIT_EXCEEDED',
+    }),
+    addHeadersOnExceeding: {
+      'x-ratelimit-limit': true,
+      'x-ratelimit-remaining': true,
+      'x-ratelimit-reset': true,
+    },
+    addHeaders: {
+      'x-ratelimit-limit': true,
+      'x-ratelimit-remaining': true,
+      'x-ratelimit-reset': true,
+      'retry-after': true,
+    },
+  });
+
   // ========== 注册JWT插件 ==========
   const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
@@ -83,6 +119,21 @@ export async function createApp() {
   // ========== 注册认证中间件装饰器 ==========
   app.decorate('authenticate', authMiddleware);
 
+  // ========== 全局错误处理 ==========
+  app.setErrorHandler((error, request, reply) => {
+    handleError(error, reply);
+  });
+
+  // ========== 生产环境 HTTPS 强制 ==========
+  if (process.env.NODE_ENV === 'production') {
+    app.addHook('onRequest', async (request, reply) => {
+      const proto = request.headers['x-forwarded-proto'] || request.protocol;
+      if (proto === 'http') {
+        return reply.code(301).redirect(`https://${request.hostname}${request.url}`);
+      }
+    });
+  }
+
   // ========== 注册路由 ==========
   await app.register(loginRoute);
   await app.register(meRoute);
@@ -94,10 +145,20 @@ export async function createApp() {
     data: { status: 'ok', timestamp: new Date().toISOString() },
   }));
 
-  // ========== 全局错误处理 ==========
-  app.setErrorHandler((error, request, reply) => {
-    handleError(error, reply);
-  });
+  // ========== RBAC 测试路由（仅开发/测试环境） ==========
+  if (process.env.NODE_ENV !== 'production') {
+    app.post('/api/test/rbac/create-req', {
+      onRequest: [app.authenticate, rbacMiddleware(Operation.CREATE_REQ)],
+    }, async () => ({ success: true, data: { message: 'CREATE_REQ allowed' } }));
+
+    app.post('/api/test/rbac/review-req', {
+      onRequest: [app.authenticate, rbacMiddleware(Operation.REVIEW_REQ)],
+    }, async () => ({ success: true, data: { message: 'REVIEW_REQ allowed' } }));
+
+    app.post('/api/test/rbac/complete-dev', {
+      onRequest: [app.authenticate, rbacMiddleware(Operation.COMPLETE_DEV)],
+    }, async () => ({ success: true, data: { message: 'COMPLETE_DEV allowed' } }));
+  }
 
   return app;
 }
