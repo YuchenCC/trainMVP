@@ -128,12 +128,12 @@ const VariantA: React.FC = () => {
         </Card>
 
         <Card
-          title="前置依赖"
+          title="关联依赖"
           extra={<Button type="link" icon={<PlusOutlined />}>添加依赖</Button>}
           style={{ marginBottom: 16 }}
         >
           {deps.length === 0 ? (
-            <div style={{ color: '#999', textAlign: 'center', padding: 20 }}>暂无前置依赖</div>
+            <div style={{ color: '#999', textAlign: 'center', padding: 20 }}>暂无关联依赖</div>
           ) : (
             deps.map((dep) => (
               <div

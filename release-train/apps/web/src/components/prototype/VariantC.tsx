@@ -132,7 +132,7 @@ const VariantC: React.FC = () => {
 
           <Card
             size="small"
-            title={<span style={{ fontSize: 14 }}>前置依赖</span>}
+            title={<span style={{ fontSize: 14 }}>关联依赖</span>}
             extra={<Button type="link" size="small" icon={<PlusOutlined />}>添加</Button>}
           >
             {deps.map((dep) => (
@@ -220,7 +220,7 @@ const VariantC: React.FC = () => {
           >
             {deps.length === 0 ? (
               <div style={{ color: '#999', textAlign: 'center', padding: 16, fontSize: 13 }}>
-                无前置依赖
+                无关联依赖
               </div>
             ) : (
               <div>

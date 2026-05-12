@@ -158,13 +158,13 @@ const VariantB: React.FC = () => {
         {/* Step 2: 依赖与提交 */}
         <div style={{ display: current === 2 ? 'block' : 'none' }}>
           <Card
-            title="前置依赖（可选）"
+            title="关联依赖（可选）"
             extra={<Button type="link" icon={<PlusOutlined />}>添加依赖</Button>}
             style={{ marginBottom: 16 }}
           >
             {deps.length === 0 ? (
               <div style={{ color: '#999', textAlign: 'center', padding: 24 }}>
-                暂无前置依赖，点击右上角添加
+                暂无关联依赖，点击右上角添加
               </div>
             ) : (
               deps.map((dep) => (
