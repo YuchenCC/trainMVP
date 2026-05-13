@@ -99,7 +99,79 @@ export const ERROR_CODE_MAP: Record<string, ErrorCodeEntry> = {
     message: '请求参数验证失败',
   },
 
-  // 后续按需扩展，命名格式：{资源}_{原因}，如 REQUIREMENT_NOT_DRAFT
+  // ==========================================
+  // 需求模块业务错误（BUSINESS）— 统一 HTTP 200
+  // ==========================================
+
+  REQUIREMENT_NOT_FOUND: {
+    code: 'REQUIREMENT_NOT_FOUND',
+    type: ErrorType.BUSINESS,
+    statusCode: 200,
+    message: '需求不存在',
+  },
+
+  REQUIREMENT_NOT_DRAFT: {
+    code: 'REQUIREMENT_NOT_DRAFT',
+    type: ErrorType.BUSINESS,
+    statusCode: 200,
+    message: '仅草稿状态可操作',
+  },
+
+  REQUIREMENT_INVALID_DESCRIPTION: {
+    code: 'REQUIREMENT_INVALID_DESCRIPTION',
+    type: ErrorType.BUSINESS,
+    statusCode: 200,
+    message: '需求描述无效',
+  },
+
+  REQUIREMENT_SYSTEM_NOT_FOUND: {
+    code: 'REQUIREMENT_SYSTEM_NOT_FOUND',
+    type: ErrorType.BUSINESS,
+    statusCode: 200,
+    message: '归属系统不存在',
+  },
+
+  REQUIREMENT_BA_NOT_FOUND: {
+    code: 'REQUIREMENT_BA_NOT_FOUND',
+    type: ErrorType.BUSINESS,
+    statusCode: 200,
+    message: '业务归属人不存在或角色不符',
+  },
+
+  REQUIREMENT_PM_NOT_FOUND: {
+    code: 'REQUIREMENT_PM_NOT_FOUND',
+    type: ErrorType.BUSINESS,
+    statusCode: 200,
+    message: '产品经理不存在或角色不符',
+  },
+
+  REQUIREMENT_DEPENDENCY_NOT_FOUND: {
+    code: 'REQUIREMENT_DEPENDENCY_NOT_FOUND',
+    type: ErrorType.BUSINESS,
+    statusCode: 200,
+    message: '依赖需求不存在',
+  },
+
+  REQUIREMENT_CIRCULAR_DEPENDENCY: {
+    code: 'REQUIREMENT_CIRCULAR_DEPENDENCY',
+    type: ErrorType.BUSINESS,
+    statusCode: 200,
+    message: '存在循环依赖，无法添加',
+  },
+
+  REQUIREMENT_CODE_CONFLICT: {
+    code: 'REQUIREMENT_CODE_CONFLICT',
+    type: ErrorType.BUSINESS,
+    statusCode: 200,
+    message: '需求编号生成冲突，请重试',
+  },
+
+  REQUIREMENT_VERSION_CONFLICT: {
+    code: 'REQUIREMENT_VERSION_CONFLICT',
+    type: ErrorType.BUSINESS,
+    statusCode: 200,
+    message: '需求已被其他人修改，请刷新后重试',
+  },
 };
 
 // ========== 工具函数 ==========

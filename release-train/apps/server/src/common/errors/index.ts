@@ -56,6 +56,41 @@ export const errors = {
 
   internal: (message?: string) =>
     makeError('INTERNAL_ERROR', message), // 500 技术错误：服务器内部错误
+
+  // ========== 需求模块业务错误（200） ==========
+  // 需求模块专用语义化错误码，替换通用 badRequest/notFound/conflict
+  // 每个错误码对应 shared/error-codes.ts 中的一条注册记录
+  // 使用方式：throw errors.requirementNotFound('需求 xxx 不存在')
+
+  requirementNotFound: (message?: string) =>
+    makeError('REQUIREMENT_NOT_FOUND', message), // 200 业务错误：需求不存在
+
+  requirementNotDraft: (message?: string) =>
+    makeError('REQUIREMENT_NOT_DRAFT', message), // 200 业务错误：仅草稿状态可操作
+
+  requirementInvalidDescription: (message?: string) =>
+    makeError('REQUIREMENT_INVALID_DESCRIPTION', message), // 200 业务错误：需求描述为空或超长
+
+  requirementSystemNotFound: (message?: string) =>
+    makeError('REQUIREMENT_SYSTEM_NOT_FOUND', message), // 200 业务错误：归属系统不存在
+
+  requirementBaNotFound: (message?: string) =>
+    makeError('REQUIREMENT_BA_NOT_FOUND', message), // 200 业务错误：业务归属人不存在或角色不符
+
+  requirementPmNotFound: (message?: string) =>
+    makeError('REQUIREMENT_PM_NOT_FOUND', message), // 200 业务错误：产品经理不存在或角色不符
+
+  requirementDependencyNotFound: (message?: string) =>
+    makeError('REQUIREMENT_DEPENDENCY_NOT_FOUND', message), // 200 业务错误：依赖需求不存在
+
+  requirementCircularDependency: (message?: string) =>
+    makeError('REQUIREMENT_CIRCULAR_DEPENDENCY', message), // 200 业务错误：存在循环依赖
+
+  requirementCodeConflict: (message?: string) =>
+    makeError('REQUIREMENT_CODE_CONFLICT', message), // 200 业务错误：需求编号生成冲突
+
+  requirementVersionConflict: (message?: string) =>
+    makeError('REQUIREMENT_VERSION_CONFLICT', message), // 200 业务错误：需求版本冲突（并发修改）
 };
 
 // ========== 错误处理函数（生产环境不暴露堆栈） ==========

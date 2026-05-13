@@ -9,9 +9,12 @@ import {
   CreateRequirementRequest,  // 创建需求请求参数类型（shared 包定义）
   UpdateRequirementRequest,  // 编辑需求请求参数类型
   RequirementDetail,          // 需求详情响应类型
+  RequirementListItem,        // 需求列表项类型
+  RequirementListQuery,       // 需求列表查询参数类型
   DependencyItem,             // 依赖项摘要类型（用于依赖列表展示）
   OperationType,              // 操作类型枚举（用于 StatusLog 审计）
 } from '@release-train/shared';
+import { PaginatedResponse } from '@release-train/shared';
 
 // ========== XSS 过滤白名单配置 ==========
 // 定义需求描述中允许保留的 HTML 标签、属性和 URL 协议
@@ -98,7 +101,7 @@ async function generateReqCode(tx: Prisma.TransactionClient, maxRetries = 3): Pr
       if (existing) {
         // 编号冲突，如果是最后一次尝试则抛错，否则继续重试
         if (attempt === maxRetries - 1) {
-          throw errors.conflict('需求编号生成冲突，请重试');
+          throw errors.requirementCodeConflict();
         }
         continue; // 继续下一轮重试
       }
@@ -106,13 +109,13 @@ async function generateReqCode(tx: Prisma.TransactionClient, maxRetries = 3): Pr
     } catch (error) {
       // 非业务错误的异常直接透出
       if (attempt === maxRetries - 1) {
-        throw errors.conflict('需求编号生成冲突，请重试');
+        throw errors.requirementCodeConflict();
       }
     }
   }
 
   // 兜底：重试耗尽
-  throw errors.conflict('需求编号生成冲突，请重试');
+  throw errors.requirementCodeConflict();
 }
 
 /**
@@ -260,32 +263,32 @@ export async function createRequirement(
 
   // 校验过滤后描述不为空
   if (filteredDescription.length === 0) {
-    throw errors.badRequest('需求描述不能为空');
+    throw errors.requirementInvalidDescription('需求描述不能为空');
   }
 
   // 校验过滤后描述不超长（50000 字上限）
   if (filteredDescription.length > 50000) {
-    throw errors.badRequest('需求描述不能超过50000字');
+    throw errors.requirementInvalidDescription('需求描述不能超过50000字');
   }
 
   // 2. 校验归属系统存在性（先判空，避免无效 DB 查询）
   if (!data.systemId) {
-    throw errors.badRequest('归属系统不能为空');
+    throw errors.requirementSystemNotFound('归属系统不能为空');
   }
   const system = await prisma.system.findUnique({ where: { id: data.systemId } });
   if (!system) {
-    throw errors.badRequest('归属系统不存在');
+    throw errors.requirementSystemNotFound();
   }
 
   // 3. 校验业务归属人存在且角色为 BA（先判空，避免无效 DB 查询）
   if (!data.baId) {
-    throw errors.badRequest('业务归属人不能为空');
+    throw errors.requirementBaNotFound('业务归属人不能为空');
   }
   const ba = await prisma.user.findFirst({
     where: { id: data.baId, role: 'BA' }, // 限定角色为 BA
   });
   if (!ba) {
-    throw errors.badRequest('业务归属人不存在');
+    throw errors.requirementBaNotFound();
   }
 
   // 4. 如果指定了产品经理，校验其存在且角色为 PM
@@ -294,7 +297,7 @@ export async function createRequirement(
       where: { id: data.pmId, role: 'PM' }, // 限定角色为 PM
     });
     if (!pm) {
-      throw errors.badRequest('产品经理不存在');
+      throw errors.requirementPmNotFound();
     }
   }
 
@@ -308,7 +311,7 @@ export async function createRequirement(
     const missingIds = data.dependencyIds.filter((id) => !existingIds.has(id)); // 取差集
     if (missingIds.length > 0) {
       // 批量返回所有不存在的依赖需求 ID
-      throw errors.badRequest(`依赖需求不存在：${missingIds.join(', ')}`);
+      throw errors.requirementDependencyNotFound(`依赖需求不存在：${missingIds.join(', ')}`);
     }
   }
 
@@ -348,7 +351,7 @@ export async function createRequirement(
         // 循环依赖检测：添加 A → depId 是否会形成环？
         const hasCircular = await hasCircularDependency(requirement.id, depId, tx);
         if (hasCircular) {
-          throw errors.badRequest('存在循环依赖，无法添加'); // 阻断保存
+          throw errors.requirementCircularDependency(); // 阻断保存
         }
 
         // 创建依赖关系记录
@@ -396,9 +399,9 @@ export async function getRequirementById(id: string): Promise<RequirementDetail>
     },
   });
 
-  // 需求不存在 → 404
+  // 需求不存在 → 200 业务错误
   if (!requirement) {
-    throw errors.notFound('需求');
+    throw errors.requirementNotFound();
   }
 
   // 组装并返回详情
@@ -437,27 +440,27 @@ export async function updateRequirement(
 
   // 需求不存在
   if (!existing) {
-    throw errors.notFound('需求');
+    throw errors.requirementNotFound();
   }
 
   // 2. 仅草稿状态可编辑
   if (existing.status !== 'DRAFT') {
-    throw errors.badRequest('仅草稿状态可编辑');
+    throw errors.requirementNotDraft();
   }
 
   // 3. 乐观锁校验：version 不匹配说明已被其他人修改
   if (existing.version !== data.version) {
-    throw errors.conflict('需求已被其他人修改，请刷新后重试');
+    throw errors.requirementVersionConflict();
   }
 
   // 4. 如果修改了描述 → XSS 过滤后再做长度校验
   if (data.description) {
     const filtered = sanitizeDescription(data.description);
     if (filtered.length === 0) {
-      throw errors.badRequest('需求描述不能为空');
+      throw errors.requirementInvalidDescription('需求描述不能为空');
     }
     if (filtered.length > 50000) {
-      throw errors.badRequest('需求描述不能超过50000字');
+      throw errors.requirementInvalidDescription('需求描述不能超过50000字');
     }
     data.description = filtered; // 替换为过滤后的安全文本
   }
@@ -466,7 +469,7 @@ export async function updateRequirement(
   if (data.systemId) {
     const system = await prisma.system.findUnique({ where: { id: data.systemId } });
     if (!system) {
-      throw errors.badRequest('归属系统不存在');
+      throw errors.requirementSystemNotFound();
     }
   }
 
@@ -476,7 +479,7 @@ export async function updateRequirement(
       where: { id: data.baId, role: 'BA' },
     });
     if (!ba) {
-      throw errors.badRequest('业务归属人不存在');
+      throw errors.requirementBaNotFound();
     }
   }
 
@@ -486,7 +489,7 @@ export async function updateRequirement(
       where: { id: data.pmId, role: 'PM' },
     });
     if (!pm) {
-      throw errors.badRequest('产品经理不存在');
+      throw errors.requirementPmNotFound();
     }
   }
 
@@ -500,7 +503,7 @@ export async function updateRequirement(
       const existingIds = new Set(existingDeps.map((d) => d.id));
       const missingIds = data.dependencyIds.filter((did) => !existingIds.has(did));
       if (missingIds.length > 0) {
-        throw errors.badRequest(`依赖需求不存在：${missingIds.join(', ')}`);
+        throw errors.requirementDependencyNotFound(`依赖需求不存在：${missingIds.join(', ')}`);
       }
     }
   }
@@ -533,10 +536,10 @@ export async function updateRequirement(
     if (result.count === 0) {
       const current = await tx.requirement.findUnique({ where: { id } });
       if (!current) {
-        throw errors.notFound('需求'); // 需求已被删除
+        throw errors.requirementNotFound(); // 需求已被删除
       }
       // 版本号不匹配 → 乐观锁冲突
-      throw errors.conflict('需求已被其他人修改，请刷新后重试');
+      throw errors.requirementVersionConflict();
     }
 
     // 9d. 如果传了 dependencyIds → 全量替换依赖列表
@@ -550,7 +553,7 @@ export async function updateRequirement(
       for (const depId of data.dependencyIds) {
         const hasCircular = await hasCircularDependency(id, depId, tx);
         if (hasCircular) {
-          throw errors.badRequest('存在循环依赖，无法添加');
+          throw errors.requirementCircularDependency();
         }
 
         await tx.requirementDependency.create({
@@ -607,12 +610,12 @@ export async function cancelRequirement(
   const existing = await prisma.requirement.findUnique({ where: { id } });
 
   if (!existing) {
-    throw errors.notFound('需求');
+    throw errors.requirementNotFound();
   }
 
   // 2. US1.1 仅支持草稿取消
   if (existing.status !== 'DRAFT') {
-    throw errors.badRequest('US1.1仅支持草稿取消，非草稿取消请使用取消需求功能');
+    throw errors.requirementNotDraft('US1.1仅支持草稿取消，非草稿取消请使用取消需求功能');
   }
 
   // 3. 事务内更新状态 + 创建日志
@@ -676,4 +679,74 @@ export async function searchRequirements(keyword: string): Promise<RequirementSe
     orderBy: { createdAt: 'desc' }, // 最新创建的排在前面
     take: 20,                       // 最多返回 20 条
   });
+}
+
+/**
+ * 需求列表查询（分页 + 筛选 + 搜索）
+ * 
+ * 遵循编码规范 9.4 分页规范：
+ * - 使用偏移分页（skip + take）
+ * - findMany 和 count 使用相同 where 条件
+ * - pageSize 上限 100，page 下限 1
+ * 
+ * @param params - 查询参数（page/pageSize/status/keyword）
+ * @returns 分页响应 { list, total, page, pageSize }
+ */
+export async function listRequirements(
+  params: RequirementListQuery,
+): Promise<PaginatedResponse<RequirementListItem>> {
+  // 分页参数规范化（遵循编码规范 9.4.2）
+  const page = Math.max(1, params.page ?? 1);                         // 页码 >= 1
+  const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20)); // 每页 1~100，默认 20
+
+  // 构建 where 条件
+  const where: any = {};
+
+  // 按状态筛选
+  if (params.status) {
+    where.status = params.status;
+  }
+
+  // 按关键词模糊搜索（编号或标题）
+  if (params.keyword && params.keyword.trim().length > 0) {
+    where.OR = [
+      { reqCode: { contains: params.keyword, mode: 'insensitive' } },
+      { title: { contains: params.keyword, mode: 'insensitive' } },
+    ];
+  }
+
+  // 并行查询：数据 + 总数（相同 where 条件）
+  const [list, total] = await Promise.all([
+    prisma.requirement.findMany({
+      where,
+      skip: (page - 1) * pageSize,   // 偏移量
+      take: pageSize,                 // 每页条数
+      orderBy: { createdAt: 'desc' }, // 最新创建排前面
+      select: {
+        id: true,
+        reqCode: true,
+        title: true,
+        status: true,
+        priority: true,
+        storyPoints: true,
+        createdAt: true,
+        updatedAt: true,
+        system: { select: { id: true, name: true } },
+        ba: { select: { id: true, displayName: true } },
+        creator: { select: { id: true, displayName: true } },
+      },
+    }),
+    prisma.requirement.count({ where }), // 总数（相同条件）
+  ]);
+
+  // 转换为 ISO 8601 字符串格式（Prisma 枚举 → shared 枚举需显式转换）
+  const formattedList: RequirementListItem[] = list.map((item) => ({
+    ...item,
+    status: item.status as unknown as RequirementListItem['status'],
+    priority: item.priority as unknown as RequirementListItem['priority'],
+    createdAt: item.createdAt.toISOString(),
+    updatedAt: item.updatedAt.toISOString(),
+  }));
+
+  return { list: formattedList, total, page, pageSize };
 }

@@ -8,7 +8,10 @@ import {
   CreateRequirementRequest,          // 创建需求请求体类型
   UpdateRequirementRequest,          // 编辑需求请求体类型
   ApiResponse,                       // 通用 API 响应包装类型
+  PaginatedResponse,                 // 分页响应包装类型
   RequirementDetail,                 // 需求详情响应类型
+  RequirementListItem,               // 需求列表项类型
+  RequirementListQuery,              // 需求列表查询参数类型
   JwtPayload,                        // JWT Token 载荷类型（sub/username/role）
 } from '@release-train/shared';
 import {
@@ -17,6 +20,7 @@ import {
   updateRequirement,                // 编辑需求 service
   cancelRequirement,                // 取消需求 service
   searchRequirements,               // 搜索需求 service
+  listRequirements,                 // 需求列表 service（分页）
   RequirementSearchItem,            // 搜索单项类型
 } from './service.js';
 
@@ -44,6 +48,19 @@ const getUserId = (request: FastifyRequest): string => {
  * @param fastify - Fastify 实例（由 app.ts 传入）
  */
 export async function requirementRoutes(fastify: FastifyInstance): Promise<void> {
+  // ======================== 需求列表（分页） ========================
+  // 注意：此路由必须放在 :id 路由之前，避免 Fastify 路由匹配冲突
+  fastify.get<{ Querystring: RequirementListQuery; Reply: ApiResponse<PaginatedResponse<RequirementListItem>> }>(
+    '/api/requirements',                                 // GET /api/requirements?page=1&pageSize=20&status=DRAFT&keyword=
+    {
+      onRequest: [fastify.authenticate],                  // 需要登录
+    },
+    async (request, reply) => {
+      const result = await listRequirements(request.query); // 调用 service 分页查询
+      return reply.send({ success: true, data: result });   // 返回分页数据
+    },
+  );
+
   // ======================== 需求搜索 ========================
   // 注意：此路由必须放在 :id 路由之前，避免 "search" 被 :id 捕获
   fastify.get<{ Querystring: { q: string }; Reply: ApiResponse<RequirementSearchItem[]> }>(
