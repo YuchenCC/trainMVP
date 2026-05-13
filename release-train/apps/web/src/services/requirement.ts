@@ -6,7 +6,10 @@ import {
   CreateRequirementRequest,   // 创建需求请求体
   UpdateRequirementRequest,   // 编辑需求请求体
   RequirementDetail,          // 需求详情响应
+  RequirementListItem,        // 需求列表项
+  RequirementListQuery,       // 需求列表查询参数
   ApiResponse,                // 通用 API 响应包装
+  PaginatedResponse,          // 分页响应包装
 } from '@release-train/shared';
 
 /**
@@ -17,6 +20,17 @@ import {
  * - 业务失败：Axios 拦截器直接 reject，组件 catch 中处理
  */
 export const requirementService = {
+  /**
+   * 需求列表查询（分页 + 筛选 + 搜索）
+   * 
+   * @param params - 查询参数（page/pageSize/status/keyword）
+   * @returns 分页响应 { list, total, page, pageSize }
+   */
+  list: async (params: RequirementListQuery): Promise<ApiResponse<PaginatedResponse<RequirementListItem>>> => {
+    const response = await api.get('/requirements', { params }); // GET /api/requirements?page=&pageSize=&status=&keyword=
+    return response.data;
+  },
+
   /**
    * 创建需求
    * 

@@ -96,3 +96,26 @@ export interface EmergencyChangeRequest {
   urgency: string;                     // 紧急程度 P0/P1
   reason: string;                      // 变更原因
 }
+
+// 需求列表项（用于分页列表展示，字段精简）
+export interface RequirementListItem {
+  id: string;                          // 需求ID
+  reqCode: string;                     // 需求编号
+  title: string;                       // 需求标题
+  status: ReqStatus;                   // 主状态
+  priority: Priority;                  // 优先级
+  storyPoints: number;                 // 工作量点数
+  system: { id: string; name: string }; // 归属系统摘要
+  ba: { id: string; displayName: string };  // 业务归属人摘要
+  creator: { id: string; displayName: string }; // 创建人摘要
+  createdAt: string;                   // 创建时间（ISO 8601）
+  updatedAt: string;                   // 更新时间（ISO 8601）
+}
+
+// 需求列表查询参数
+export interface RequirementListQuery {
+  page?: number;                       // 页码，默认 1
+  pageSize?: number;                   // 每页条数，默认 20，最大 100
+  status?: ReqStatus;                  // 按状态筛选（可选）
+  keyword?: string;                    // 按编号/标题模糊搜索（可选）
+}
