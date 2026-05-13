@@ -199,14 +199,17 @@ describe('T1 US1.1 需求录入', () => {
       expect(body.data.status).toBe('DRAFT');
     });
 
-    it('获取不存在的需求应返回404', async () => {
+    it('获取不存在的需求应返回200，错误码 REQUIREMENT_NOT_FOUND', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/requirements/nonexistent-id',
         headers: { Authorization: `Bearer ${baToken}` },
       });
 
-      expect(res.statusCode).toBe(404);
+      expect(res.statusCode).toBe(200); // 业务错误统一返回 200
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('REQUIREMENT_NOT_FOUND');
     });
   });
 
@@ -231,7 +234,7 @@ describe('T1 US1.1 需求录入', () => {
       expect(body.data.version).toBe(2);
     });
 
-    it('乐观锁版本不匹配应返回409', async () => {
+    it('乐观锁版本不匹配应返回200，错误码 REQUIREMENT_VERSION_CONFLICT', async () => {
       const res = await app.inject({
         method: 'PATCH',
         url: `/api/requirements/${createdRequirementId}`,
@@ -242,10 +245,13 @@ describe('T1 US1.1 需求录入', () => {
         },
       });
 
-      expect(res.statusCode).toBe(409);
+      expect(res.statusCode).toBe(200); // 业务错误统一返回 200
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('REQUIREMENT_VERSION_CONFLICT');
     });
 
-    it('编辑不存在的需求应返回404', async () => {
+    it('编辑不存在的需求应返回200，错误码 REQUIREMENT_NOT_FOUND', async () => {
       const res = await app.inject({
         method: 'PATCH',
         url: '/api/requirements/nonexistent-id',
@@ -256,7 +262,10 @@ describe('T1 US1.1 需求录入', () => {
         },
       });
 
-      expect(res.statusCode).toBe(404);
+      expect(res.statusCode).toBe(200); // 业务错误统一返回 200
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('REQUIREMENT_NOT_FOUND');
     });
   });
 
@@ -289,14 +298,229 @@ describe('T1 US1.1 需求录入', () => {
       expect(body.data.success).toBe(true);
     });
 
-    it('取消不存在的需求应返回404', async () => {
+    it('取消不存在的需求应返回200，错误码 REQUIREMENT_NOT_FOUND', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/requirements/nonexistent-id/cancel',
         headers: { Authorization: `Bearer ${baToken}` },
       });
 
-      expect(res.statusCode).toBe(404);
+      expect(res.statusCode).toBe(200); // 业务错误统一返回 200
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('REQUIREMENT_NOT_FOUND');
+    });
+  });
+
+  // ====================================================================
+  // 分页列表测试（TDD）
+  // ====================================================================
+  describe('GET /api/requirements 分页列表', () => {
+    it('默认分页（不传参数）返回第一页，默认 pageSize=20', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data).toHaveProperty('list');
+      expect(body.data).toHaveProperty('total');
+      expect(body.data).toHaveProperty('page');
+      expect(body.data).toHaveProperty('pageSize');
+      expect(body.data.page).toBe(1);
+      expect(body.data.pageSize).toBe(20);
+      expect(Array.isArray(body.data.list)).toBe(true);
+      expect(body.data.total).toBeGreaterThanOrEqual(0);
+    });
+
+    it('分页响应结构正确：list 元素包含必要字段', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+
+      if (body.data.list.length > 0) {
+        const item = body.data.list[0];
+        expect(item).toHaveProperty('id');
+        expect(item).toHaveProperty('reqCode');
+        expect(item).toHaveProperty('title');
+        expect(item).toHaveProperty('status');
+        expect(item).toHaveProperty('priority');
+        expect(item).toHaveProperty('storyPoints');
+        expect(item).toHaveProperty('system');
+        expect(item).toHaveProperty('ba');
+        expect(item).toHaveProperty('creator');
+        expect(item).toHaveProperty('createdAt');
+        expect(item).toHaveProperty('updatedAt');
+        expect(item.system).toHaveProperty('id');
+        expect(item.system).toHaveProperty('name');
+        expect(item.ba).toHaveProperty('id');
+        expect(item.ba).toHaveProperty('displayName');
+        expect(item.creator).toHaveProperty('id');
+        expect(item.creator).toHaveProperty('displayName');
+      }
+    });
+
+    it('自定义 pageSize=5 返回最多5条', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?pageSize=5',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.pageSize).toBe(5);
+      expect(body.data.list.length).toBeLessThanOrEqual(5);
+    });
+
+    it('pageSize 超出上限100应截断为100', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?pageSize=200',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.pageSize).toBe(100); // 截断为上限
+    });
+
+    it('pageSize=0 应修正为1', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?pageSize=0',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.pageSize).toBe(1); // 最小为1
+    });
+
+    it('page=0 应修正为第1页', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?page=0',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.page).toBe(1); // 最小为1
+    });
+
+    it('按关键词搜索（标题匹配）', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?keyword=用户登录',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.total).toBeGreaterThanOrEqual(0);
+      // 所有结果标题或编号应包含关键词
+      for (const item of body.data.list) {
+        const matchTitle = item.title.includes('用户登录');
+        const matchCode = item.reqCode.includes('用户登录');
+        expect(matchTitle || matchCode).toBe(true);
+      }
+    });
+
+    it('按关键词搜索（编号匹配）', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?keyword=REQ-2026',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.total).toBeGreaterThanOrEqual(0);
+      for (const item of body.data.list) {
+        const matchTitle = item.title.includes('REQ-2026');
+        const matchCode = item.reqCode.includes('REQ-2026');
+        expect(matchTitle || matchCode).toBe(true);
+      }
+    });
+
+    it('按状态筛选 DRAFT', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?status=DRAFT',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      for (const item of body.data.list) {
+        expect(item.status).toBe('DRAFT');
+      }
+    });
+
+    it('筛选无数据的状态返回空列表', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?status=RELEASED',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.list).toEqual([]);
+      expect(body.data.total).toBe(0);
+    });
+
+    it('未登录应返回401', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements',
+      });
+
+      expect(res.statusCode).toBe(401);
+      const body = res.json();
+      expect(body.success).toBe(false);
+    });
+
+    it('第二页数据与第一页不重复', async () => {
+      // 先查第一页
+      const page1 = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?pageSize=2',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+      const page1Ids = page1.json().data.list.map((item: any) => item.id);
+
+      // 再查第二页
+      const page2 = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?page=2&pageSize=2',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+      const page2Ids = page2.json().data.list.map((item: any) => item.id);
+
+      // 两页 ID 不应有交集
+      if (page2Ids.length > 0) {
+        const intersection = page1Ids.filter((id: string) => page2Ids.includes(id));
+        expect(intersection).toEqual([]);
+      }
     });
   });
 });

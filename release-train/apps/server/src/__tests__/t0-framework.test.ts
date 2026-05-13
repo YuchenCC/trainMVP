@@ -89,16 +89,17 @@ describe('T0 基础框架', () => {
       expect(body.data).not.toHaveProperty('password');
     });
 
-    it('重复创建相同用户名应返回冲突', async () => {
+    it('重复创建相同用户名应返回200，错误码 CONFLICT', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/auth/seed',
         payload: TEST_ADMIN,
       });
 
-      expect(res.statusCode).toBe(409);
+      expect(res.statusCode).toBe(200); // 业务错误统一返回 200
       const body = res.json();
       expect(body.success).toBe(false);
+      expect(body.code).toBe('CONFLICT');
     });
 
     it('应成功创建BA用户', async () => {
@@ -186,14 +187,17 @@ describe('T0 基础框架', () => {
       expect(body.success).toBe(false);
     });
 
-    it('空用户名应返回参数校验错误', async () => {
+    it('空用户名应返回200，错误码 VALIDATION_ERROR', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/auth/login',
         payload: { username: '', password: 'whatever' },
       });
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(200); // 参数校验属于业务错误，统一返回 200
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('VALIDATION_ERROR');
     });
   });
 

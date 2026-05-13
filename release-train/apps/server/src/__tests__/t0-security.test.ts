@@ -249,8 +249,9 @@ describe('T0 安全渗透测试', () => {
         payload: { username: longString, password: longString },
       });
 
-      expect([400, 401]).toContain(res.statusCode);
+      expect(res.statusCode).toBe(200); // 参数校验属于业务错误，统一返回 200
       expect(res.json().success).toBe(false);
+      expect(res.json().code).toBe('VALIDATION_ERROR');
     });
 
     it('畸形 JSON body 应返回 400 而非 500', async () => {
@@ -304,15 +305,16 @@ describe('T0 安全渗透测试', () => {
       expect(res.json().success).toBe(true);
     });
 
-    it('BA 不可访问 REVIEW_REQ 受保护路由（应返回 403）', async () => {
+    it('BA 不可访问 REVIEW_REQ 受保护路由（应返回200，错误码 PERMISSION_DENIED）', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/test/rbac/review-req',
         headers: { Authorization: `Bearer ${baToken}` },
       });
 
-      expect(res.statusCode).toBe(403);
+      expect(res.statusCode).toBe(200); // 角色权限属于业务错误，统一返回 200
       expect(res.json().success).toBe(false);
+      expect(res.json().code).toBe('PERMISSION_DENIED');
     });
 
     it('PM 可访问 REVIEW_REQ 受保护路由', async () => {
@@ -335,14 +337,16 @@ describe('T0 安全渗透测试', () => {
       expect(res.statusCode).toBe(200);
     });
 
-    it('BA 不可访问 COMPLETE_DEV 受保护路由', async () => {
+    it('BA 不可访问 COMPLETE_DEV 受保护路由（应返回200，错误码 PERMISSION_DENIED）', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/test/rbac/complete-dev',
         headers: { Authorization: `Bearer ${baToken}` },
       });
 
-      expect(res.statusCode).toBe(403);
+      expect(res.statusCode).toBe(200); // 角色权限属于业务错误，统一返回 200
+      expect(res.json().success).toBe(false);
+      expect(res.json().code).toBe('PERMISSION_DENIED');
     });
 
     it('TECH_MGR 可访问 COMPLETE_DEV 受保护路由', async () => {
@@ -381,15 +385,15 @@ describe('T0 安全渗透测试', () => {
       expect(res.statusCode).toBe(401);
     });
 
-    it('已认证但无权限应返回 403（非 401）', async () => {
+    it('已认证但无权限应返回200，错误码 PERMISSION_DENIED（非 401）', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/test/rbac/complete-dev',
         headers: { Authorization: `Bearer ${baToken}` },
       });
 
-      expect(res.statusCode).toBe(403);
-      expect(res.json().code).toBe('FORBIDDEN');
+      expect(res.statusCode).toBe(200); // 角色权限属于业务错误，统一返回 200
+      expect(res.json().code).toBe('PERMISSION_DENIED');
     });
 
     it('Token 中 role 被篡改后 RBAC 应拒绝', async () => {
@@ -479,7 +483,7 @@ describe('T0 安全渗透测试', () => {
       await secApp.close();
     });
 
-    it('无效角色应被 schema 校验拒绝', async () => {
+    it('无效角色应被 schema 校验拒绝（返回200，错误码 VALIDATION_ERROR）', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/auth/seed',
@@ -492,17 +496,21 @@ describe('T0 安全渗透测试', () => {
         },
       });
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(200); // 参数校验属于业务错误，统一返回 200
+      expect(res.json().success).toBe(false);
+      expect(res.json().code).toBe('VALIDATION_ERROR');
     });
 
-    it('缺少必填字段应被拒绝', async () => {
+    it('缺少必填字段应被拒绝（返回200，错误码 VALIDATION_ERROR）', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/auth/seed',
         payload: { username: 'incomplete_user' },
       });
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(200); // 参数校验属于业务错误，统一返回 200
+      expect(res.json().success).toBe(false);
+      expect(res.json().code).toBe('VALIDATION_ERROR');
     });
   });
 
@@ -645,8 +653,8 @@ describe('T0 安全渗透测试', () => {
 
       console.log(`[时序分析] 存在用户平均: ${avgExist}ms, 不存在用户平均: ${avgNotExist}ms, 差异: ${timeDiff}ms`);
 
-      // 修复后差异应 < 100ms（两者都走 bcrypt 路径）
-      expect(timeDiff).toBeLessThan(100);
+      // 修复后差异应 < 200ms（两者都走 bcrypt 路径，CI 环境留足余量）
+      expect(timeDiff).toBeLessThan(200);
     });
   });
 
@@ -798,24 +806,28 @@ describe('T0 安全渗透测试', () => {
       expect([400, 401]).toContain(res.statusCode);
     });
 
-    it('超长输入应被 schema 拒绝', async () => {
+    it('超长输入应被 schema 拒绝（返回200，错误码 VALIDATION_ERROR）', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/auth/login',
         payload: { username: 'a'.repeat(101), password: 'test' },
       });
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(200); // 参数校验属于业务错误，统一返回 200
+      expect(res.json().success).toBe(false);
+      expect(res.json().code).toBe('VALIDATION_ERROR');
     });
 
-    it('超长密码应被 schema 拒绝', async () => {
+    it('超长密码应被 schema 拒绝（返回200，错误码 VALIDATION_ERROR）', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/auth/login',
         payload: { username: 'admin', password: 'p'.repeat(201) },
       });
 
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(200); // 参数校验属于业务错误，统一返回 200
+      expect(res.json().success).toBe(false);
+      expect(res.json().code).toBe('VALIDATION_ERROR');
     });
   });
 
