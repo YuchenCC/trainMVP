@@ -72,6 +72,17 @@
 - 依赖管理采用全量替换模式：编辑需求时提交完整依赖列表，后端全量替换，不做增量操作
 - 添加依赖时自动进行循环依赖检测（DFS算法，按需查询数据库），存在循环则阻断
 
+**v1.2 增强**：
+
+- **系统列表动态加载**：归属系统下拉从 `GET /api/systems` 动态获取，不在前端硬编码
+- **人员动态加载**：选择归属系统后，通过 `GET /api/systems/:id/users` 动态获取该系统成员，BA/PM下拉框按角色过滤
+- **依赖需求搜索**：通过 `GET /api/requirements/search?q=` 关键词搜索已有需求（模糊匹配编号和标题），300ms防抖，点击添加，不再随机选择
+- **实施文件**：
+  - 后端：`apps/server/src/modules/systems/`（系统+成员查询）
+  - 后端：`apps/server/src/modules/requirements/service.ts`（searchRequirements）
+  - 前端：`apps/web/src/services/system.ts`（系统服务API）
+  - 前端：`apps/web/src/components/requirements/RequirementForm.tsx`（动态表单）
+
 **草稿编辑权限**：
 
 - 草稿状态下，BA/PM/PROJECT_MGR 都可编辑需求（不限归属人）

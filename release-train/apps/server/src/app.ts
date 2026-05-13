@@ -21,6 +21,8 @@ dotenv.config({ path: path.join(monorepoRoot, '.env') });
 import { authMiddleware, rbacMiddleware } from './common/middleware/index.js';
 import { handleError } from './common/errors/index.js';
 import { loginRoute, meRoute, seedRoute } from './modules/auth/index.js';
+import { requirementRoutes } from './modules/requirements/index.js';
+import { systemRoutes } from './modules/systems/index.js';
 import { Operation } from '@release-train/shared';
 
 // 兜底加载当前目录的 .env（兼容 apps/server/.env 符号链接）
@@ -138,6 +140,8 @@ export async function createApp() {
   await app.register(loginRoute);
   await app.register(meRoute);
   await app.register(seedRoute);
+  await app.register(systemRoutes);
+  await app.register(requirementRoutes);
 
   // ========== 健康检查 ==========
   app.get('/api/health', async () => ({

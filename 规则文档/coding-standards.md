@@ -8,7 +8,7 @@
 | 适用工程 | `release-train` |
 | 技术栈 | React + Vite + Ant Design + Zustand / Fastify + Prisma / pnpm monorepo |
 | 制定日期 | 2026-05-10 |
-| 版本 | v1.0 |
+| 版本 | v1.1 |
 
 本规范用于统一 `release-train` 工程的目录组织、命名、类型、接口、数据访问、错误处理、测试和安全边界。所有新增业务模块（需求池、版本火车、AI排期与优化）均应遵守本文。
 
@@ -260,12 +260,128 @@ fastify.post<{
 
 ### 7.4 错误处理
 
-- 业务错误统一使用 `errors` 工厂抛出。
-- 不直接 `reply.status(400).send(...)` 拼错误响应。
+#### 7.4.1 错误抛出规范
+
+- 业务错误统一使用 `errors` 工厂抛出，禁止直接 `reply.status(400).send(...)` 拼错误响应。
 - 未找到资源时，根据业务语义返回：
   - 不存在：`errors.notFound('需求')`
   - 无权访问：`errors.forbidden()`
 - 生产环境不得向前端暴露堆栈、SQL、内部路径。
+
+#### 7.4.2 错误码体系
+
+所有业务错误必须携带语义化错误码（`code` 字段），前端根据错误码做统一处理，**禁止前端解析 `message` 文本做分支判断**。
+
+**错误码管理方式**：
+
+错误码、类型、默认提示统一在 `packages/shared/src/constants/error-codes.ts` 中集中注册，前后端共享。后端 `errors` 工厂通过 `makeError()` 从注册表读取，确保错误码、状态码、类型与注册表一致。
+
+**错误码命名规则**：
+
+- 格式：`UPPER_SNAKE_CASE`，如 `BAD_REQUEST`、`NOT_FOUND`、`REQUIREMENT_NOT_DRAFT`
+- 通用错误码使用大类名（如 `FORBIDDEN`），业务错误码使用 `{资源}_{原因}` 格式（如 `REQUIREMENT_NOT_DRAFT`）
+- 错误码必须全局唯一，新增时先检查是否已有语义相同的码
+
+**错误类型分类**：
+
+每个错误码必须标注类型（`ErrorType`），用于区分技术错误和业务错误：
+
+| 类型 | 枚举值 | HTTP 状态码 | 说明 | 示例 |
+|------|--------|------------|------|------|
+| 技术错误 | `TECHNICAL` | 对应 HTTP 状态码（401/403/404/429/500） | IP访问拒绝、认证失败、限流、服务器/数据库异常、资源不存在 | `UNAUTHORIZED`、`FORBIDDEN`、`INTERNAL_ERROR` |
+| 业务错误 | `BUSINESS` | **统一 200** | 角色权限、参数校验、唯一/重复、非空、业务规则 | `PERMISSION_DENIED`、`BAD_REQUEST`、`CONFLICT` |
+
+> **核心约定**：业务错误统一返回 HTTP 200，通过响应体 `success: false` + `code` 区分。前端无需根据 HTTP 状态码判断业务结果，只需检查 `success` 字段。
+
+**错误码分类（按 HTTP 状态码）**：
+
+| 类别 | HTTP 状态码 | 错误类型 | 错误码示例 | 说明 |
+|------|------------|---------|-----------|------|
+| 认证 | 401 | TECHNICAL | `UNAUTHORIZED` | 未登录、Token 过期、Token 被吊销 |
+| IP拒绝 | 403 | TECHNICAL | `FORBIDDEN` | IP访问拒绝等基础设施层拦截 |
+| 资源 | 404 | TECHNICAL | `NOT_FOUND` | 资源不存在 |
+| 限流 | 429 | TECHNICAL | `RATE_LIMIT_EXCEEDED` | 请求频率超限 |
+| 系统 | 500 | TECHNICAL | `INTERNAL_ERROR` | 服务器内部错误，不暴露细节 |
+| 角色权限 | **200** | BUSINESS | `PERMISSION_DENIED` | 用户角色权限不足 |
+| 参数校验 | **200** | BUSINESS | `BAD_REQUEST`、`VALIDATION_ERROR` | 参数缺失、格式错误、枚举值非法 |
+| 业务规则 | **200** | BUSINESS | `REQUIREMENT_NOT_DRAFT`、`DEPENDENCY_CIRCULAR` | 状态不允许操作、循环依赖等 |
+| 冲突 | **200** | BUSINESS | `CONFLICT`、`VERSION_CONFLICT` | 乐观锁冲突、编号冲突、重复操作 |
+
+**当前已注册错误码**（`packages/shared/src/constants/error-codes.ts`）：
+
+| 错误码 | 类型 | HTTP 状态码 | 工厂方法 | 默认消息 |
+|--------|------|------------|---------|---------|
+| `UNAUTHORIZED` | TECHNICAL | 401 | `errors.unauthorized()` | 未登录或登录已过期 |
+| `FORBIDDEN` | TECHNICAL | 403 | `errors.forbidden()` | 访问被拒绝 |
+| `NOT_FOUND` | TECHNICAL | 404 | `errors.notFound('资源名')` | {资源名}不存在 |
+| `RATE_LIMIT_EXCEEDED` | TECHNICAL | 429 | Fastify rate-limit 自动生成 | 请求过于频繁，请稍后再试 |
+| `INTERNAL_ERROR` | TECHNICAL | 500 | `errors.internal()` | 服务器内部错误 |
+| `PERMISSION_DENIED` | BUSINESS | **200** | `errors.permissionDenied()` | 无权限执行此操作 |
+| `BAD_REQUEST` | BUSINESS | **200** | `errors.badRequest()` | 请求参数错误 |
+| `VALIDATION_ERROR` | BUSINESS | **200** | Fastify schema 自动生成 | 请求参数验证失败 |
+| `CONFLICT` | BUSINESS | **200** | `errors.conflict()` | 数据冲突 |
+
+#### 7.4.3 新增错误码流程
+
+1. 在 `packages/shared/src/constants/error-codes.ts` 的 `ERROR_CODE_MAP` 中注册新条目：
+   - 确定错误类型（`TECHNICAL` 或 `BUSINESS`）
+   - 命名遵循 `{资源}_{原因}` 格式
+   - 默认消息使用中文，简洁描述错误原因（不超过 30 字）
+2. 在 `apps/server/src/common/errors/index.ts` 的 `errors` 工厂中新增对应方法
+3. 同步更新本规范的错误码表
+
+```typescript
+// 步骤 1：在 shared/error-codes.ts 注册
+// ========== 业务错误 ==========
+REQUIREMENT_NOT_DRAFT: {
+  code: 'REQUIREMENT_NOT_DRAFT',
+  type: ErrorType.BUSINESS,
+  statusCode: 200, // 业务错误统一 200
+  message: '仅草稿状态可编辑',
+},
+
+// 步骤 2：在 server/common/errors/index.ts 新增工厂方法
+requirementNotDraft: (message?: string) =>
+  makeError('REQUIREMENT_NOT_DRAFT', message),
+```
+
+#### 7.4.4 错误提示规范
+
+| 规则 | 说明 |
+|------|------|
+| 语言 | 用户可见的错误提示使用中文，技术日志使用英文 |
+| 简洁 | 单条错误提示不超过 30 字，不暴露内部状态和堆栈 |
+| 可操作 | 提示应告知用户下一步操作，如"请刷新后重试"、"请先选择系统" |
+| 不暴露 | 禁止在 `message` 中返回 SQL 语句、表名、字段名、文件路径 |
+| 批量校验 | 多个字段校验失败时，一次性返回所有错误，不逐条返回 |
+| 前端映射 | 前端对已知错误码做统一映射，未知错误码显示通用提示"操作失败，请稍后重试" |
+
+**错误消息示例**：
+
+| ✅ 推荐 | ❌ 不推荐 |
+|---------|----------|
+| `归属系统不存在` | `System with id 'cuid_xxx' not found in database` |
+| `仅草稿状态可编辑` | `Cannot edit requirement in status READY` |
+| `依赖需求不存在：REQ-2026-0001, REQ-2026-0002` | `Foreign key constraint violation on requirement_dependency` |
+| `需求已被其他人修改，请刷新后重试` | `Version conflict: expected 3, got 4` |
+| `请求过于频繁，请稍后再试` | `Rate limit exceeded: 100 requests per minute` |
+
+#### 7.4.5 前端错误处理
+
+- 前端统一在 Axios 响应拦截器中处理 401（跳转登录页）。
+- 业务错误码通过 `code` 字段判断，**不通过 `message` 文本匹配**。
+- 已知错误码 → 显示对应的中文提示；未知错误码 → 显示通用提示"操作失败，请稍后重试"。
+- 表单提交错误在对应字段下方显示，全局错误使用 `message.error()`。
+
+```typescript
+// 推荐：通过 code 判断
+if (error.response?.data?.code === 'VERSION_CONFLICT') {
+  message.warning('需求已被其他人修改，请刷新后重试');
+}
+
+// 不推荐：通过 message 文本判断
+if (error.response?.data?.message?.includes('版本')) { ... }
+```
 
 ### 7.5 认证与权限
 
@@ -361,6 +477,137 @@ fastify.post<{
 - 日期字段传输使用 ISO 8601 字符串。
 - 后端必须校验 `page >= 1`、`pageSize` 在合理范围内。
 
+### 9.4 分页规范
+
+#### 9.4.1 分页模式
+
+本项目统一使用**偏移分页（Offset-based Pagination）**，不使用游标分页。
+
+| 模式 | 适用场景 | 本项目 |
+|------|---------|--------|
+| 偏移分页 | 数据总量可控、需要跳页、需要显示总页数 | ✅ 默认 |
+| 游标分页 | 实时数据流、无限滚动、数据量极大 | ❌ 不使用 |
+
+#### 9.4.2 请求参数
+
+所有列表接口统一使用以下查询参数：
+
+| 参数 | 类型 | 必填 | 默认值 | 约束 |
+|------|------|------|--------|------|
+| `page` | `number` | 否 | `1` | `>= 1` |
+| `pageSize` | `number` | 否 | `20` | `>= 1, <= 100` |
+
+```typescript
+// packages/shared/src/types/api.ts — 已定义
+export interface PaginationParams {
+  page?: number;
+  pageSize?: number;
+}
+```
+
+**后端校验规则**：
+
+- `page` 未传或非法 → 默认 `1`
+- `pageSize` 未传或非法 → 默认 `20`
+- `pageSize > 100` → 强制截断为 `100`（防止一次查询过多数据）
+- `pageSize < 1` → 默认 `20`
+
+#### 9.4.3 响应格式
+
+分页接口统一返回 `PaginatedResponse<T>`：
+
+```typescript
+// packages/shared/src/types/api.ts — 已定义
+export interface PaginatedResponse<T> {
+  list: T[];        // 当前页数据
+  total: number;    // 总记录数
+  page: number;     // 当前页码
+  pageSize: number; // 每页条数
+}
+```
+
+响应示例：
+
+```json
+{
+  "success": true,
+  "data": {
+    "list": [{ "id": "xxx", "title": "需求A" }],
+    "total": 156,
+    "page": 1,
+    "pageSize": 20
+  }
+}
+```
+
+#### 9.4.4 后端实现规范
+
+- 使用 Prisma 的 `skip` + `take` 实现分页，禁止查出全量数据后在前端或 service 层截断。
+- 分页查询必须同时执行 `findMany`（数据）和 `count`（总数），两者使用相同的 `where` 条件。
+- 当 `total` 为 0 时，`list` 返回空数组 `[]`，不返回 `null`。
+
+```typescript
+// 标准分页查询模式
+async function listRequirements(params: {
+  page?: number;
+  pageSize?: number;
+  status?: string;
+}): Promise<PaginatedResponse<RequirementItem>> {
+  const page = Math.max(1, params.page ?? 1);           // 页码 >= 1
+  const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20)); // 每页 1~100
+
+  const where = { status: params.status };               // 筛选条件
+
+  const [list, total] = await Promise.all([
+    prisma.requirement.findMany({
+      where,
+      skip: (page - 1) * pageSize,                       // 偏移量
+      take: pageSize,                                    // 每页条数
+      orderBy: { createdAt: 'desc' },                    // 排序
+    }),
+    prisma.requirement.count({ where }),                 // 总数（相同条件）
+  ]);
+
+  return { list, total, page, pageSize };
+}
+```
+
+#### 9.4.5 前端分页规范
+
+- 列表页统一使用 Ant Design `Table` 组件的内置分页，不自行实现分页控件。
+- 分页参数变更时重新请求后端接口，不在前端做假分页。
+- 筛选条件变更时重置页码为 `1`。
+
+```typescript
+// 标准前端分页模式
+<Table
+  dataSource={data?.list ?? []}
+  pagination={{
+    current: data?.page ?? 1,
+    pageSize: data?.pageSize ?? 20,
+    total: data?.total ?? 0,
+    showSizeChanger: true,                               // 允许切换每页条数
+    pageSizeOptions: ['10', '20', '50', '100'],          // 可选每页条数
+    showTotal: (total) => `共 ${total} 条`,              // 显示总数
+  }}
+  onChange={(pagination) => {
+    fetchList({ page: pagination.current, pageSize: pagination.pageSize });
+  }}
+/>
+```
+
+#### 9.4.6 不分页的例外场景
+
+以下场景可以不使用分页，但必须在代码注释中说明原因：
+
+| 场景 | 说明 | 示例 |
+|------|------|------|
+| 下拉选项 | 数据量可控（如系统列表已限制 50 条） | 系统选择器 |
+| 导出 | 用户明确需要全量导出 | Excel 导出 |
+| 内部关联 | 非用户直接触发的内部查询 | 权限校验时的角色列表 |
+
+> 即使不分页，也必须设置 `take` 上限，防止意外全量查询。
+
 ---
 
 ## 十、测试规范
@@ -440,5 +687,5 @@ it('未登录访问需求列表时返回 401', async () => {
 
 *文档编号：RT-CODE-STD*  
 *创建时间：2026-05-10*  
-*版本：v1.0*  
+*版本：v1.1*  
 *关联文档：RT-T0-基础框架与数据层-设计方案_20260510.md、RT-安全规范_20260510.md*
