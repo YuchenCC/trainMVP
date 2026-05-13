@@ -39,7 +39,7 @@ export function rbacMiddleware(operation: Operation) {
     // 从权限矩阵查询该操作允许的角色
     const allowedRoles = PERMISSION_MATRIX[operation];
     if (!allowedRoles || !allowedRoles.includes(user.role as Role)) {
-      throw errors.forbidden();
+      throw errors.permissionDenied(); // 业务错误：用户角色权限不足，HTTP 200
     }
   };
 }
@@ -59,7 +59,7 @@ export function rbacRolesMiddleware(...allowedRoles: Role[]) {
     }
 
     if (!allowedRoles.includes(user.role as Role)) {
-      throw errors.forbidden();
+      throw errors.permissionDenied(); // 业务错误：用户角色权限不足，HTTP 200
     }
   };
 }

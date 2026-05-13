@@ -26,7 +26,8 @@ api.interceptors.response.use(
   (response) => {
     const data = response.data as ApiResponse;
     if (data.success === false) {
-      // 业务错误，抛出给调用方处理
+      // 业务错误（HTTP 200 + success:false）：角色权限、参数校验、唯一/重复、业务规则等
+      // 直接抛出给调用方处理，message 已包含中文提示
       return Promise.reject(new Error(data.message || '操作失败'));
     }
     return response;
@@ -35,13 +36,15 @@ api.interceptors.response.use(
     if (error.response) {
       const status = error.response.status;
       if (status === 401) {
-        // Token过期或无效，清除登录状态并跳转登录页
+        // 技术错误：Token过期或无效，清除登录状态并跳转登录页
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         window.location.href = '/login';
       } else if (status === 403) {
-        return Promise.reject(new Error('无权限执行此操作'));
+        // 技术错误：IP访问拒绝等基础设施层拦截
+        return Promise.reject(new Error('访问被拒绝'));
       } else {
+        // 其他技术错误（404/429/500）：取后端返回的 message
         const message = error.response.data?.message || '请求失败';
         return Promise.reject(new Error(message));
       }

@@ -207,6 +207,17 @@ export const ROLE_LABELS: Record<Role, string> = {
   [Role.SUPER_ADMIN]: '超级管理员',
 };
 
+// ========== 系统成员角色显示名称映射 ==========
+export const SYSTEM_ROLE_LABELS: Record<SystemRole, string> = {
+  [SystemRole.BA]: '业务BA',
+  [SystemRole.PM]: '产品经理',
+  [SystemRole.PROJECT_MGR]: '项目经理',
+  [SystemRole.TECH_MGR]: '技术经理',
+  [SystemRole.TEST_MGR]: '测试经理',
+  [SystemRole.DEV]: '开发人员',
+  [SystemRole.QA]: '测试人员',
+};
+
 // ========== 需求状态显示名称映射 ==========
 export const REQ_STATUS_LABELS: Record<ReqStatus, string> = {
   [ReqStatus.DRAFT]: '草稿',
@@ -233,3 +244,16 @@ export const TRAIN_STATUS_LABELS: Record<TrainStatus, string> = {
   [TrainStatus.COMPLETED]: '已完成',
   [TrainStatus.CANCELLED]: '已取消',
 };
+
+// ========== 错误码注册表（独立文件管理） ==========
+// 所有错误码、类型（技术/业务）、默认提示集中管理
+// 详见 error-codes.ts
+export {
+  ErrorType,
+  ERROR_CODE_MAP,
+  getErrorCodeEntry,
+  getErrorMessage,
+  isBusinessError,
+  isTechnicalError,
+} from './error-codes';
+export type { ErrorCodeEntry } from './error-codes';
