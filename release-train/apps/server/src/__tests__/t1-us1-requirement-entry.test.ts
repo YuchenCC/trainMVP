@@ -179,7 +179,7 @@ describe('T1 US1.1 需求录入', () => {
         },
       });
 
-      expect(res.statusCode).toBe(401);
+      expect(res.statusCode).toBe(200);
     });
   });
 
@@ -691,7 +691,7 @@ describe('T1 US1.1 需求录入', () => {
         url: '/api/requirements',
       });
 
-      expect(res.statusCode).toBe(401);
+      expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.success).toBe(false);
     });

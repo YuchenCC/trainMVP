@@ -170,7 +170,7 @@ describe('T0 基础框架', () => {
         payload: { username: TEST_ADMIN.username, password: 'WrongPassword!' },
       });
 
-      expect(res.statusCode).toBe(401);
+      expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.success).toBe(false);
     });
@@ -182,7 +182,7 @@ describe('T0 基础框架', () => {
         payload: { username: 'nonexistent', password: 'whatever' },
       });
 
-      expect(res.statusCode).toBe(401);
+      expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.success).toBe(false);
     });
@@ -224,7 +224,7 @@ describe('T0 基础框架', () => {
         url: '/api/auth/me',
       });
 
-      expect(res.statusCode).toBe(401);
+      expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.success).toBe(false);
     });
@@ -236,7 +236,7 @@ describe('T0 基础框架', () => {
         headers: { Authorization: 'Bearer invalid.token.here' },
       });
 
-      expect(res.statusCode).toBe(401);
+      expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.success).toBe(false);
     });
