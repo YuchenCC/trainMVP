@@ -48,6 +48,23 @@ function buildBreadcrumbs(pathname: string) {
   return items;
 }
 
+// 根据当前路径获取语义父级路由（避免 navigate(-1) 依赖浏览器历史栈导致套圈）
+function getParentPath(pathname: string): string {
+  // /requirements/:id/edit → /requirements/:id
+  const editMatch = pathname.match(/^(\/requirements\/[^/]+)\/edit$/);
+  if (editMatch) return editMatch[1];
+
+  // /requirements/:id → /requirements
+  const detailMatch = pathname.match(/^\/requirements\/[^/]+$/);
+  if (detailMatch) return '/requirements';
+
+  // /requirements/new → /requirements
+  if (pathname === '/requirements/new') return '/requirements';
+
+  // 其他子页面兜底返回首页
+  return '/requirements';
+}
+
 // ========== 主布局组件 ==========
 const MainLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -188,7 +205,7 @@ const MainLayout: React.FC = () => {
           <Space size={4}>
             {breadcrumbs.length > 0 && (
               <span
-                onClick={() => navigate(-1)}
+                onClick={() => navigate(getParentPath(location.pathname))}
                 style={{
                   cursor: 'pointer',
                   display: 'inline-flex',
