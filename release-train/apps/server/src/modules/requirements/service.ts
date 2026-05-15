@@ -12,7 +12,9 @@ import {
   RequirementListItem,        // 需求列表项类型
   RequirementListQuery,       // 需求列表查询参数类型
   DependencyItem,             // 依赖项摘要类型（用于依赖列表展示）
+  StatusLogItem,              // 操作审计日志项类型
   OperationType,              // 操作类型枚举（用于 StatusLog 审计）
+  ReqStatus,                  // 需求状态枚举（用于风险分级）
 } from '@release-train/shared';
 import { PaginatedResponse } from '@release-train/shared';
 
@@ -197,15 +199,55 @@ async function buildRequirementDetail(
   });
 
   // 2. 将依赖列表转换为 DependencyItem[] 格式（Prisma 枚举 → shared 枚举类型断言）
-  const dependencies: DependencyItem[] = deps.map((d) => ({
-    id: d.dependency.id,                                                         // 需求 ID
-    reqCode: d.dependency.reqCode,                                              // 需求编号
-    title: d.dependency.title,                                                  // 需求标题
-    status: d.dependency.status as unknown as DependencyItem['status'],         // 主状态（类型断言解决 Prisma 枚举差异）
-    subStatus: (d.dependency.subStatus ?? undefined) as DependencyItem['subStatus'], // 子状态（null → undefined）
+  //    同时计算每条依赖的风险等级
+  const dependencies: DependencyItem[] = deps.map((d) => {
+    const depStatus = d.dependency.status as unknown as ReqStatus;
+    let riskLevel: DependencyItem['riskLevel'] = null;
+
+    if (depStatus === 'ONBOARDED' || depStatus === 'RELEASED') {
+      riskLevel = null;
+    } else if (depStatus === 'READY') {
+      riskLevel = 'warning';
+    } else if (depStatus === 'CANCELLED') {
+      riskLevel = 'critical';
+    } else {
+      riskLevel = 'high';
+    }
+
+    return {
+      id: d.dependency.id,
+      reqCode: d.dependency.reqCode,
+      title: d.dependency.title,
+      status: depStatus as DependencyItem['status'],
+      subStatus: (d.dependency.subStatus ?? undefined) as DependencyItem['subStatus'],
+      riskLevel,
+    };
+  });
+
+  // 3. 查询该需求的操作审计日志（按时间倒序）
+  const statusLogs = await txOrPrisma.statusLog.findMany({
+    where: { requirementId: requirement.id },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      operator: {
+        select: { displayName: true },
+      },
+    },
+  });
+
+  const statusLogItems: StatusLogItem[] = statusLogs.map((log) => ({
+    id: log.id,
+    operatorName: log.operator.displayName,
+    operationType: log.operationType as unknown as StatusLogItem['operationType'],
+    fromStatus: (log.fromStatus ?? undefined) as StatusLogItem['fromStatus'],
+    toStatus: log.toStatus as unknown as StatusLogItem['toStatus'],
+    fromSubStatus: (log.fromSubStatus ?? undefined) as StatusLogItem['fromSubStatus'],
+    toSubStatus: (log.toSubStatus ?? undefined) as StatusLogItem['toSubStatus'],
+    reason: log.reason ?? undefined,
+    createdAt: log.createdAt.toISOString(),
   }));
 
-  // 3. 返回完整的 RequirementDetail（含关联数据展开和时间格式化）
+  // 4. 返回完整的 RequirementDetail（含关联数据展开和时间格式化）
   return {
     id: requirement.id,                                    // 需求 ID
     reqCode: requirement.reqCode,                          // 需求编号
@@ -231,9 +273,9 @@ async function buildRequirementDetail(
     sourceChannel: requirement.sourceChannel ?? undefined,  // 来源渠道（null → undefined）
     version: requirement.version,                           // 乐观锁版本号
     dependencies,                                           // 前置依赖列表（步骤 2 已组装）
+    statusLogs: statusLogItems,                             // 操作审计日志（步骤 3 已组装）
     createdAt: requirement.createdAt.toISOString(),         // 创建时间 → ISO 8601 字符串
     updatedAt: requirement.updatedAt.toISOString(),         // 更新时间 → ISO 8601 字符串
-    proposedAt: requirement.proposedAt.toISOString(),       // 提出时间 → ISO 8601 字符串
   };
 }
 

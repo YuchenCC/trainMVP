@@ -173,6 +173,29 @@ export function hasPermission(role: Role, operation: Operation): boolean {
   return PERMISSION_MATRIX[operation]?.includes(role) ?? false;
 }
 
+// ========== 操作类型显示名称映射 ==========
+export const OPERATION_TYPE_LABELS: Record<OperationType, string> = {
+  [OperationType.CREATE]: '创建需求',
+  [OperationType.UPDATE]: '编辑需求',
+  [OperationType.SUBMIT_REVIEW]: '发起评审',
+  [OperationType.REVIEW_PASS]: '评审通过',
+  [OperationType.REVIEW_REJECT]: '评审拒绝',
+  [OperationType.RE_EDIT]: '重新编辑',
+  [OperationType.CANCEL]: '取消需求',
+  [OperationType.CHANGE_REQUIREMENT]: '需求变更',
+  [OperationType.EMERGENCY_CHANGE]: '紧急变更',
+  [OperationType.DEV_COMPLETE]: '开发完成',
+  [OperationType.SIT_PASS]: 'SIT通过',
+  [OperationType.UAT_PASS]: 'UAT通过',
+  [OperationType.BATCH_SUBMIT_REVIEW]: '批量发起评审',
+  [OperationType.BATCH_CANCEL]: '批量取消',
+  [OperationType.BATCH_CHANGE_PRIORITY]: '批量修改优先级',
+  [OperationType.ONBOARD]: '纳版',
+  [OperationType.REMOVE]: '从火车移除',
+  [OperationType.RELEASE]: '投产',
+  [OperationType.ROLLBACK]: '回滚',
+};
+
 // ========== 优先级显示名称映射 ==========
 export const PRIORITY_LABELS: Record<Priority, string> = {
   [Priority.P0]: 'P0-最高',

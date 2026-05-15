@@ -92,7 +92,6 @@ model Requirement {
   version         Int           @default(1)                  // 乐观锁版本号，每次更新自增，防止并发冲突
   reqType         ReqType?                                   // 需求类型：新功能/优化/缺陷（可选）
   sourceChannel   SourceChannel?                             // 来源渠道：业务提出/用户反馈等（可选）
-  proposedAt      DateTime      @default(now())              // 提出时间，需求创建时自动填充
   createdAt       DateTime      @default(now())              // 创建时间
   updatedAt       DateTime      @updatedAt                   // 更新时间
 

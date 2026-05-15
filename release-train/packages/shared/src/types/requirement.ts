@@ -19,7 +19,6 @@ export interface Requirement {
   version: number;                     // 乐观锁版本号
   reqType?: ReqType;                   // 需求类型（可选）
   sourceChannel?: SourceChannel;       // 来源渠道（可选）
-  proposedAt: Date;                    // 提出时间
   createdAt: Date;                     // 创建时间
   updatedAt: Date;                     // 更新时间
 }
@@ -72,9 +71,9 @@ export interface RequirementDetail {
   sourceChannel?: SourceChannel;       // 来源渠道（可选）
   version: number;                     // 乐观锁版本号
   dependencies: DependencyItem[];      // 前置依赖列表
+  statusLogs: StatusLogItem[];         // 操作审计日志（按时间倒序）
   createdAt: string;                   // 创建时间（ISO 8601）
   updatedAt: string;                   // 更新时间（ISO 8601）
-  proposedAt: string;                  // 提出时间（ISO 8601）
 }
 
 // 依赖项摘要
@@ -84,6 +83,20 @@ export interface DependencyItem {
   title: string;                       // 需求标题
   status: ReqStatus;                   // 需求状态
   subStatus?: ReqSubStatus;            // 子状态
+  riskLevel: 'warning' | 'high' | 'critical' | null; // 依赖风险等级
+}
+
+// 操作审计日志项
+export interface StatusLogItem {
+  id: string;
+  operatorName: string;                // 操作人姓名
+  operationType: OperationType;        // 操作类型
+  fromStatus?: ReqStatus;              // 变更前状态
+  toStatus: ReqStatus;                 // 变更后状态
+  fromSubStatus?: ReqSubStatus;        // 变更前子状态
+  toSubStatus?: ReqSubStatus;          // 变更后子状态
+  reason?: string;                     // 原因/备注
+  createdAt: string;                   // 操作时间 ISO 8601
 }
 
 // 需求状态变更请求参数

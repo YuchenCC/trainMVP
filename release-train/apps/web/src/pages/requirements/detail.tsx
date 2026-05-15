@@ -1,8 +1,8 @@
-// ========== 需求详情页面（US1.2） ==========
+// ========== 需求详情页面（US1.4） ==========
 // 路由 /requirements/:id，卡片分区展示需求完整信息
-// 草稿状态 + 授权用户可见「编辑」按钮
+// 包含：基本信息、需求描述、依赖列表、操作历史时间线、操作按钮
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   Card,
   Descriptions,
@@ -15,23 +15,29 @@ import {
   Row,
   Col,
   Table,
+  Timeline,
 } from 'antd';
 import {
   EditOutlined,
+  ArrowLeftOutlined,
 } from '@ant-design/icons';
 import { requirementService } from '../../services/requirement';
 import { useAuthStore } from '../../stores/auth';
 import {
   RequirementDetail,
   ReqStatus,
+  ReqSubStatus,
   REQ_STATUS_LABELS,
   REQ_STATUS_COLORS,
+  REQ_SUB_STATUS_LABELS,
   PRIORITY_LABELS,
   PRIORITY_COLORS,
   REQ_TYPE_LABELS,
   SOURCE_CHANNEL_LABELS,
+  OPERATION_TYPE_LABELS,
   Role,
   DependencyItem,
+  StatusLogItem,
 } from '@release-train/shared';
 
 const { Text } = Typography;
@@ -50,10 +56,34 @@ function canEditRequirement(
   return false;
 }
 
+// 获取状态显示文本（含子状态）
+function getStatusText(requirement: RequirementDetail): string {
+  const statusLabel = REQ_STATUS_LABELS[requirement.status];
+  if (requirement.status === ReqStatus.ONBOARDED && requirement.subStatus) {
+    return `${statusLabel}-${REQ_SUB_STATUS_LABELS[requirement.subStatus]}`;
+  }
+  return statusLabel;
+}
+
+// 获取风险等级对应的 Tag 配置
+function getRiskLevelConfig(riskLevel: DependencyItem['riskLevel']) {
+  switch (riskLevel) {
+    case 'warning':
+      return { color: 'orange', text: '⚠️ 风险' };
+    case 'high':
+      return { color: 'red', text: '🔴 高风险' };
+    case 'critical':
+      return { color: 'red', text: '🔴 严重' };
+    default:
+      return { color: 'green', text: '✅ 无风险' };
+  }
+}
+
 // ========== RequirementDetailPage 组件 ==========
 const RequirementDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuthStore();
 
   const [loading, setLoading] = useState(true);
@@ -107,7 +137,7 @@ const RequirementDetailPage: React.FC = () => {
 
   const canEdit = canEditRequirement(requirement, user?.role, user?.id);
 
-  // 依赖列表表格列定义
+  // 依赖列表表格列定义（新增风险等级列）
   const dependencyColumns = [
     {
       title: '需求编号',
@@ -125,17 +155,60 @@ const RequirementDetailPage: React.FC = () => {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      width: 100,
-      render: (status: ReqStatus) => (
-        <Tag color={REQ_STATUS_COLORS[status]}>{REQ_STATUS_LABELS[status]}</Tag>
+      width: 120,
+      render: (status: ReqStatus, record: DependencyItem) => (
+        <Tag color={REQ_STATUS_COLORS[status]}>
+          {record.subStatus && status === ReqStatus.ONBOARDED
+            ? `${REQ_STATUS_LABELS[status]}-${REQ_SUB_STATUS_LABELS[record.subStatus]}`
+            : REQ_STATUS_LABELS[status]}
+        </Tag>
       ),
+    },
+    {
+      title: '风险等级',
+      dataIndex: 'riskLevel',
+      key: 'riskLevel',
+      width: 100,
+      render: (riskLevel: DependencyItem['riskLevel']) => {
+        const config = getRiskLevelConfig(riskLevel);
+        return <Tag color={config.color}>{config.text}</Tag>;
+      },
     },
   ];
 
+  // 格式化操作历史时间
+  const formatLogTime = (isoString: string) => {
+    return new Date(isoString).toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  // 获取操作历史记录的描述文本
+  const getLogDescription = (log: StatusLogItem) => {
+    const operationText = OPERATION_TYPE_LABELS[log.operationType] || log.operationType;
+    return `${operationText}${log.reason ? ` - ${log.reason}` : ''}`;
+  };
+
   return (
     <div>
-      {/* 操作栏 */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+      {/* 操作栏：返回列表 + 编辑按钮 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+        <Button
+          type="link"
+          icon={<ArrowLeftOutlined />}
+          onClick={() => {
+            // 保留之前的筛选条件（通过 URL query 参数传递）
+            const searchParams = new URLSearchParams(location.search);
+            const queryString = searchParams.toString();
+            navigate(`/requirements${queryString ? `?${queryString}` : ''}`);
+          }}
+        >
+          返回列表
+        </Button>
         <Space>
           {canEdit && (
             <Button
@@ -160,7 +233,7 @@ const RequirementDetailPage: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label="状态">
                 <Tag color={REQ_STATUS_COLORS[requirement.status]}>
-                  {REQ_STATUS_LABELS[requirement.status]}
+                  {getStatusText(requirement)}
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="优先级">
@@ -211,6 +284,78 @@ const RequirementDetailPage: React.FC = () => {
               />
             )}
           </Card>
+
+          {/* 操作历史时间线卡片 */}
+          <Card title={`操作历史（${requirement.statusLogs.length}）`} style={{ marginBottom: 16 }}>
+            {requirement.statusLogs.length === 0 ? (
+              <Text type="secondary">暂无操作记录</Text>
+            ) : (
+              <Timeline mode="left">
+                {requirement.statusLogs.map((log) => (
+                  <Timeline.Item key={log.id}>
+                    <div>
+                      <div style={{ fontWeight: 500 }}>{getLogDescription(log)}</div>
+                      <div style={{ color: '#64748b', fontSize: 12, marginTop: 4 }}>
+                        {formatLogTime(log.createdAt)} · {log.operatorName}
+                      </div>
+                      {log.fromStatus && (
+                        <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 4 }}>
+                          {REQ_STATUS_LABELS[log.fromStatus]} → {REQ_STATUS_LABELS[log.toStatus]}
+                        </div>
+                      )}
+                    </div>
+                  </Timeline.Item>
+                ))}
+              </Timeline>
+            )}
+          </Card>
+
+          {/* 底部操作按钮区域 */}
+          <Card style={{ marginBottom: 16 }}>
+            <Space>
+              {requirement.status === ReqStatus.DRAFT && (
+                <>
+                  <Button type="primary" onClick={() => navigate(`/requirements/${id}/edit`)}>
+                    编辑
+                  </Button>
+                  <Button>发起评审</Button>
+                  <Button danger>取消</Button>
+                </>
+              )}
+              {requirement.status === ReqStatus.PENDING_REVIEW && (
+                <>
+                  <Button type="primary">评审通过</Button>
+                  <Button danger>评审拒绝</Button>
+                </>
+              )}
+              {requirement.status === ReqStatus.REJECTED && (
+                <>
+                  <Button type="primary">重新编辑</Button>
+                </>
+              )}
+              {requirement.status === ReqStatus.READY && (
+                <>
+                  <Button>需求变更</Button>
+                </>
+              )}
+              {requirement.status === ReqStatus.ONBOARDED && (
+                <>
+                  {requirement.subStatus === ReqSubStatus.FROZEN ? (
+                    <>
+                      <Button type="primary">紧急变更</Button>
+                      <Button danger>取消</Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button>需求变更</Button>
+                      <Button danger>取消</Button>
+                    </>
+                  )}
+                </>
+              )}
+              {/* 已投产和已取消状态不显示操作按钮 */}
+            </Space>
+          </Card>
         </Col>
 
         {/* 右列 */}
@@ -233,9 +378,6 @@ const RequirementDetailPage: React.FC = () => {
           {/* 时间信息卡片 */}
           <Card title="时间信息">
             <Descriptions column={1} size="small" labelStyle={{ color: '#64748b' }}>
-              <Descriptions.Item label="提出时间">
-                {new Date(requirement.proposedAt).toLocaleString('zh-CN')}
-              </Descriptions.Item>
               <Descriptions.Item label="创建时间">
                 {new Date(requirement.createdAt).toLocaleString('zh-CN')}
               </Descriptions.Item>
