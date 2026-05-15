@@ -245,6 +245,25 @@ export const TRAIN_STATUS_LABELS: Record<TrainStatus, string> = {
   [TrainStatus.CANCELLED]: '已取消',
 };
 
+// ========== 需求状态 Tag 颜色映射 ==========
+export const REQ_STATUS_COLORS: Record<ReqStatus, string> = {
+  [ReqStatus.DRAFT]: 'default',
+  [ReqStatus.PENDING_REVIEW]: 'processing',
+  [ReqStatus.READY]: 'success',
+  [ReqStatus.REJECTED]: 'error',
+  [ReqStatus.ONBOARDED]: 'blue',
+  [ReqStatus.RELEASED]: 'green',
+  [ReqStatus.CANCELLED]: '#999',
+};
+
+// ========== 优先级 Tag 颜色映射 ==========
+export const PRIORITY_COLORS: Record<Priority, string> = {
+  [Priority.P0]: 'red',
+  [Priority.P1]: 'orange',
+  [Priority.P2]: 'blue',
+  [Priority.P3]: 'default',
+};
+
 // ========== 错误码注册表（独立文件管理） ==========
 // 所有错误码、类型（技术/业务）、默认提示集中管理
 // 详见 error-codes.ts

@@ -4,7 +4,7 @@
 // 文件名：RequirementForm.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Form, Input, Select, InputNumber, Button, Card, Tag, Space, Typography, Divider, message, Spin,
+  Form, Input, Select, InputNumber, Button, Card, Tag, Space, Typography, Divider, message, Spin, Modal,
 } from 'antd';  // Ant Design 组件库
 import {
   PlusOutlined,            // 添加依赖按钮图标
@@ -294,8 +294,20 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
         message.success('需求创建成功');
       }
       onSuccess?.(); // 通知父组件（如关闭表单）
-    } catch (error) {
-      message.error((error as Error).message || '操作失败');
+    } catch (error: any) {
+      const errCode = error?.response?.data?.code;
+      if (errCode === 'REQUIREMENT_VERSION_CONFLICT') {
+        Modal.warning({
+          title: '编辑冲突',
+          content: '该需求已被其他人修改，请刷新页面获取最新数据后重新编辑。',
+          okText: '刷新页面',
+          onOk: () => {
+            window.location.reload();
+          },
+        });
+      } else {
+        message.error(error?.response?.data?.message || error?.message || '操作失败');
+      }
     } finally {
       setIsSubmitting(false);                                  // 恢复按钮
     }
@@ -320,8 +332,20 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
       }
       message.success('草稿已保存');
       onSuccess?.();
-    } catch (error) {
-      message.error((error as Error).message || '保存失败');
+    } catch (error: any) {
+      const errCode = error?.response?.data?.code;
+      if (errCode === 'REQUIREMENT_VERSION_CONFLICT') {
+        Modal.warning({
+          title: '编辑冲突',
+          content: '该需求已被其他人修改，请刷新页面获取最新数据后重新编辑。',
+          okText: '刷新页面',
+          onOk: () => {
+            window.location.reload();
+          },
+        });
+      } else {
+        message.error(error?.response?.data?.message || error?.message || '保存失败');
+      }
     }
   };
 
