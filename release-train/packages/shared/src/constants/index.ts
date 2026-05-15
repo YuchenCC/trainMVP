@@ -151,7 +151,7 @@ export const OPERATION_LABELS: Record<Operation, string> = {
 export const PERMISSION_MATRIX: Record<Operation, Role[]> = {
   [Operation.CREATE_REQ]:       [Role.BA, Role.PM, Role.PROJECT_MGR],
   [Operation.EDIT_REQ]:         [Role.BA, Role.PM, Role.PROJECT_MGR],
-  [Operation.SUBMIT_REVIEW]:    [Role.BA, Role.PM, Role.PROJECT_MGR],
+  [Operation.SUBMIT_REVIEW]:    [Role.BA, Role.TRAIN_ADMIN],
   [Operation.REVIEW_REQ]:       [Role.PM, Role.PROJECT_MGR, Role.TECH_MGR],
   [Operation.CANCEL_REQ]:       [Role.BA, Role.PROJECT_MGR, Role.TRAIN_ADMIN],
   [Operation.CHANGE_REQ]:       [Role.BA, Role.TRAIN_ADMIN],

@@ -15,6 +15,7 @@ import {
   StatusLogItem,              // 操作审计日志项类型
   OperationType,              // 操作类型枚举（用于 StatusLog 审计）
   ReqStatus,                  // 需求状态枚举（用于风险分级）
+  Role,                       // 角色枚举（用于发起评审权限校验）
 } from '@release-train/shared';
 import { PaginatedResponse } from '@release-train/shared';
 
@@ -690,6 +691,132 @@ export async function cancelRequirement(
 
     // 返回成功标记
     return { success: true as const };
+  });
+}
+
+/**
+ * 发起评审（草稿 → 待评审）
+ * 
+ * US1.5 将草稿状态需求提交评审，进入评审流程。
+ * 权限：BA（归属人）、TRAIN_ADMIN、SUPER_ADMIN
+ * 前置条件：需求状态必须为 DRAFT，且必填字段完整
+ * 
+ * @param id - 需求 ID
+ * @param operatorId - 操作人 ID（从 JWT 提取）
+ * @param operatorRole - 操作人角色（从 JWT 提取）
+ * @returns 更新后的需求详情（含状态和审计日志）
+ * @throws REQUIREMENT_NOT_FOUND - 需求不存在
+ * @throws REQUIREMENT_NOT_DRAFT - 非草稿状态
+ * @throws REQUIREMENT_PERMISSION_DENIED - 无发起评审权限
+ * @throws BAD_REQUEST - 必填字段缺失
+ * @throws REQUIREMENT_VERSION_CONFLICT - 乐观锁冲突
+ */
+export async function submitReview(
+  id: string,
+  operatorId: string,
+  operatorRole: string,
+): Promise<RequirementDetail> {
+  // 1. 查询需求存在性（含 baId 用于权限校验）
+  const existing = await prisma.requirement.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      status: true,
+      baId: true,
+      title: true,
+      description: true,
+      systemId: true,
+      priority: true,
+      storyPoints: true,
+      version: true,
+    },
+  });
+
+  if (!existing) {
+    throw errors.requirementNotFound();
+  }
+
+  // 2. 状态校验：仅草稿状态可发起评审
+  if (existing.status !== 'DRAFT') {
+    throw errors.requirementNotDraft('仅草稿状态可发起评审');
+  }
+
+  // 3. 权限校验：BA 必须是归属人，TRAIN_ADMIN/SUPER_ADMIN 不限
+  const isBA = operatorRole === Role.BA && operatorId === existing.baId;
+  const isTrainAdmin = operatorRole === Role.TRAIN_ADMIN;
+  const isSuperAdmin = operatorRole === Role.SUPER_ADMIN;
+
+  if (!isBA && !isTrainAdmin && !isSuperAdmin) {
+    throw errors.requirementPermissionDenied('无发起评审权限');
+  }
+
+  // 4. 必填字段校验
+  if (!existing.title || existing.title.trim().length < 1) {
+    throw errors.badRequest('标题不能为空');
+  }
+  if (existing.title.length > 200) {
+    throw errors.badRequest('标题长度不能超过 200 字符');
+  }
+  if (!existing.description || existing.description.trim().length === 0) {
+    throw errors.badRequest('需求描述不能为空');
+  }
+  if (!existing.systemId) {
+    throw errors.badRequest('归属系统不能为空');
+  }
+  if (!existing.priority) {
+    throw errors.badRequest('优先级不能为空');
+  }
+  if (!existing.storyPoints || existing.storyPoints < 1 || existing.storyPoints > 100) {
+    throw errors.badRequest('工作量点数必须为 1-100 的正整数');
+  }
+  if (!existing.baId) {
+    throw errors.badRequest('业务归属人不能为空');
+  }
+
+  // 5. 事务内：乐观锁更新状态 + 创建审计日志
+  return prisma.$transaction(async (tx) => {
+    // 5a. 带版本号条件的更新（乐观锁）
+    const result = await tx.requirement.updateMany({
+      where: { id, version: existing.version },
+      data: {
+        status: 'PENDING_REVIEW',
+        version: { increment: 1 },
+      },
+    });
+
+    // 5b. 更新影响行数为 0 → 版本冲突
+    if (result.count === 0) {
+      const current = await tx.requirement.findUnique({ where: { id } });
+      if (!current) {
+        throw errors.requirementNotFound();
+      }
+      throw errors.requirementVersionConflict();
+    }
+
+    // 5c. 创建状态变更日志（fromStatus 从实际数据读取）
+    await tx.statusLog.create({
+      data: {
+        requirementId: id,
+        operationType: OperationType.SUBMIT_REVIEW,
+        fromStatus: existing.status,
+        toStatus: 'PENDING_REVIEW',
+        operatorId,
+      },
+    });
+
+    // 5d. 重新查询更新后的需求（含关联数据）
+    const updated = await tx.requirement.findUnique({
+      where: { id },
+      include: {
+        system: true,
+        ba: true,
+        pm: true,
+        creator: true,
+        train: true,
+      },
+    });
+
+    return buildRequirementDetail(updated!, tx);
   });
 }
 
