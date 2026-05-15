@@ -664,10 +664,12 @@ describe('T0 安全渗透测试', () => {
   describe('速率限制（防暴力破解）', () => {
     it('连续请求超过限制应返回 429', async () => {
       const savedEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'development';
+      const savedRateLimitMax = process.env.RATE_LIMIT_MAX;
+      process.env.RATE_LIMIT_MAX = '10';
       const rateLimitApp = await createApp();
       await rateLimitApp.ready();
       process.env.NODE_ENV = savedEnv;
+      process.env.RATE_LIMIT_MAX = savedRateLimitMax;
 
       const results: number[] = [];
       for (let i = 0; i < 15; i++) {
@@ -687,10 +689,12 @@ describe('T0 安全渗透测试', () => {
 
     it('429 响应应包含标准错误格式', async () => {
       const savedEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'development';
+      const savedRateLimitMax = process.env.RATE_LIMIT_MAX;
+      process.env.RATE_LIMIT_MAX = '10';
       const rateLimitApp = await createApp();
       await rateLimitApp.ready();
       process.env.NODE_ENV = savedEnv;
+      process.env.RATE_LIMIT_MAX = savedRateLimitMax;
 
       let fourTwoNineBody: any = null;
       for (let i = 0; i < 15; i++) {
@@ -714,10 +718,12 @@ describe('T0 安全渗透测试', () => {
 
     it('429 响应应包含 retry-after 头', async () => {
       const savedEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'development';
+      const savedRateLimitMax = process.env.RATE_LIMIT_MAX;
+      process.env.RATE_LIMIT_MAX = '10';
       const rateLimitApp = await createApp();
       await rateLimitApp.ready();
       process.env.NODE_ENV = savedEnv;
+      process.env.RATE_LIMIT_MAX = savedRateLimitMax;
 
       let retryAfter: string | undefined;
       for (let i = 0; i < 15; i++) {

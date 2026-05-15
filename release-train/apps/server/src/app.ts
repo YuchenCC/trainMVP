@@ -82,10 +82,14 @@ export async function createApp() {
   });
 
   // ========== 注册速率限制（防暴力破解） ==========
-  // 测试环境放宽限制，避免测试间互相影响
-  const isTest = process.env.NODE_ENV === 'test';
+  // 非生产环境放宽限制：测试环境避免测试间互相影响，开发环境避免前端浏览触发限流
+  // 可通过 RATE_LIMIT_MAX 环境变量覆盖（测试用例用）
+  const isProduction = process.env.NODE_ENV === 'production';
+  const rateLimitMax = process.env.RATE_LIMIT_MAX
+    ? parseInt(process.env.RATE_LIMIT_MAX, 10)
+    : (isProduction ? 200 : 1000);
   await app.register(rateLimit, {
-    max: isTest ? 1000 : 10,
+    max: rateLimitMax,
     timeWindow: '1 minute',
     keyGenerator: (request) => {
       return request.ip;
