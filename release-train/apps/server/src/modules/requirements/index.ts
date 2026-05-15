@@ -21,9 +21,11 @@ import {
   cancelRequirement,                // 取消需求 service
   submitReview,                     // 发起评审 service
   reviewPass,                       // 评审通过 service
+  reviewReject,                     // 评审拒绝 service
   reEdit,                          // 重新编辑 service
   searchRequirements,               // 搜索需求 service
   listRequirements,                 // 需求列表 service（分页）
+  changeRequirement,                // 需求变更 service
   RequirementSearchItem,            // 搜索单项类型
 } from './service.js';
 
@@ -167,17 +169,20 @@ export async function requirementRoutes(fastify: FastifyInstance): Promise<void>
   );
 
   // ======================== 取消需求 ========================
-  fastify.post<{ Params: { id: string }; Reply: ApiResponse<{ success: true }> }>(
+  fastify.post<{ Params: { id: string }; Body: { reason: string }; Reply: ApiResponse<RequirementDetail> }>(
     '/api/requirements/:id/cancel',                      // POST /api/requirements/:id/cancel
     {
       onRequest: [
         fastify.authenticate,                            // 需要登录
-        rbacMiddleware(Operation.CANCEL_REQ),             // 需要 CANCEL_REQ 权限（BA/PROJECT_MGR/TRAIN_ADMIN）
+        rbacMiddleware(Operation.CANCEL_REQ),             // 需要 CANCEL_REQ 权限（BA/TRAIN_ADMIN/SUPER_ADMIN）
       ],
     },
     async (request, reply) => {
-      const userId = getUserId(request);                            // 从 JWT 提取操作人
-      const result = await cancelRequirement(request.params.id, userId); // 调用 service 取消
+      const user = request.user as JwtPayload;                       // 从 JWT 提取用户信息
+      const userId = user.sub;                                       // 操作人 ID
+      const operatorRole = user.role;                                // 操作人角色
+      const reason = request.body?.reason || '';                     // 取消原因（必填）
+      const result = await cancelRequirement(request.params.id, userId, operatorRole, reason); // 调用 service 取消
       return reply.send({ success: true, data: result });
     },
   );
@@ -219,6 +224,25 @@ export async function requirementRoutes(fastify: FastifyInstance): Promise<void>
     },
   );
 
+  // ======================== 评审拒绝 ========================
+  fastify.post<{ Params: { id: string }; Body: { reason: string }; Reply: ApiResponse<RequirementDetail> }>(
+    '/api/requirements/:id/review-reject',              // POST /api/requirements/:id/review-reject
+    {
+      onRequest: [
+        fastify.authenticate,                            // 需要登录
+        rbacMiddleware(Operation.REVIEW_REQ),             // 需要 REVIEW_REQ 权限（仅 PROJECT_MGR）
+      ],
+    },
+    async (request, reply) => {
+      const user = request.user as JwtPayload;                       // 从 JWT 提取用户信息
+      const userId = user.sub;                                       // 操作人 ID
+      const operatorRole = user.role;                                // 操作人角色
+      const reason = request.body?.reason || '';                     // 拒绝原因（必填）
+      const result = await reviewReject(request.params.id, userId, operatorRole, reason); // 调用 service 评审拒绝
+      return reply.send({ success: true, data: result });
+    },
+  );
+
   // ======================== 重新编辑 ========================
   fastify.post<{ Params: { id: string }; Reply: ApiResponse<RequirementDetail> }>(
     '/api/requirements/:id/re-edit',                  // POST /api/requirements/:id/re-edit
@@ -233,6 +257,38 @@ export async function requirementRoutes(fastify: FastifyInstance): Promise<void>
       const userId = user.sub;                                       // 操作人 ID
       const operatorRole = user.role;                                // 操作人角色
       const result = await reEdit(request.params.id, userId, operatorRole); // 调用 service 重新编辑
+      return reply.send({ success: true, data: result });
+    },
+  );
+
+  // ======================== 需求变更 ========================
+  fastify.post<{
+    Params: { id: string };
+    Body: { changeReason: string };
+    Reply: ApiResponse<RequirementDetail>;
+  }>(
+    '/api/requirements/:id/change',                    // POST /api/requirements/:id/change
+    {
+      onRequest: [
+        fastify.authenticate,                            // 需要登录
+        rbacMiddleware(Operation.CHANGE_REQ),             // 需要 CHANGE_REQ 权限（BA/TRAIN_ADMIN/SUPER_ADMIN）
+      ],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['changeReason'],                     // 变更原因必填
+          properties: {
+            changeReason: { type: 'string', minLength: 1, maxLength: 500 }, // 1-500 字
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const user = request.user as JwtPayload;                       // 从 JWT 提取用户信息
+      const userId = user.sub;                                       // 操作人 ID
+      const operatorRole = user.role;                                // 操作人角色
+      const changeReason = request.body.changeReason;                 // 变更原因
+      const result = await changeRequirement(request.params.id, userId, operatorRole, changeReason); // 调用 service 需求变更
       return reply.send({ success: true, data: result });
     },
   );

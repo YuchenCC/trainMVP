@@ -66,6 +66,51 @@ export const requirementService = {
   },
 
   /**
+   * 发起评审（草稿 → 待评审）
+   * 
+   * @param id - 需求 ID
+   * @returns 更新后的需求详情
+   */
+  submitReview: async (id: string): Promise<ApiResponse<RequirementDetail>> => {
+    const response = await api.post(`/requirements/${id}/submit-review`); // POST /api/requirements/:id/submit-review
+    return response.data;
+  },
+
+  /**
+   * 评审通过（待评审 → 就绪）
+   * 
+   * @param id - 需求 ID
+   * @returns 更新后的需求详情
+   */
+  reviewPass: async (id: string): Promise<ApiResponse<RequirementDetail>> => {
+    const response = await api.post(`/requirements/${id}/review-pass`); // POST /api/requirements/:id/review-pass
+    return response.data;
+  },
+
+  /**
+   * 评审拒绝（待评审 → 已拒绝）
+   * 
+   * @param id - 需求 ID
+   * @param reason - 拒绝原因（必填，最多 500 字）
+   * @returns 更新后的需求详情
+   */
+  reviewReject: async (id: string, reason: string): Promise<ApiResponse<RequirementDetail>> => {
+    const response = await api.post(`/requirements/${id}/review-reject`, { reason }); // POST /api/requirements/:id/review-reject
+    return response.data;
+  },
+
+  /**
+   * 重新编辑（已驳回 → 草稿）
+   * 
+   * @param id - 需求 ID
+   * @returns 更新后的需求详情
+   */
+  reEdit: async (id: string): Promise<ApiResponse<RequirementDetail>> => {
+    const response = await api.post(`/requirements/${id}/re-edit`); // POST /api/requirements/:id/re-edit
+    return response.data;
+  },
+
+  /**
    * 取消需求（草稿状态，免填原因）
    * 
    * @param id - 需求 ID
@@ -73,6 +118,23 @@ export const requirementService = {
    */
   cancel: async (id: string): Promise<ApiResponse<{ success: true }>> => {
     const response = await api.post(`/requirements/${id}/cancel`); // POST /api/requirements/:id/cancel
+    return response.data;
+  },
+
+  /**
+   * 需求变更（已就绪/已纳版 → 草稿）
+   * 
+   * US1.11 需求变更功能：
+   * - 前置条件：状态为已就绪或已纳版（非封板）
+   * - 权限：BA（归属人）、TRAIN_ADMIN、SUPER_ADMIN
+   * - 已纳版变更时：清除 trainId，释放火车容量
+   * 
+   * @param id - 需求 ID
+   * @param changeReason - 变更原因（必填，最多 500 字）
+   * @returns 更新后的需求详情
+   */
+  changeRequirement: async (id: string, changeReason: string): Promise<ApiResponse<RequirementDetail>> => {
+    const response = await api.post(`/requirements/${id}/change`, { changeReason }); // POST /api/requirements/:id/change
     return response.data;
   },
 

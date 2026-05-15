@@ -301,12 +301,16 @@ describe('T0 基础框架', () => {
       expect(hasPermission(Role.BA, Operation.REVIEW_REQ)).toBe(false);
     });
 
-    it('PM 可评审需求（REVIEW_REQ）', async () => {
-      expect(hasPermission(Role.PM, Operation.REVIEW_REQ)).toBe(true);
+    it('PM 不可评审需求（REVIEW_REQ）', async () => {
+      expect(hasPermission(Role.PM, Operation.REVIEW_REQ)).toBe(false);
     });
 
-    it('TECH_MGR 可评审需求（REVIEW_REQ）', async () => {
-      expect(hasPermission(Role.TECH_MGR, Operation.REVIEW_REQ)).toBe(true);
+    it('TECH_MGR 不可评审需求（REVIEW_REQ）', async () => {
+      expect(hasPermission(Role.TECH_MGR, Operation.REVIEW_REQ)).toBe(false);
+    });
+
+    it('PROJECT_MGR 可评审需求（REVIEW_REQ）', async () => {
+      expect(hasPermission(Role.PROJECT_MGR, Operation.REVIEW_REQ)).toBe(true);
     });
 
     it('TECH_MGR 可完成开发（COMPLETE_DEV）', async () => {

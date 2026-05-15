@@ -16,10 +16,14 @@ import {
   Col,
   Table,
   Timeline,
+  message,
+  Modal,
+  Input,
 } from 'antd';
 import {
   EditOutlined,
   ArrowLeftOutlined,
+  CloseOutlined,
 } from '@ant-design/icons';
 import { requirementService } from '../../services/requirement';
 import { useAuthStore } from '../../stores/auth';
@@ -136,6 +140,151 @@ const RequirementDetailPage: React.FC = () => {
   }
 
   const canEdit = canEditRequirement(requirement, user?.role, user?.id);
+
+  const handleSubmitReview = async () => {
+    try {
+      await requirementService.submitReview(id!);
+      message.success('已发起评审');
+      fetchDetail();
+    } catch (error: any) {
+      message.error(error?.message || '发起评审失败');
+    }
+  };
+
+  const handleReviewPass = () => {
+    Modal.confirm({
+      title: '确认评审通过',
+      content: '通过后需求将变为「就绪」状态，可被纳版。',
+      okText: '确认通过',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await requirementService.reviewPass(id!);
+          message.success('评审已通过');
+          fetchDetail();
+        } catch (error: any) {
+          message.error(error?.message || '评审通过失败');
+        }
+      },
+    });
+  };
+
+  const handleReviewReject = () => {
+    let rejectReason = '';
+    Modal.confirm({
+      title: '评审拒绝',
+      icon: <CloseOutlined />,
+      content: (
+        <div style={{ marginTop: 16 }}>
+          <p style={{ marginBottom: 8 }}>请输入拒绝原因（必填，最多 500 字）：</p>
+          <Input.TextArea
+            rows={4}
+            maxLength={500}
+            showCount
+            placeholder="请详细说明拒绝原因，以便需求提出人修改"
+            onChange={(e) => { rejectReason = e.target.value; }}
+          />
+        </div>
+      ),
+      okText: '确认拒绝',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        if (!rejectReason || rejectReason.trim().length === 0) {
+          message.warning('请输入拒绝原因');
+          return Promise.reject();
+        }
+        try {
+          await requirementService.reviewReject(id!, rejectReason.trim());
+          message.success('需求已驳回');
+          fetchDetail();
+        } catch (error: any) {
+          message.error(error?.message || '评审拒绝失败');
+        }
+      },
+    });
+  };
+
+  const handleReEdit = async () => {
+    try {
+      await requirementService.reEdit(id!);
+      message.success('已退回草稿，可重新编辑');
+      fetchDetail();
+    } catch (error: any) {
+      message.error(error?.message || '重新编辑失败');
+    }
+  };
+
+  const handleCancel = () => {
+    Modal.confirm({
+      title: '确认取消需求',
+      content: '取消后需求将变为「已取消」状态，不可恢复。',
+      okText: '确认取消',
+      okButtonProps: { danger: true },
+      cancelText: '返回',
+      onOk: async () => {
+        try {
+          await requirementService.cancel(id!);
+          message.success('需求已取消');
+          fetchDetail();
+        } catch (error: any) {
+          message.error(error?.message || '取消失败');
+        }
+      },
+    });
+  };
+
+  // ========== 需求变更处理 ==========
+  // 判断是否显示需求变更按钮：已就绪或已纳版（非封板）+ BA/TRAIN_ADMIN/SUPER_ADMIN
+  const canChangeRequirement = () => {
+    if (!user?.role || !user?.id) return false;
+
+    // 权限检查：BA（归属人）、TRAIN_ADMIN、SUPER_ADMIN
+    const hasPermission =
+      user.role === Role.TRAIN_ADMIN ||
+      user.role === Role.SUPER_ADMIN ||
+      (user.role === Role.BA && requirement.ba.id === user.id);
+
+    if (!hasPermission) return false;
+
+    // 状态检查：已就绪 或 已纳版（非封板）
+    if (requirement.status === ReqStatus.READY) {
+      return true;
+    }
+    if (requirement.status === ReqStatus.ONBOARDED && requirement.subStatus !== ReqSubStatus.FROZEN) {
+      return true;
+    }
+    return false;
+  };
+
+  const [changeModalVisible, setChangeModalVisible] = useState(false);
+  const [changeReason, setChangeReason] = useState('');
+  const [changeLoading, setChangeLoading] = useState(false);
+
+  // 处理需求变更提交
+  const handleChangeRequirement = async () => {
+    if (!changeReason.trim()) {
+      message.warning('请填写变更原因');
+      return;
+    }
+    if (changeReason.length > 500) {
+      message.warning('变更原因最多500字');
+      return;
+    }
+
+    setChangeLoading(true);
+    try {
+      await requirementService.changeRequirement(id!, changeReason);
+      message.success('需求已变更，请重新编辑');
+      setChangeModalVisible(false);
+      setChangeReason('');
+      fetchDetail();
+    } catch (error: any) {
+      message.error(error?.message || '变更失败');
+    } finally {
+      setChangeLoading(false);
+    }
+  };
 
   // 依赖列表表格列定义（新增风险等级列）
   const dependencyColumns = [
@@ -318,24 +467,24 @@ const RequirementDetailPage: React.FC = () => {
                   <Button type="primary" onClick={() => navigate(`/requirements/${id}/edit`)}>
                     编辑
                   </Button>
-                  <Button>发起评审</Button>
-                  <Button danger>取消</Button>
+                  <Button onClick={handleSubmitReview}>发起评审</Button>
+                  <Button danger onClick={handleCancel}>取消</Button>
                 </>
               )}
               {requirement.status === ReqStatus.PENDING_REVIEW && (
                 <>
-                  <Button type="primary">评审通过</Button>
-                  <Button danger>评审拒绝</Button>
+                  <Button type="primary" onClick={handleReviewPass}>评审通过</Button>
+                  <Button danger onClick={handleReviewReject}>评审拒绝</Button>
                 </>
               )}
               {requirement.status === ReqStatus.REJECTED && (
                 <>
-                  <Button type="primary">重新编辑</Button>
+                  <Button type="primary" onClick={handleReEdit}>重新编辑</Button>
                 </>
               )}
-              {requirement.status === ReqStatus.READY && (
+              {requirement.status === ReqStatus.READY && canChangeRequirement() && (
                 <>
-                  <Button>需求变更</Button>
+                  <Button type="primary" onClick={() => setChangeModalVisible(true)}>需求变更</Button>
                 </>
               )}
               {requirement.status === ReqStatus.ONBOARDED && (
@@ -345,9 +494,13 @@ const RequirementDetailPage: React.FC = () => {
                       <Button type="primary">紧急变更</Button>
                       <Button danger>取消</Button>
                     </>
+                  ) : canChangeRequirement() ? (
+                    <>
+                      <Button type="primary" onClick={() => setChangeModalVisible(true)}>需求变更</Button>
+                      <Button danger>取消</Button>
+                    </>
                   ) : (
                     <>
-                      <Button>需求变更</Button>
                       <Button danger>取消</Button>
                     </>
                   )}
@@ -388,6 +541,47 @@ const RequirementDetailPage: React.FC = () => {
           </Card>
         </Col>
       </Row>
+
+      {/* 需求变更弹窗 */}
+      <Modal
+        title="需求变更"
+        open={changeModalVisible}
+        onCancel={() => {
+          setChangeModalVisible(false);
+          setChangeReason('');
+        }}
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => {
+              setChangeModalVisible(false);
+              setChangeReason('');
+            }}
+          >
+            取消
+          </Button>,
+          <Button
+            key="submit"
+            type="primary"
+            loading={changeLoading}
+            onClick={handleChangeRequirement}
+          >
+            确认变更
+          </Button>,
+        ]}
+      >
+        <div style={{ marginBottom: 16 }}>
+           <div style={{ marginBottom: 8, color: '#64748b' }}>变更原因（必填，最多500字）</div>
+           <Input.TextArea
+             value={changeReason}
+             onChange={(e) => setChangeReason(e.target.value)}
+             placeholder="请输入需求变更的原因..."
+             maxLength={500}
+             rows={4}
+             showCount
+           />
+         </div>
+      </Modal>
     </div>
   );
 };

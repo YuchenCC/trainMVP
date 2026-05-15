@@ -105,6 +105,30 @@ export const errors = {
 
   requirementPermissionDenied: (message?: string) =>
     makeError('REQUIREMENT_PERMISSION_DENIED', message),
+
+  requirementNotInTrain: (message?: string) =>
+    makeError('REQUIREMENT_NOT_IN_TRAIN', message),
+
+  subStatusCannotChange: (message?: string) =>
+    makeError('SUB_STATUS_CANNOT_CHANGE', message),
+
+  subStatusSameAsCurrent: (message?: string) =>
+    makeError('SUB_STATUS_SAME_AS_CURRENT', message),
+
+  subStatusInvalid: (message?: string) =>
+    makeError('SUB_STATUS_INVALID', message),
+
+  requirementChangeReasonRequired: (message?: string) =>
+    makeError('REQUIREMENT_CHANGE_REASON_REQUIRED', message),
+
+  requirementChangeReasonTooLong: (message?: string) =>
+    makeError('REQUIREMENT_CHANGE_REASON_TOO_LONG', message),
+
+  requirementNotReadyOrInTrain: (message?: string) =>
+    makeError('REQUIREMENT_NOT_READY_OR_IN_TRAIN', message),
+
+  requirementSealedCannotChange: (message?: string) =>
+    makeError('REQUIREMENT_SEALED_CANNOT_CHANGE', message),
 };
 
 // ========== 全局错误处理器 ==========

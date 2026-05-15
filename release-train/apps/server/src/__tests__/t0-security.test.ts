@@ -37,6 +37,13 @@ const TEST_TECH_MGR = {
   email: 'sec_tech_mgr@test.com',
 };
 
+const TEST_PROJECT_MGR = {
+  username: 'sec_test_project_mgr',
+  password: 'ProjectMgrSecure123!',
+  displayName: '安全测试项目经理',
+  email: 'sec_project_mgr@test.com',
+};
+
 // ========== 安全渗透测试套件 ==========
 describe('T0 安全渗透测试', () => {
   let app: FastifyInstance;
@@ -44,6 +51,7 @@ describe('T0 安全渗透测试', () => {
   let baToken: string;
   let pmToken: string;
   let techMgrToken: string;
+  let projectMgrToken: string;
   let jwtSecret: string;
 
   beforeAll(async () => {
@@ -59,6 +67,7 @@ describe('T0 安全渗透测试', () => {
     await app.inject({ method: 'POST', url: '/api/auth/seed', payload: { ...TEST_BA, role: 'BA' } });
     await app.inject({ method: 'POST', url: '/api/auth/seed', payload: { ...TEST_PM, role: 'PM' } });
     await app.inject({ method: 'POST', url: '/api/auth/seed', payload: { ...TEST_TECH_MGR, role: 'TECH_MGR' } });
+    await app.inject({ method: 'POST', url: '/api/auth/seed', payload: { ...TEST_PROJECT_MGR, role: 'PROJECT_MGR' } });
 
     const loginRes = await app.inject({
       method: 'POST',
@@ -87,6 +96,13 @@ describe('T0 安全渗透测试', () => {
       payload: { username: TEST_TECH_MGR.username, password: TEST_TECH_MGR.password },
     });
     techMgrToken = techRes.json().data.token;
+
+    const projectMgrRes = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: TEST_PROJECT_MGR.username, password: TEST_PROJECT_MGR.password },
+    });
+    projectMgrToken = projectMgrRes.json().data.token;
   });
 
   afterAll(async () => {
@@ -94,7 +110,7 @@ describe('T0 安全渗透测试', () => {
     await prisma.user.deleteMany({
       where: {
         username: {
-          in: [TEST_ADMIN.username, TEST_BA.username, TEST_PM.username, TEST_TECH_MGR.username],
+          in: [TEST_ADMIN.username, TEST_BA.username, TEST_PM.username, TEST_TECH_MGR.username, TEST_PROJECT_MGR.username],
         },
       },
     });
@@ -317,7 +333,7 @@ describe('T0 安全渗透测试', () => {
       expect(res.json().code).toBe('PERMISSION_DENIED');
     });
 
-    it('PM 可访问 REVIEW_REQ 受保护路由', async () => {
+    it('PM 不可访问 REVIEW_REQ 受保护路由（应返回200，错误码 PERMISSION_DENIED）', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/test/rbac/review-req',
@@ -325,9 +341,11 @@ describe('T0 安全渗透测试', () => {
       });
 
       expect(res.statusCode).toBe(200);
+      expect(res.json().success).toBe(false);
+      expect(res.json().code).toBe('PERMISSION_DENIED');
     });
 
-    it('TECH_MGR 可访问 REVIEW_REQ 受保护路由', async () => {
+    it('TECH_MGR 不可访问 REVIEW_REQ 受保护路由（应返回200，错误码 PERMISSION_DENIED）', async () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/test/rbac/review-req',
@@ -335,6 +353,19 @@ describe('T0 安全渗透测试', () => {
       });
 
       expect(res.statusCode).toBe(200);
+      expect(res.json().success).toBe(false);
+      expect(res.json().code).toBe('PERMISSION_DENIED');
+    });
+
+    it('PROJECT_MGR 可访问 REVIEW_REQ 受保护路由', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/test/rbac/review-req',
+        headers: { Authorization: `Bearer ${projectMgrToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().success).toBe(true);
     });
 
     it('BA 不可访问 COMPLETE_DEV 受保护路由（应返回200，错误码 PERMISSION_DENIED）', async () => {

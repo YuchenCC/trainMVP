@@ -3,7 +3,7 @@
 // 点击「新增需求」跳转 /requirements/new
 // 点击行跳转 /requirements/:id（需求详情）
 import React, { useState, useEffect, useCallback } from 'react';
-import { Button, Table, Input, Select, Space, Tag } from 'antd';
+import { Button, Table, Input, Select, Space, Tag, message, Modal } from 'antd';
 import {
   PlusOutlined,
   SearchOutlined,
@@ -242,13 +242,96 @@ const RequirementsPage: React.FC = () => {
     });
   };
 
-  // ========== 操作按钮回调（MVP 阶段弹窗提示，后续实现完整功能） ==========
+  // ========== 操作按钮回调 ==========
   const handleEdit = (id: string) => navigate(`/requirements/${id}/edit`);
-  const handleSubmitReview = (_id: string) => { /* TODO: US1.4 发起评审 */ };
-  const handleApprove = (_id: string) => { /* TODO: US1.4 通过评审 */ };
-  const handleReject = (_id: string) => { /* TODO: US1.4 驳回 */ };
+
+  const refreshList = () => {
+    fetchList({
+      page,
+      pageSize,
+      systemId: systemFilter,
+      status: statusFilter.length > 0 ? statusFilter : undefined,
+      keyword: keyword || undefined,
+      sortBy,
+      sortOrder,
+    });
+  };
+
+  const handleSubmitReview = async (id: string) => {
+    try {
+      await requirementService.submitReview(id);
+      message.success('已发起评审');
+      refreshList();
+    } catch (error: any) {
+      message.error(error?.message || '发起评审失败');
+    }
+  };
+
+  const handleApprove = (id: string) => {
+    Modal.confirm({
+      title: '确认评审通过',
+      content: '通过后需求将变为「就绪」状态，可被纳版。',
+      okText: '确认通过',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await requirementService.reviewPass(id);
+          message.success('评审已通过');
+          refreshList();
+        } catch (error: any) {
+          message.error(error?.message || '评审通过失败');
+        }
+      },
+    });
+  };
+
+  const handleReject = (id: string) => {
+    let rejectReason = '';
+    Modal.confirm({
+      title: '评审拒绝',
+      icon: <CloseOutlined />,
+      content: (
+        <div style={{ marginTop: 16 }}>
+          <p style={{ marginBottom: 8 }}>请输入拒绝原因（必填，最多 500 字）：</p>
+          <Input.TextArea
+            rows={4}
+            maxLength={500}
+            showCount
+            placeholder="请详细说明拒绝原因，以便需求提出人修改"
+            onChange={(e) => { rejectReason = e.target.value; }}
+          />
+        </div>
+      ),
+      okText: '确认拒绝',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        if (!rejectReason || rejectReason.trim().length === 0) {
+          message.warning('请输入拒绝原因');
+          return Promise.reject();
+        }
+        try {
+          await requirementService.reviewReject(id, rejectReason.trim());
+          message.success('需求已驳回');
+          refreshList();
+        } catch (error: any) {
+          message.error(error?.message || '评审拒绝失败');
+        }
+      },
+    });
+  };
+
   const handleOnboard = (_id: string) => { /* TODO: T2 纳版 */ };
-  const handleResubmit = (_id: string) => { /* TODO: US1.4 重新提交 */ };
+
+  const handleResubmit = async (id: string) => {
+    try {
+      await requirementService.reEdit(id);
+      message.success('已退回草稿，可重新编辑');
+      refreshList();
+    } catch (error: any) {
+      message.error(error?.message || '重新编辑失败');
+    }
+  };
 
   // ========== 表格列定义 ==========
   const columns: ColumnsType<RequirementListItem> = [

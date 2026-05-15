@@ -184,6 +184,54 @@ export const ERROR_CODE_MAP: Record<string, ErrorCodeEntry> = {
     type: ErrorType.BUSINESS,
     message: '无权编辑该需求',
   },
+
+  REQUIREMENT_NOT_IN_TRAIN: {
+    code: 'REQUIREMENT_NOT_IN_TRAIN',
+    type: ErrorType.BUSINESS,
+    message: '仅已纳版需求可变更子状态',
+  },
+
+  SUB_STATUS_CANNOT_CHANGE: {
+    code: 'SUB_STATUS_CANNOT_CHANGE',
+    type: ErrorType.BUSINESS,
+    message: '封板状态不可变更',
+  },
+
+  SUB_STATUS_SAME_AS_CURRENT: {
+    code: 'SUB_STATUS_SAME_AS_CURRENT',
+    type: ErrorType.BUSINESS,
+    message: '不能选择当前状态',
+  },
+
+  SUB_STATUS_INVALID: {
+    code: 'SUB_STATUS_INVALID',
+    type: ErrorType.BUSINESS,
+    message: '无效的子状态值',
+  },
+
+  REQUIREMENT_CHANGE_REASON_REQUIRED: {
+    code: 'REQUIREMENT_CHANGE_REASON_REQUIRED',
+    type: ErrorType.BUSINESS,
+    message: '变更原因不能为空',
+  },
+
+  REQUIREMENT_CHANGE_REASON_TOO_LONG: {
+    code: 'REQUIREMENT_CHANGE_REASON_TOO_LONG',
+    type: ErrorType.BUSINESS,
+    message: '变更原因最多500字',
+  },
+
+  REQUIREMENT_NOT_READY_OR_IN_TRAIN: {
+    code: 'REQUIREMENT_NOT_READY_OR_IN_TRAIN',
+    type: ErrorType.BUSINESS,
+    message: '仅已就绪或已纳版状态可发起变更',
+  },
+
+  REQUIREMENT_SEALED_CANNOT_CHANGE: {
+    code: 'REQUIREMENT_SEALED_CANNOT_CHANGE',
+    type: ErrorType.BUSINESS,
+    message: '封板状态不可发起变更，请使用紧急变更',
+  },
 };
 
 // ========== 工具函数 ==========

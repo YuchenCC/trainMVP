@@ -35,6 +35,7 @@ export enum OperationType {
   DEV_COMPLETE = 'DEV_COMPLETE',              // 开发完成
   SIT_PASS = 'SIT_PASS',                      // SIT通过
   UAT_PASS = 'UAT_PASS',                      // UAT通过
+  CHANGE_SUB_STATUS = 'CHANGE_SUB_STATUS',    // 子状态变更
   BATCH_SUBMIT_REVIEW = 'BATCH_SUBMIT_REVIEW', // 批量发起评审
   BATCH_CANCEL = 'BATCH_CANCEL',              // 批量取消
   BATCH_CHANGE_PRIORITY = 'BATCH_CHANGE_PRIORITY', // 批量修改优先级
@@ -120,6 +121,7 @@ export enum Operation {
   COMPLETE_DEV = 'COMPLETE_DEV',                // 开发完成
   PASS_SIT = 'PASS_SIT',                        // SIT通过
   PASS_UAT = 'PASS_UAT',                        // UAT通过
+  CHANGE_SUB_STATUS = 'CHANGE_SUB_STATUS',      // 子状态变更
   CREATE_TRAIN = 'CREATE_TRAIN',                // 创建火车
   MANAGE_TRAIN = 'MANAGE_TRAIN',                // 纳版/移除/投产
   ROLLBACK_TRAIN = 'ROLLBACK_TRAIN',            // 回滚
@@ -139,6 +141,7 @@ export const OPERATION_LABELS: Record<Operation, string> = {
   [Operation.COMPLETE_DEV]: '开发完成',
   [Operation.PASS_SIT]: 'SIT通过',
   [Operation.PASS_UAT]: 'UAT通过',
+  [Operation.CHANGE_SUB_STATUS]: '子状态变更',
   [Operation.CREATE_TRAIN]: '创建火车',
   [Operation.MANAGE_TRAIN]: '纳版/移除/投产',
   [Operation.ROLLBACK_TRAIN]: '回滚',
@@ -152,14 +155,15 @@ export const PERMISSION_MATRIX: Record<Operation, Role[]> = {
   [Operation.CREATE_REQ]:       [Role.BA, Role.PM, Role.PROJECT_MGR],
   [Operation.EDIT_REQ]:         [Role.BA, Role.PM, Role.PROJECT_MGR],
   [Operation.SUBMIT_REVIEW]:    [Role.BA, Role.TRAIN_ADMIN],
-  [Operation.REVIEW_REQ]:       [Role.PM, Role.PROJECT_MGR, Role.TECH_MGR],
-  [Operation.CANCEL_REQ]:       [Role.BA, Role.PROJECT_MGR, Role.TRAIN_ADMIN],
-  [Operation.CHANGE_REQ]:       [Role.BA, Role.TRAIN_ADMIN],
+  [Operation.REVIEW_REQ]:       [Role.PROJECT_MGR],
+  [Operation.CANCEL_REQ]:       [Role.BA, Role.TRAIN_ADMIN, Role.SUPER_ADMIN],
+  [Operation.CHANGE_REQ]:       [Role.BA, Role.TRAIN_ADMIN, Role.SUPER_ADMIN],
   [Operation.EMERGENCY_CHANGE]: [Role.BA, Role.TRAIN_ADMIN],
   [Operation.APPROVE_EMERGENCY]:[Role.PROJECT_MGR, Role.TRAIN_ADMIN],
   [Operation.COMPLETE_DEV]:     [Role.TECH_MGR],
   [Operation.PASS_SIT]:         [Role.TEST_MGR],
   [Operation.PASS_UAT]:         [Role.BA],
+  [Operation.CHANGE_SUB_STATUS]: [Role.PROJECT_MGR, Role.TECH_MGR, Role.TEST_MGR],
   [Operation.CREATE_TRAIN]:     [Role.TRAIN_ADMIN],
   [Operation.MANAGE_TRAIN]:     [Role.TRAIN_ADMIN],
   [Operation.ROLLBACK_TRAIN]:   [Role.TRAIN_ADMIN],
@@ -187,6 +191,7 @@ export const OPERATION_TYPE_LABELS: Record<OperationType, string> = {
   [OperationType.DEV_COMPLETE]: '开发完成',
   [OperationType.SIT_PASS]: 'SIT通过',
   [OperationType.UAT_PASS]: 'UAT通过',
+  [OperationType.CHANGE_SUB_STATUS]: '子状态变更',
   [OperationType.BATCH_SUBMIT_REVIEW]: '批量发起评审',
   [OperationType.BATCH_CANCEL]: '批量取消',
   [OperationType.BATCH_CHANGE_PRIORITY]: '批量修改优先级',

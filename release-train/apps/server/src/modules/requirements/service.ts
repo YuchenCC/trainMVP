@@ -654,43 +654,149 @@ export async function updateRequirement(
  * @throws AppError 404 - 需求不存在
  * @throws AppError 400 - 非草稿状态（提示使用完整取消功能）
  */
+/**
+ * 取消需求（US1.9 增强版）
+ * 
+ * US1.9 将取消功能从仅支持草稿扩展为支持所有非终态需求。
+ * 权限：BA（归属人）、TRAIN_ADMIN、SUPER_ADMIN
+ * 前置条件：需求状态不能为 CANCELLED 或 RELEASED（已投产）
+ * 特殊规则：已纳版需求取消时清除 trainId 并返还容量
+ * 
+ * @param id - 需求 ID
+ * @param operatorId - 操作人 ID（从 JWT 提取）
+ * @param operatorRole - 操作人角色（从 JWT 提取）
+ * @param reason - 取消原因（必填，最多 500 字）
+ * @returns 更新后的需求详情（含状态、版本号、审计日志）
+ * @throws REQUIREMENT_NOT_FOUND - 需求不存在
+ * @throws REQUIREMENT_ALREADY_CANCELLED - 需求已取消
+ * @throws REQUIREMENT_ALREADY_PRODUCED - 已投产需求不能取消
+ * @throws REQUIREMENT_PERMISSION_DENIED - 无取消权限（非归属BA/非TRAIN_ADMIN/非SUPER_ADMIN）
+ * @throws BAD_REQUEST - 取消原因为空或超过500字
+ */
 export async function cancelRequirement(
   id: string,
   operatorId: string,
-): Promise<{ success: true }> {
-  // 1. 查询需求存在性
-  const existing = await prisma.requirement.findUnique({ where: { id } });
+  operatorRole: string,
+  reason: string,
+): Promise<RequirementDetail> {
+  // 1. 查询需求存在性（含权限校验所需字段）
+  const existing = await prisma.requirement.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      status: true,
+      baId: true,
+      trainId: true,
+      storyPoints: true,
+      systemId: true,
+      version: true,
+    },
+  });
 
   if (!existing) {
     throw errors.requirementNotFound();
   }
 
-  // 2. US1.1 仅支持草稿取消
-  if (existing.status !== 'DRAFT') {
-    throw errors.requirementNotDraft('US1.1仅支持草稿取消，非草稿取消请使用取消需求功能');
+  // 2. 状态校验：不能是已取消
+  if (existing.status === 'CANCELLED') {
+    throw errors.requirementAlreadyCancelled();
   }
 
-  // 3. 事务内更新状态 + 创建日志
+  // 3. 状态校验：不能是已投产（RELEASED）
+  if (existing.status === 'RELEASED') {
+    throw errors.requirementAlreadyProduced();
+  }
+
+  // 4. 权限校验：BA 必须是归属人，TRAIN_ADMIN/SUPER_ADMIN 不限
+  const isBA = operatorRole === Role.BA && operatorId === existing.baId;
+  const isTrainAdmin = operatorRole === Role.TRAIN_ADMIN;
+  const isSuperAdmin = operatorRole === Role.SUPER_ADMIN;
+
+  if (!isBA && !isTrainAdmin && !isSuperAdmin) {
+    throw errors.requirementPermissionDenied('您没有取消需求的权限');
+  }
+
+  // 5. 取消原因校验
+  if (!reason || reason.trim().length === 0) {
+    throw errors.badRequest('取消原因不能为空');
+  }
+
+  if (reason.length > 500) {
+    throw errors.badRequest('取消原因最多 500 字');
+  }
+
+  // 6. 事务内：更新状态 → 清除火车关联 → 返还容量 → 创建审计日志
   return prisma.$transaction(async (tx) => {
-    // 更新状态为 CANCELLED（终态，不可恢复）
-    await tx.requirement.update({
+    // 6a. 乐观锁：重新读取版本号
+    const current = await tx.requirement.findUnique({
       where: { id },
-      data: { status: 'CANCELLED' },
+      select: { version: true },
     });
 
-    // 创建状态变更日志
+    if (!current) {
+      throw errors.requirementNotFound();
+    }
+
+    // 6b. 构建更新数据
+    const updateData: any = {
+      status: 'CANCELLED',
+      version: { increment: 1 },
+    };
+
+    // 如果已纳版（trainId 不为空），清除火车关联
+    if (existing.trainId) {
+      updateData.trainId = null;
+    }
+
+    // 6c. 更新需求状态
+    await tx.requirement.update({
+      where: { id, version: current.version },
+      data: updateData,
+    });
+
+    // 6d. 如果已纳版，返还容量到 TrainSystem
+    if (existing.trainId) {
+      const trainSystem = await tx.trainSystem.findFirst({
+        where: {
+          trainId: existing.trainId,
+          systemId: existing.systemId,
+        },
+      });
+
+      if (trainSystem) {
+        const newUsedPoints = Math.max(0, trainSystem.usedPoints - existing.storyPoints);
+        await tx.trainSystem.update({
+          where: { id: trainSystem.id },
+          data: { usedPoints: newUsedPoints },
+        });
+      }
+    }
+
+    // 6e. 创建状态变更日志（含取消原因）
     await tx.statusLog.create({
       data: {
-        requirementId: id,                   // 需求 ID
-        operationType: OperationType.CANCEL, // 操作类型：取消
-        fromStatus: 'DRAFT',                 // 变更前状态：草稿
-        toStatus: 'CANCELLED',               // 变更后状态：已取消
-        operatorId,                           // 操作人 ID
+        requirementId: id,
+        operationType: OperationType.CANCEL,
+        fromStatus: existing.status,
+        toStatus: 'CANCELLED',
+        operatorId,
+        reason: reason.trim(),
       },
     });
 
-    // 返回成功标记
-    return { success: true as const };
+    // 6f. 返回更新后的需求详情
+    const updated = await tx.requirement.findUnique({
+      where: { id },
+      include: {
+        system: true,
+        ba: true,
+        pm: true,
+        creator: true,
+        train: true,
+      },
+    });
+
+    return buildRequirementDetail(updated!, tx);
   });
 }
 
@@ -906,6 +1012,258 @@ export async function reviewPass(
     });
 
     // 5d. 重新查询更新后的需求（含关联数据）
+    const updated = await tx.requirement.findUnique({
+      where: { id },
+      include: {
+        system: true,
+        ba: true,
+        pm: true,
+        creator: true,
+        train: true,
+      },
+    });
+
+    return buildRequirementDetail(updated!, tx);
+  });
+}
+
+// ========== 评审拒绝（待评审 → 已拒绝） ==========
+
+/**
+ * 评审拒绝：项目经理拒绝需求评审，需求进入已拒绝状态
+ * 
+ * US1.7 评审拒绝功能：
+ * - 前置条件：状态为 PENDING_REVIEW
+ * - 权限：仅 PROJECT_MGR（SUPER_ADMIN 在中间件层已放行）
+ * - 拒绝原因必填，最多 500 字
+ * - 记录 REVIEW_REJECT 审计日志
+ * 
+ * @param id - 需求 ID
+ * @param operatorId - 操作人 ID（从 JWT 提取）
+ * @param operatorRole - 操作人角色（从 JWT 提取）
+ * @param reason - 拒绝原因（必填，最多 500 字）
+ * @returns 更新后的需求详情
+ * @throws REQUIREMENT_NOT_FOUND - 需求不存在
+ * @throws REQUIREMENT_NOT_PENDING_REVIEW - 非待评审状态
+ * @throws REQUIREMENT_PERMISSION_DENIED - 无评审拒绝权限
+ * @throws BAD_REQUEST - 拒绝原因校验失败
+ * @throws REQUIREMENT_VERSION_CONFLICT - 乐观锁冲突
+ */
+export async function reviewReject(
+  id: string,
+  operatorId: string,
+  operatorRole: string,
+  reason: string,
+): Promise<RequirementDetail> {
+  // 1. 查询需求存在性（含版本号用于乐观锁）
+  const existing = await prisma.requirement.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      status: true,
+      version: true,
+    },
+  });
+
+  if (!existing) {
+    throw errors.requirementNotFound();
+  }
+
+  // 2. 状态校验：仅待评审状态可评审拒绝
+  if (existing.status !== 'PENDING_REVIEW') {
+    throw errors.requirementNotPendingReview('仅待评审状态可评审拒绝');
+  }
+
+  // 3. 权限校验：仅 PROJECT_MGR 可评审拒绝（SUPER_ADMIN 在中间件层已放行）
+  if (operatorRole !== Role.PROJECT_MGR && operatorRole !== Role.SUPER_ADMIN) {
+    throw errors.requirementPermissionDenied('仅项目经理可评审拒绝');
+  }
+
+  // 4. 拒绝原因校验：必填
+  if (!reason || reason.trim().length === 0) {
+    throw errors.badRequest('拒绝原因不能为空');
+  }
+
+  // 5. 拒绝原因长度校验：最多 500 字
+  if (reason.length > 500) {
+    throw errors.badRequest('拒绝原因最多 500 字');
+  }
+
+  // 6. 事务内：乐观锁更新状态 + 创建审计日志
+  return prisma.$transaction(async (tx) => {
+    // 6a. 带版本号条件的更新（乐观锁）
+    const result = await tx.requirement.updateMany({
+      where: { id, version: existing.version },
+      data: {
+        status: 'REJECTED',
+        version: { increment: 1 },
+      },
+    });
+
+    // 6b. 更新影响行数为 0 → 版本冲突
+    if (result.count === 0) {
+      const current = await tx.requirement.findUnique({ where: { id } });
+      if (!current) {
+        throw errors.requirementNotFound();
+      }
+      throw errors.requirementVersionConflict();
+    }
+
+    // 6c. 创建状态变更日志（审计记录，含拒绝原因）
+    await tx.statusLog.create({
+      data: {
+        requirementId: id,
+        operationType: OperationType.REVIEW_REJECT,
+        fromStatus: 'PENDING_REVIEW',
+        toStatus: 'REJECTED',
+        operatorId,
+        reason: reason.trim(),
+      },
+    });
+
+    // 6d. 重新查询更新后的需求（含关联数据）
+    const updated = await tx.requirement.findUnique({
+      where: { id },
+      include: {
+        system: true,
+        ba: true,
+        pm: true,
+        creator: true,
+        train: true,
+      },
+    });
+
+    return buildRequirementDetail(updated!, tx);
+  });
+}
+
+// ========== 需求变更（已就绪/已纳版 → 草稿） ==========
+
+/**
+ * 需求变更：将已就绪或已纳版（非封板）状态的需求退回草稿
+ * 
+ * US1.11 需求变更功能：
+ * - 前置条件：状态为 READY 或 IN_TRAIN（非封板子状态）
+ * - 权限：BA（归属人）、TRAIN_ADMIN、SUPER_ADMIN
+ * - 已纳版变更时：清除 trainId，释放火车容量
+ * - 记录 CHANGE_REQUIREMENT 审计日志
+ * 
+ * @param id - 需求 ID
+ * @param operatorId - 操作人 ID（从 JWT 提取）
+ * @param operatorRole - 操作人角色（从 JWT 提取）
+ * @param changeReason - 变更原因（必填，最多 500 字）
+ * @returns 更新后的需求详情
+ */
+export async function changeRequirement(
+  id: string,
+  operatorId: string,
+  operatorRole: string,
+  changeReason: string,
+): Promise<RequirementDetail> {
+  // 1. 查询需求存在性（含版本号用于乐观锁）
+  const existing = await prisma.requirement.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      status: true,
+      subStatus: true,
+      trainId: true,
+      systemId: true,
+      storyPoints: true,
+      version: true,
+    },
+  });
+
+  if (!existing) {
+    throw errors.requirementNotFound();
+  }
+
+  // 2. 状态校验：仅 READY 或 ONBOARDED（非封板）可变更
+  if (existing.status === 'READY') {
+    // 已就绪状态可变更
+  } else if (existing.status === 'ONBOARDED') {
+    // 已纳版状态：封板子状态不可变更
+    if (existing.subStatus === 'FROZEN') {
+      throw errors.requirementSealedCannotChange();
+    }
+  } else {
+    throw errors.requirementNotReadyOrInTrain();
+  }
+
+  // 3. 权限校验：BA（归属人）、TRAIN_ADMIN、SUPER_ADMIN
+  const isBA = operatorRole === Role.BA;
+  const isTrainAdmin = operatorRole === Role.TRAIN_ADMIN;
+  const isSuperAdmin = operatorRole === Role.SUPER_ADMIN;
+
+  if (!isBA && !isTrainAdmin && !isSuperAdmin) {
+    throw errors.requirementPermissionDenied('仅业务归属人、火车管理员可发起需求变更');
+  }
+
+  // 4. 变更原因必填校验
+  if (!changeReason || changeReason.trim().length === 0) {
+    throw errors.requirementChangeReasonRequired('变更原因不能为空');
+  }
+
+  // 5. 变更原因长度校验
+  if (changeReason.length > 500) {
+    throw errors.requirementChangeReasonTooLong();
+  }
+
+  // 6. 事务内：状态变更 + 清除火车关联 + 释放容量 + 审计日志
+  return prisma.$transaction(async (tx) => {
+    // 6a. 带版本号条件的更新（乐观锁）
+    const updateData: any = {
+      status: 'DRAFT',
+      version: { increment: 1 },
+    };
+
+    // 6b. 如果是已纳版状态，清除火车关联
+    if (existing.status === 'ONBOARDED' && existing.trainId) {
+      // 清除火车关联
+      updateData.trainId = null;
+
+      // 6c. 释放火车容量（如果需求有 storyPoints）
+      // 容量在 TrainSystem.usedPoints 上管理
+      if (existing.storyPoints && existing.storyPoints > 0 && existing.trainId && existing.systemId) {
+        await tx.trainSystem.updateMany({
+          where: {
+            trainId: existing.trainId,
+            systemId: existing.systemId,
+          },
+          data: {
+            usedPoints: { decrement: existing.storyPoints },
+          },
+        });
+      }
+    }
+
+    const result = await tx.requirement.updateMany({
+      where: { id, version: existing.version },
+      data: updateData,
+    });
+
+    // 6d. 更新影响行数为 0 → 版本冲突
+    if (result.count === 0) {
+      const current = await tx.requirement.findUnique({ where: { id } });
+      if (!current) {
+        throw errors.requirementNotFound();
+      }
+      throw errors.requirementVersionConflict();
+    }
+
+    // 6e. 创建状态变更日志（审计记录）
+    await tx.statusLog.create({
+      data: {
+        requirementId: id,
+        operationType: OperationType.CHANGE_REQUIREMENT,
+        fromStatus: existing.status,
+        toStatus: 'DRAFT',
+        operatorId,
+        reason: changeReason.trim(),
+      },
+    });
+
+    // 6f. 重新查询更新后的需求（含关联数据）
     const updated = await tx.requirement.findUnique({
       where: { id },
       include: {

@@ -204,6 +204,7 @@ enum OperationType {
   DEV_COMPLETE          // 开发完成（开发中→SIT测试）
   SIT_PASS              // SIT通过（SIT测试→UAT测试）
   UAT_PASS              // UAT通过（UAT测试→封板）
+  CHANGE_SUB_STATUS     // 子状态变更
   BATCH_SUBMIT_REVIEW   // 批量发起评审
   BATCH_CANCEL          // 批量取消
   BATCH_CHANGE_PRIORITY // 批量修改优先级
