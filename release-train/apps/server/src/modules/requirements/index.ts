@@ -20,6 +20,8 @@ import {
   updateRequirement,                // 编辑需求 service
   cancelRequirement,                // 取消需求 service
   submitReview,                     // 发起评审 service
+  reviewPass,                       // 评审通过 service
+  reEdit,                          // 重新编辑 service
   searchRequirements,               // 搜索需求 service
   listRequirements,                 // 需求列表 service（分页）
   RequirementSearchItem,            // 搜索单项类型
@@ -194,6 +196,43 @@ export async function requirementRoutes(fastify: FastifyInstance): Promise<void>
       const userId = user.sub;                                       // 操作人 ID
       const operatorRole = user.role;                                // 操作人角色
       const result = await submitReview(request.params.id, userId, operatorRole); // 调用 service 发起评审
+      return reply.send({ success: true, data: result });
+    },
+  );
+
+  // ======================== 评审通过 ========================
+  fastify.post<{ Params: { id: string }; Body: { comment?: string }; Reply: ApiResponse<RequirementDetail> }>(
+    '/api/requirements/:id/review-pass',               // POST /api/requirements/:id/review-pass
+    {
+      onRequest: [
+        fastify.authenticate,                            // 需要登录
+        rbacMiddleware(Operation.REVIEW_REQ),             // 需要 REVIEW_REQ 权限（仅 PROJECT_MGR）
+      ],
+    },
+    async (request, reply) => {
+      const user = request.user as JwtPayload;                       // 从 JWT 提取用户信息
+      const userId = user.sub;                                       // 操作人 ID
+      const operatorRole = user.role;                                // 操作人角色
+      const comment = request.body?.comment;                         // 评审意见（可选）
+      const result = await reviewPass(request.params.id, userId, operatorRole, comment); // 调用 service 评审通过
+      return reply.send({ success: true, data: result });
+    },
+  );
+
+  // ======================== 重新编辑 ========================
+  fastify.post<{ Params: { id: string }; Reply: ApiResponse<RequirementDetail> }>(
+    '/api/requirements/:id/re-edit',                  // POST /api/requirements/:id/re-edit
+    {
+      onRequest: [
+        fastify.authenticate,                            // 需要登录
+        rbacMiddleware(Operation.EDIT_REQ),               // 需要 EDIT_REQ 权限（BA/PM/PROJECT_MGR）
+      ],
+    },
+    async (request, reply) => {
+      const user = request.user as JwtPayload;                       // 从 JWT 提取用户信息
+      const userId = user.sub;                                       // 操作人 ID
+      const operatorRole = user.role;                                // 操作人角色
+      const result = await reEdit(request.params.id, userId, operatorRole); // 调用 service 重新编辑
       return reply.send({ success: true, data: result });
     },
   );

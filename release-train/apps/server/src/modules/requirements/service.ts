@@ -820,6 +820,194 @@ export async function submitReview(
   });
 }
 
+/**
+ * 评审通过（待评审 → 已就绪）
+ * 
+ * US1.6 将待评审需求评审通过，进入已就绪状态。
+ * 权限：仅 PROJECT_MGR（项目经理）
+ * 前置条件：需求状态必须为 PENDING_REVIEW
+ * 
+ * @param id - 需求 ID
+ * @param operatorId - 操作人 ID（从 JWT 提取）
+ * @param operatorRole - 操作人角色（从 JWT 提取）
+ * @param comment - 评审意见（可选，最多 500 字）
+ * @returns 更新后的需求详情（含状态和审计日志）
+ * @throws REQUIREMENT_NOT_FOUND - 需求不存在
+ * @throws REQUIREMENT_NOT_PENDING_REVIEW - 非待评审状态
+ * @throws REQUIREMENT_ALREADY_APPROVED - 已被评审通过
+ * @throws REQUIREMENT_PERMISSION_DENIED - 无评审通过权限
+ * @throws BAD_REQUEST - 评审意见超长
+ * @throws REQUIREMENT_VERSION_CONFLICT - 乐观锁冲突
+ */
+export async function reviewPass(
+  id: string,
+  operatorId: string,
+  operatorRole: string,
+  comment?: string,
+): Promise<RequirementDetail> {
+  // 1. 查询需求存在性（含版本号用于乐观锁）
+  const existing = await prisma.requirement.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      status: true,
+      version: true,
+    },
+  });
+
+  if (!existing) {
+    throw errors.requirementNotFound();
+  }
+
+  // 2. 状态校验：仅待评审状态可评审通过
+  if (existing.status !== 'PENDING_REVIEW') {
+    throw errors.requirementNotPendingReview('仅待评审状态可评审通过');
+  }
+
+  // 3. 权限校验：仅 PROJECT_MGR 可评审通过（SUPER_ADMIN 在中间件层已放行）
+  if (operatorRole !== Role.PROJECT_MGR && operatorRole !== Role.SUPER_ADMIN) {
+    throw errors.requirementPermissionDenied('仅项目经理可评审通过');
+  }
+
+  // 4. 评审意见长度校验
+  if (comment && comment.length > 500) {
+    throw errors.badRequest('评审意见最多 500 字');
+  }
+
+  // 5. 事务内：乐观锁更新状态 + 创建审计日志
+  return prisma.$transaction(async (tx) => {
+    // 5a. 带版本号条件的更新（乐观锁）
+    const result = await tx.requirement.updateMany({
+      where: { id, version: existing.version },
+      data: {
+        status: 'READY',
+        version: { increment: 1 },
+      },
+    });
+
+    // 5b. 更新影响行数为 0 → 版本冲突
+    if (result.count === 0) {
+      const current = await tx.requirement.findUnique({ where: { id } });
+      if (!current) {
+        throw errors.requirementNotFound();
+      }
+      throw errors.requirementVersionConflict();
+    }
+
+    // 5c. 创建状态变更日志（审计记录）
+    await tx.statusLog.create({
+      data: {
+        requirementId: id,
+        operationType: OperationType.REVIEW_PASS,
+        fromStatus: 'PENDING_REVIEW',
+        toStatus: 'READY',
+        operatorId,
+      },
+    });
+
+    // 5d. 重新查询更新后的需求（含关联数据）
+    const updated = await tx.requirement.findUnique({
+      where: { id },
+      include: {
+        system: true,
+        ba: true,
+        pm: true,
+        creator: true,
+        train: true,
+      },
+    });
+
+    return buildRequirementDetail(updated!, tx);
+  });
+}
+
+// ========== 重新编辑（已拒绝 → 草稿） ==========
+
+/**
+ * 重新编辑：将已拒绝的需求退回草稿状态，允许 BA/PM 修改后重新提交
+ * 
+ * 业务规则：
+ * - 仅 REJECTED 状态可重新编辑
+ * - BA、PM、PROJECT_MGR 可操作（EDIT_REQ 权限）
+ * - 使用乐观锁防止并发冲突
+ * - 记录 RE_EDIT 审计日志
+ * 
+ * @param id - 需求 ID
+ * @param operatorId - 操作人 ID
+ * @param operatorRole - 操作人角色
+ * @returns 更新后的需求详情
+ */
+export async function reEdit(
+  id: string,
+  operatorId: string,
+  operatorRole: string,
+): Promise<RequirementDetail> {
+  const existing = await prisma.requirement.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      status: true,
+      version: true,
+    },
+  });
+
+  if (!existing) {
+    throw errors.requirementNotFound();
+  }
+
+  if (existing.status !== 'REJECTED') {
+    throw errors.requirementNotRejected('仅已拒绝状态可重新编辑');
+  }
+
+  if (
+    operatorRole !== Role.BA &&
+    operatorRole !== Role.PM
+  ) {
+    throw errors.requirementPermissionDenied('仅 BA、PM 可重新编辑');
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const result = await tx.requirement.updateMany({
+      where: { id, version: existing.version },
+      data: {
+        status: 'DRAFT',
+        version: { increment: 1 },
+      },
+    });
+
+    if (result.count === 0) {
+      const current = await tx.requirement.findUnique({ where: { id } });
+      if (!current) {
+        throw errors.requirementNotFound();
+      }
+      throw errors.requirementVersionConflict();
+    }
+
+    await tx.statusLog.create({
+      data: {
+        requirementId: id,
+        operationType: OperationType.RE_EDIT,
+        fromStatus: 'REJECTED',
+        toStatus: 'DRAFT',
+        operatorId,
+      },
+    });
+
+    const updated = await tx.requirement.findUnique({
+      where: { id },
+      include: {
+        system: true,
+        ba: true,
+        pm: true,
+        creator: true,
+        train: true,
+      },
+    });
+
+    return buildRequirementDetail(updated!, tx);
+  });
+}
+
 // ========== 需求搜索相关类型 ==========
 
 /** 需求搜索单项结果（用于前端依赖选择下拉） */

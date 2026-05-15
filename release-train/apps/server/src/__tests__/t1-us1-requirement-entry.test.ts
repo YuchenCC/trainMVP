@@ -1618,4 +1618,948 @@ describe('T1 US1.1 需求录入', () => {
       expect(submit2.json().data.status).toBe('PENDING_REVIEW');
     });
   });
+
+  // ====================================================================
+  // US1.6 评审通过测试（TDD）
+  // ====================================================================
+  describe('US1.6 POST /api/requirements/:id/review-pass 评审通过', () => {
+    let projectMgrToken: string;
+    let projectMgrId: string;
+    let pmToken: string;
+    let pmId: string;
+    let baToken: string;
+    let baId: string;
+    let techMgrToken: string;
+    let techMgrId: string;
+    let testMgrToken: string;
+    let testMgrId: string;
+    let systemId: string;
+    let pendingReviewReqId: string;
+    let allTestUserIds: string[];
+    let allTestReqIds: string[];
+
+    /**
+     * 辅助函数：创建一个待评审状态的需求
+     * 用于需要独立 PENDING_REVIEW 需求的测试用例
+     */
+    async function createPendingReviewReq(): Promise<string> {
+      const draftReq = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: 'US1.6-辅助测试需求',
+          description: '<p>辅助测试</p>',
+          systemId,
+          priority: 'P2',
+          storyPoints: 5,
+          baId,
+        },
+      });
+      const draftId = draftReq.json().data.id;
+      allTestReqIds.push(draftId);
+
+      const submitRes = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${draftId}/submit-review`,
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+      return submitRes.json().data.id;
+    }
+
+    beforeAll(async () => {
+      allTestReqIds = [];
+
+      // 清理上次测试可能残留的数据
+      await prisma.user.deleteMany({
+        where: {
+          username: {
+            in: [
+              'test_pmgr_us16',
+              'test_pm_us16',
+              'test_ba_us16',
+              'test_techmgr_us16',
+              'test_testmgr_us16',
+            ],
+          },
+        },
+      });
+
+      const pmgrPasswordHash = await bcrypt.hash('PMgrPass123!', 10);
+      const pmPasswordHash = await bcrypt.hash('PMPass123!', 10);
+      const baPasswordHash = await bcrypt.hash('BAPass123!', 10);
+      const techMgrPasswordHash = await bcrypt.hash('TechMgrPass123!', 10);
+      const testMgrPasswordHash = await bcrypt.hash('TestMgrPass123!', 10);
+
+      // 创建测试系统
+      const system = await prisma.system.create({
+        data: { name: '测试系统_US16', description: 'US1.6 评审通过测试用系统' },
+      });
+      systemId = system.id;
+
+      // 创建项目经理（PROJECT_MGR）
+      const pmgrUser = await prisma.user.create({
+        data: {
+          username: 'test_pmgr_us16',
+          password: pmgrPasswordHash,
+          displayName: '测试项目经理_US16',
+          email: 'test_pmgr_us16@test.com',
+          role: 'PROJECT_MGR',
+        },
+      });
+      projectMgrId = pmgrUser.id;
+
+      // 创建产品经理（PM）
+      const pmUser = await prisma.user.create({
+        data: {
+          username: 'test_pm_us16',
+          password: pmPasswordHash,
+          displayName: '测试PM_US16',
+          email: 'test_pm_us16@test.com',
+          role: 'PM',
+        },
+      });
+      pmId = pmUser.id;
+
+      // 创建 BA
+      const baUser = await prisma.user.create({
+        data: {
+          username: 'test_ba_us16',
+          password: baPasswordHash,
+          displayName: '测试BA_US16',
+          email: 'test_ba_us16@test.com',
+          role: 'BA',
+        },
+      });
+      baId = baUser.id;
+
+      // 创建技术经理（TECH_MGR）
+      const techMgrUser = await prisma.user.create({
+        data: {
+          username: 'test_techmgr_us16',
+          password: techMgrPasswordHash,
+          displayName: '测试技术经理_US16',
+          email: 'test_techmgr_us16@test.com',
+          role: 'TECH_MGR',
+        },
+      });
+      techMgrId = techMgrUser.id;
+
+      // 创建测试经理（TEST_MGR）
+      const testMgrUser = await prisma.user.create({
+        data: {
+          username: 'test_testmgr_us16',
+          password: testMgrPasswordHash,
+          displayName: '测试测试经理_US16',
+          email: 'test_testmgr_us16@test.com',
+          role: 'TEST_MGR',
+        },
+      });
+      testMgrId = testMgrUser.id;
+
+      allTestUserIds = [projectMgrId, pmId, baId, techMgrId, testMgrId];
+
+      // 登录获取 token
+      const pmgrLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'test_pmgr_us16', password: 'PMgrPass123!' },
+      });
+      projectMgrToken = pmgrLogin.json().data.token;
+
+      const pmLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'test_pm_us16', password: 'PMPass123!' },
+      });
+      pmToken = pmLogin.json().data.token;
+
+      const baLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'test_ba_us16', password: 'BAPass123!' },
+      });
+      baToken = baLogin.json().data.token;
+
+      const techMgrLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'test_techmgr_us16', password: 'TechMgrPass123!' },
+      });
+      techMgrToken = techMgrLogin.json().data.token;
+
+      const testMgrLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'test_testmgr_us16', password: 'TestMgrPass123!' },
+      });
+      testMgrToken = testMgrLogin.json().data.token;
+
+      // 创建草稿需求 → 发起评审 → 得到待评审需求（供 TC1.6.1 使用）
+      pendingReviewReqId = await createPendingReviewReq();
+    });
+
+    afterAll(async () => {
+      // 先删除 StatusLog
+      if (allTestUserIds && allTestUserIds.length > 0) {
+        await prisma.statusLog.deleteMany({
+          where: { operatorId: { in: allTestUserIds } },
+        });
+      }
+
+      // 删除测试需求
+      const allReqIds = [pendingReviewReqId, ...allTestReqIds].filter(Boolean);
+      if (allReqIds.length > 0) {
+        await prisma.requirementDependency.deleteMany({
+          where: { dependantId: { in: allReqIds } },
+        });
+        await prisma.statusLog.deleteMany({
+          where: { requirementId: { in: allReqIds } },
+        });
+        await prisma.requirement.deleteMany({
+          where: { id: { in: allReqIds } },
+        });
+      }
+
+      // 删除测试用户
+      await prisma.user.deleteMany({
+        where: {
+          username: {
+            in: [
+              'test_pmgr_us16',
+              'test_pm_us16',
+              'test_ba_us16',
+              'test_techmgr_us16',
+              'test_testmgr_us16',
+            ],
+          },
+        },
+      });
+
+      // 删除测试系统
+      await prisma.system.deleteMany({
+        where: { name: '测试系统_US16' },
+      });
+    });
+
+    // TC1.6.1 PROJECT_MGR 正常评审通过，状态变为 READY
+    it('TC1.6.1 PROJECT_MGR 正常评审通过，状态变为 READY', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${pendingReviewReqId}/review-pass`,
+        headers: { Authorization: `Bearer ${projectMgrToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.status).toBe('READY');
+      expect(body.data.id).toBe(pendingReviewReqId);
+    });
+
+    // TC1.6.2 BA 不能评审通过
+    it('TC1.6.2 BA 不能评审通过，返回 REQUIREMENT_PERMISSION_DENIED', async () => {
+      const reqId = await createPendingReviewReq();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/review-pass`,
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('PERMISSION_DENIED');
+    });
+
+    // TC1.6.3 PM 不能评审通过
+    it('TC1.6.3 PM 不能评审通过，返回 PERMISSION_DENIED', async () => {
+      const reqId = await createPendingReviewReq();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/review-pass`,
+        headers: { Authorization: `Bearer ${pmToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('PERMISSION_DENIED');
+    });
+
+    // TC1.6.4 TECH_MGR 不能评审通过
+    it('TC1.6.4 TECH_MGR 不能评审通过，返回 PERMISSION_DENIED', async () => {
+      const reqId = await createPendingReviewReq();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/review-pass`,
+        headers: { Authorization: `Bearer ${techMgrToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('PERMISSION_DENIED');
+    });
+
+    // TC1.6.5 TEST_MGR 不能评审通过
+    it('TC1.6.5 TEST_MGR 不能评审通过，返回 PERMISSION_DENIED', async () => {
+      const reqId = await createPendingReviewReq();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/review-pass`,
+        headers: { Authorization: `Bearer ${testMgrToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('PERMISSION_DENIED');
+    });
+
+    // TC1.6.6 非待评审状态（草稿）不能评审通过
+    it('TC1.6.6 草稿状态不能评审通过，返回 REQUIREMENT_NOT_PENDING_REVIEW', async () => {
+      // 创建一个草稿需求（不发起评审）
+      const draftReq = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: 'US1.6-草稿状态测试',
+          description: '<p>草稿状态</p>',
+          systemId,
+          priority: 'P2',
+          storyPoints: 5,
+          baId,
+        },
+      });
+      const draftId = draftReq.json().data.id;
+      allTestReqIds.push(draftId);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${draftId}/review-pass`,
+        headers: { Authorization: `Bearer ${projectMgrToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('REQUIREMENT_NOT_PENDING_REVIEW');
+    });
+
+    // TC1.6.7 已就绪状态不能重复评审通过
+    it('TC1.6.7 已就绪状态不能重复评审通过，返回 REQUIREMENT_NOT_PENDING_REVIEW', async () => {
+      // pendingReviewReqId 在 TC1.6.1 中已变为 READY
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${pendingReviewReqId}/review-pass`,
+        headers: { Authorization: `Bearer ${projectMgrToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('REQUIREMENT_NOT_PENDING_REVIEW');
+    });
+
+    // TC1.6.8 评审意见超长（>500字）
+    it('TC1.6.8 评审意见超过500字，返回 BAD_REQUEST', async () => {
+      const reqId = await createPendingReviewReq();
+      const longComment = 'a'.repeat(501);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/review-pass`,
+        headers: { Authorization: `Bearer ${projectMgrToken}` },
+        payload: { comment: longComment },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('BAD_REQUEST');
+    });
+
+    // TC1.6.9 评审意见正好500字，成功
+    it('TC1.6.9 评审意见正好500字，评审通过成功', async () => {
+      const reqId = await createPendingReviewReq();
+      const exactComment = 'a'.repeat(500);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/review-pass`,
+        headers: { Authorization: `Bearer ${projectMgrToken}` },
+        payload: { comment: exactComment },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.status).toBe('READY');
+    });
+
+    // TC1.6.10 需求不存在
+    it('TC1.6.10 需求不存在，返回 REQUIREMENT_NOT_FOUND', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/requirements/nonexistent-id/review-pass',
+        headers: { Authorization: `Bearer ${projectMgrToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('REQUIREMENT_NOT_FOUND');
+    });
+
+    // TC1.6.11 未登录
+    it('TC1.6.11 未登录评审通过，返回 UNAUTHORIZED', async () => {
+      const reqId = await createPendingReviewReq();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/review-pass`,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('UNAUTHORIZED');
+    });
+
+    // TC1.6.13 审计日志记录 REVIEW_PASS
+    it('TC1.6.13 评审通过成功后，statusLog 记录 REVIEW_PASS', async () => {
+      const reqId = await createPendingReviewReq();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/review-pass`,
+        headers: { Authorization: `Bearer ${projectMgrToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().success).toBe(true);
+
+      // 查询审计日志
+      const log = await prisma.statusLog.findFirst({
+        where: { requirementId: reqId, operationType: 'REVIEW_PASS' },
+      });
+      expect(log).not.toBeNull();
+      expect(log!.fromStatus).toBe('PENDING_REVIEW');
+      expect(log!.toStatus).toBe('READY');
+      expect(log!.operatorId).toBe(projectMgrId);
+    });
+  });
+
+  // ====================================================================
+  // US1.8 重新编辑测试（TDD）
+  // ====================================================================
+  describe('US1.8 POST /api/requirements/:id/re-edit 重新编辑', () => {
+    let projectMgrToken: string;
+    let projectMgrId: string;
+    let pmToken: string;
+    let pmId: string;
+    let baToken: string;
+    let baId: string;
+    let techMgrToken: string;
+    let techMgrId: string;
+    let testMgrToken: string;
+    let testMgrId: string;
+    let trainAdminToken: string;
+    let trainAdminId: string;
+    let superAdminToken: string;
+    let superAdminId: string;
+    let systemId: string;
+    let allTestUserIds: string[];
+    let allTestReqIds: string[];
+
+    async function createRejectedReq(): Promise<string> {
+      const draftReq = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: 'US1.8-辅助测试需求',
+          description: '<p>辅助测试</p>',
+          systemId,
+          priority: 'P2',
+          storyPoints: 5,
+          baId,
+        },
+      });
+      const draftId = draftReq.json().data.id;
+      allTestReqIds.push(draftId);
+
+      const submitRes = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${draftId}/submit-review`,
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+      const pendingId = submitRes.json().data.id;
+
+      await prisma.requirement.update({
+        where: { id: pendingId },
+        data: { status: 'REJECTED' },
+      });
+
+      return pendingId;
+    }
+
+    beforeAll(async () => {
+      allTestReqIds = [];
+
+      await prisma.user.deleteMany({
+        where: {
+          username: {
+            in: [
+              'test_pmgr_us18',
+              'test_pm_us18',
+              'test_ba_us18',
+              'test_techmgr_us18',
+              'test_testmgr_us18',
+              'test_ta_us18',
+              'test_sa_us18',
+            ],
+          },
+        },
+      });
+
+      const pmgrPasswordHash = await bcrypt.hash('PMgrPass123!', 10);
+      const pmPasswordHash = await bcrypt.hash('PMPass123!', 10);
+      const baPasswordHash = await bcrypt.hash('BAPass123!', 10);
+      const techMgrPasswordHash = await bcrypt.hash('TechMgrPass123!', 10);
+      const testMgrPasswordHash = await bcrypt.hash('TestMgrPass123!', 10);
+      const taPasswordHash = await bcrypt.hash('TAPass123!', 10);
+      const saPasswordHash = await bcrypt.hash('SAPass123!', 10);
+
+      const system = await prisma.system.create({
+        data: { name: '测试系统_US18', description: 'US1.8 重新编辑测试用系统' },
+      });
+      systemId = system.id;
+
+      const pmgrUser = await prisma.user.create({
+        data: {
+          username: 'test_pmgr_us18',
+          password: pmgrPasswordHash,
+          displayName: '测试项目经理_US18',
+          email: 'test_pmgr_us18@test.com',
+          role: 'PROJECT_MGR',
+        },
+      });
+      projectMgrId = pmgrUser.id;
+
+      const pmUser = await prisma.user.create({
+        data: {
+          username: 'test_pm_us18',
+          password: pmPasswordHash,
+          displayName: '测试PM_US18',
+          email: 'test_pm_us18@test.com',
+          role: 'PM',
+        },
+      });
+      pmId = pmUser.id;
+
+      const baUser = await prisma.user.create({
+        data: {
+          username: 'test_ba_us18',
+          password: baPasswordHash,
+          displayName: '测试BA_US18',
+          email: 'test_ba_us18@test.com',
+          role: 'BA',
+        },
+      });
+      baId = baUser.id;
+
+      const techMgrUser = await prisma.user.create({
+        data: {
+          username: 'test_techmgr_us18',
+          password: techMgrPasswordHash,
+          displayName: '测试技术经理_US18',
+          email: 'test_techmgr_us18@test.com',
+          role: 'TECH_MGR',
+        },
+      });
+      techMgrId = techMgrUser.id;
+
+      const testMgrUser = await prisma.user.create({
+        data: {
+          username: 'test_testmgr_us18',
+          password: testMgrPasswordHash,
+          displayName: '测试测试经理_US18',
+          email: 'test_testmgr_us18@test.com',
+          role: 'TEST_MGR',
+        },
+      });
+      testMgrId = testMgrUser.id;
+
+      const taUser = await prisma.user.create({
+        data: {
+          username: 'test_ta_us18',
+          password: taPasswordHash,
+          displayName: '测试火车管理员_US18',
+          email: 'test_ta_us18@test.com',
+          role: 'TRAIN_ADMIN',
+        },
+      });
+      trainAdminId = taUser.id;
+
+      const saUser = await prisma.user.create({
+        data: {
+          username: 'test_sa_us18',
+          password: saPasswordHash,
+          displayName: '测试超管_US18',
+          email: 'test_sa_us18@test.com',
+          role: 'SUPER_ADMIN',
+        },
+      });
+      superAdminId = saUser.id;
+
+      allTestUserIds = [projectMgrId, pmId, baId, techMgrId, testMgrId, trainAdminId, superAdminId];
+
+      const pmgrLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'test_pmgr_us18', password: 'PMgrPass123!' },
+      });
+      projectMgrToken = pmgrLogin.json().data.token;
+
+      const pmLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'test_pm_us18', password: 'PMPass123!' },
+      });
+      pmToken = pmLogin.json().data.token;
+
+      const baLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'test_ba_us18', password: 'BAPass123!' },
+      });
+      baToken = baLogin.json().data.token;
+
+      const techMgrLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'test_techmgr_us18', password: 'TechMgrPass123!' },
+      });
+      techMgrToken = techMgrLogin.json().data.token;
+
+      const testMgrLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'test_testmgr_us18', password: 'TestMgrPass123!' },
+      });
+      testMgrToken = testMgrLogin.json().data.token;
+
+      const taLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'test_ta_us18', password: 'TAPass123!' },
+      });
+      trainAdminToken = taLogin.json().data.token;
+
+      const saLogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'test_sa_us18', password: 'SAPass123!' },
+      });
+      superAdminToken = saLogin.json().data.token;
+    });
+
+    afterAll(async () => {
+      if (allTestUserIds && allTestUserIds.length > 0) {
+        await prisma.statusLog.deleteMany({
+          where: { operatorId: { in: allTestUserIds } },
+        });
+      }
+
+      const allReqIds = allTestReqIds.filter(Boolean);
+      if (allReqIds.length > 0) {
+        await prisma.requirementDependency.deleteMany({
+          where: { dependantId: { in: allReqIds } },
+        });
+        await prisma.statusLog.deleteMany({
+          where: { requirementId: { in: allReqIds } },
+        });
+        await prisma.requirement.deleteMany({
+          where: { id: { in: allReqIds } },
+        });
+      }
+
+      await prisma.user.deleteMany({
+        where: {
+          username: {
+            in: [
+              'test_pmgr_us18',
+              'test_pm_us18',
+              'test_ba_us18',
+              'test_techmgr_us18',
+              'test_testmgr_us18',
+              'test_ta_us18',
+              'test_sa_us18',
+            ],
+          },
+        },
+      });
+
+      await prisma.system.deleteMany({
+        where: { name: '测试系统_US18' },
+      });
+    });
+
+    // TC1.8.1 BA 正常重新编辑，状态变为 DRAFT
+    it('TC1.8.1 BA 正常重新编辑，状态变为 DRAFT', async () => {
+      const reqId = await createRejectedReq();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/re-edit`,
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.status).toBe('DRAFT');
+      expect(body.data.id).toBe(reqId);
+    });
+
+    // TC1.8.2 PM 正常重新编辑，状态变为 DRAFT
+    it('TC1.8.2 PM 正常重新编辑，状态变为 DRAFT', async () => {
+      const reqId = await createRejectedReq();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/re-edit`,
+        headers: { Authorization: `Bearer ${pmToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.status).toBe('DRAFT');
+      expect(body.data.id).toBe(reqId);
+    });
+
+    // TC1.8.3 PROJECT_MGR 不能重新编辑
+    it('TC1.8.3 PROJECT_MGR 不能重新编辑，返回 REQUIREMENT_PERMISSION_DENIED', async () => {
+      const reqId = await createRejectedReq();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/re-edit`,
+        headers: { Authorization: `Bearer ${projectMgrToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('REQUIREMENT_PERMISSION_DENIED');
+    });
+
+    // TC1.8.4 TECH_MGR 不能重新编辑
+    it('TC1.8.4 TECH_MGR 不能重新编辑，返回 PERMISSION_DENIED', async () => {
+      const reqId = await createRejectedReq();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/re-edit`,
+        headers: { Authorization: `Bearer ${techMgrToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('PERMISSION_DENIED');
+    });
+
+    // TC1.8.5 TEST_MGR 不能重新编辑
+    it('TC1.8.5 TEST_MGR 不能重新编辑，返回 PERMISSION_DENIED', async () => {
+      const reqId = await createRejectedReq();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/re-edit`,
+        headers: { Authorization: `Bearer ${testMgrToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('PERMISSION_DENIED');
+    });
+
+    // TC1.8.6 TRAIN_ADMIN 不能重新编辑
+    it('TC1.8.6 TRAIN_ADMIN 不能重新编辑，返回 PERMISSION_DENIED', async () => {
+      const reqId = await createRejectedReq();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/re-edit`,
+        headers: { Authorization: `Bearer ${trainAdminToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('PERMISSION_DENIED');
+    });
+
+    // TC1.8.7 SUPER_ADMIN 不能重新编辑
+    it('TC1.8.7 SUPER_ADMIN 不能重新编辑，返回 REQUIREMENT_PERMISSION_DENIED', async () => {
+      const reqId = await createRejectedReq();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/re-edit`,
+        headers: { Authorization: `Bearer ${superAdminToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('REQUIREMENT_PERMISSION_DENIED');
+    });
+
+    // TC1.8.8 非已拒绝状态（草稿）不能重新编辑
+    it('TC1.8.8 草稿状态不能重新编辑，返回 REQUIREMENT_NOT_REJECTED', async () => {
+      const draftReq = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: 'US1.8-TC8-草稿测试',
+          description: '<p>草稿状态测试</p>',
+          systemId,
+          priority: 'P2',
+          storyPoints: 5,
+          baId,
+        },
+      });
+      const draftId = draftReq.json().data.id;
+      allTestReqIds.push(draftId);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${draftId}/re-edit`,
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('REQUIREMENT_NOT_REJECTED');
+    });
+
+    // TC1.8.9 待评审状态不能重新编辑
+    it('TC1.8.9 待评审状态不能重新编辑，返回 REQUIREMENT_NOT_REJECTED', async () => {
+      const draftReq = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: 'US1.8-TC9-待评审测试',
+          description: '<p>待评审状态测试</p>',
+          systemId,
+          priority: 'P2',
+          storyPoints: 5,
+          baId,
+        },
+      });
+      const draftId = draftReq.json().data.id;
+      allTestReqIds.push(draftId);
+
+      const submitRes = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${draftId}/submit-review`,
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+      const pendingId = submitRes.json().data.id;
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${pendingId}/re-edit`,
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('REQUIREMENT_NOT_REJECTED');
+    });
+
+    // TC1.8.10 需求不存在
+    it('TC1.8.10 需求不存在，返回 REQUIREMENT_NOT_FOUND', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/requirements/nonexistent-id/re-edit',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('REQUIREMENT_NOT_FOUND');
+    });
+
+    // TC1.8.11 未登录不能重新编辑
+    it('TC1.8.11 未登录不能重新编辑，返回 UNAUTHORIZED', async () => {
+      const reqId = await createRejectedReq();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/re-edit`,
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('UNAUTHORIZED');
+    });
+
+    // TC1.8.12 重新编辑后版本号递增
+    it('TC1.8.12 重新编辑后版本号递增', async () => {
+      const reqId = await createRejectedReq();
+
+      const reqBefore = await prisma.requirement.findUnique({ where: { id: reqId } });
+      const versionBefore = reqBefore!.version;
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/re-edit`,
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().success).toBe(true);
+      expect(res.json().data.version).toBe(versionBefore + 1);
+    });
+
+    // TC1.8.13 审计日志记录 RE_EDIT
+    it('TC1.8.13 重新编辑成功后，statusLog 记录 RE_EDIT', async () => {
+      const reqId = await createRejectedReq();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/requirements/${reqId}/re-edit`,
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().success).toBe(true);
+
+      const log = await prisma.statusLog.findFirst({
+        where: { requirementId: reqId, operationType: 'RE_EDIT' },
+      });
+      expect(log).not.toBeNull();
+      expect(log!.fromStatus).toBe('REJECTED');
+      expect(log!.toStatus).toBe('DRAFT');
+      expect(log!.operatorId).toBe(baId);
+    });
+  });
 });
