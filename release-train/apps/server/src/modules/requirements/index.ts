@@ -13,6 +13,7 @@ import {
   RequirementListItem,               // 需求列表项类型
   RequirementListQuery,              // 需求列表查询参数类型
   JwtPayload,                        // JWT Token 载荷类型（sub/username/role）
+  ReqSubStatus,                      // 需求子状态枚举（用于子状态变更）
 } from '@release-train/shared';
 import {
   createRequirement,                // 创建需求 service
@@ -26,6 +27,7 @@ import {
   searchRequirements,               // 搜索需求 service
   listRequirements,                 // 需求列表 service（分页）
   changeRequirement,                // 需求变更 service
+  changeSubStatus,                  // 子状态变更 service
   RequirementSearchItem,            // 搜索单项类型
 } from './service.js';
 
@@ -289,6 +291,39 @@ export async function requirementRoutes(fastify: FastifyInstance): Promise<void>
       const operatorRole = user.role;                                // 操作人角色
       const changeReason = request.body.changeReason;                 // 变更原因
       const result = await changeRequirement(request.params.id, userId, operatorRole, changeReason); // 调用 service 需求变更
+      return reply.send({ success: true, data: result });
+    },
+  );
+
+  // ======================== 子状态变更 ========================
+  fastify.post<{
+    Params: { id: string };
+    Body: { subStatus: string; comment?: string };
+    Reply: ApiResponse<RequirementDetail>;
+  }>(
+    '/api/requirements/:id/change-sub-status',         // POST /api/requirements/:id/change-sub-status
+    {
+      onRequest: [
+        fastify.authenticate,                            // 需要登录
+        rbacMiddleware(Operation.CHANGE_SUB_STATUS),      // 需要 CHANGE_SUB_STATUS 权限（PROJECT_MGR/TECH_MGR/TEST_MGR）
+      ],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['subStatus'],                        // 目标子状态必填
+          properties: {
+            subStatus: { type: 'string', enum: ['DEV_IN_PROGRESS', 'SIT_TESTING', 'UAT_TESTING', 'FROZEN'] }, // 有效子状态枚举
+            comment: { type: 'string', maxLength: 500 },  // 变更说明可选，最多 500 字
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const user = request.user as JwtPayload;                       // 从 JWT 提取用户信息
+      const userId = user.sub;                                       // 操作人 ID
+      const subStatus = request.body.subStatus as ReqSubStatus;     // 目标子状态（类型转换）
+      const comment = request.body.comment;                          // 变更说明（可选）
+      const result = await changeSubStatus(request.params.id, userId, subStatus, comment); // 调用 service 子状态变更
       return reply.send({ success: true, data: result });
     },
   );

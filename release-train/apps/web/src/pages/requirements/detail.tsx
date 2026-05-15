@@ -19,6 +19,7 @@ import {
   message,
   Modal,
   Input,
+  Select,
 } from 'antd';
 import {
   EditOutlined,
@@ -34,6 +35,7 @@ import {
   REQ_STATUS_LABELS,
   REQ_STATUS_COLORS,
   REQ_SUB_STATUS_LABELS,
+  REQ_SUB_STATUS_COLORS,
   PRIORITY_LABELS,
   PRIORITY_COLORS,
   REQ_TYPE_LABELS,
@@ -42,22 +44,27 @@ import {
   Role,
   DependencyItem,
   StatusLogItem,
+  Operation,
 } from '@release-train/shared';
 
 const { Text } = Typography;
 
-// 编辑权限判断：草稿状态 + 授权角色（BA仅自己的需求）
+// 使用权限矩阵校验编辑权限：草稿状态 + 授权角色（BA 仅自己的需求）
+// 该函数在组件内通过 useAuthStore 获取 checkPermission
 function canEditRequirement(
   requirement: RequirementDetail,
   userRole: Role | undefined,
   userId: string | undefined,
+  userSystemIds: string[],
+  checkPermission: (op: Operation) => boolean,
 ): boolean {
   if (requirement.status !== ReqStatus.DRAFT) return false;
   if (!userRole || !userId) return false;
-  if (userRole === Role.SUPER_ADMIN || userRole === Role.TRAIN_ADMIN) return true;
-  if (userRole === Role.PM) return true;
-  if (userRole === Role.BA && requirement.ba.id === userId) return true;
-  return false;
+  if (userRole === Role.SUPER_ADMIN) return true;
+  if (!checkPermission(Operation.EDIT_REQ)) return false;
+  if (userRole === Role.BA && requirement.ba.id !== userId) return false;
+  if (userRole === Role.BA && !userSystemIds.includes(requirement.system.id)) return false;
+  return true;
 }
 
 // 获取状态显示文本（含子状态）
@@ -88,13 +95,82 @@ const RequirementDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuthStore();
+  const { user, checkPermission } = useAuthStore();
 
   const [loading, setLoading] = useState(true);
   const [requirement, setRequirement] = useState<RequirementDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // 加载需求详情
+  const [changeModalVisible, setChangeModalVisible] = useState(false);
+  const [changeReason, setChangeReason] = useState('');
+  const [changeLoading, setChangeLoading] = useState(false);
+
+  // ========== 子状态变更处理 ==========
+  // 判断是否显示子状态变更按钮：已纳版（非封板）+ PROJECT_MGR/TECH_MGR/TEST_MGR
+  const canChangeSubStatus = () => {
+    if (!user?.role || !requirement) return false;
+
+    // 权限检查：PROJECT_MGR、TECH_MGR、TEST_MGR
+    const hasPermission =
+      user.role === Role.PROJECT_MGR ||
+      user.role === Role.TECH_MGR ||
+      user.role === Role.TEST_MGR ||
+      user.role === Role.SUPER_ADMIN;
+
+    if (!hasPermission) return false;
+
+    // 状态检查：已纳版且非封板
+    const req = requirement;
+    if (req.status === ReqStatus.ONBOARDED && req.subStatus !== ReqSubStatus.FROZEN) {
+      return true;
+    }
+    return false;
+  };
+
+  const [subStatusModalVisible, setSubStatusModalVisible] = useState(false);
+  const [targetSubStatus, setTargetSubStatus] = useState<string | undefined>(undefined);
+  const [subStatusComment, setSubStatusComment] = useState('');
+  const [subStatusLoading, setSubStatusLoading] = useState(false);
+
+  // 获取可选的子状态列表（排除当前子状态）
+  const getAvailableSubStatuses = () => {
+    if (!requirement) return [];
+    const allSubStatuses = [
+      ReqSubStatus.DEV_IN_PROGRESS,
+      ReqSubStatus.SIT_TESTING,
+      ReqSubStatus.UAT_TESTING,
+      ReqSubStatus.FROZEN,
+    ];
+    return allSubStatuses.filter((s) => s !== requirement.subStatus);
+  };
+
+  // 处理子状态变更提交
+  const handleChangeSubStatus = async () => {
+    if (!targetSubStatus) {
+      message.warning('请选择目标子状态');
+      return;
+    }
+    if (subStatusComment.length > 500) {
+      message.warning('变更说明最多500字');
+      return;
+    }
+
+    setSubStatusLoading(true);
+    try {
+      await requirementService.changeSubStatus(id!, targetSubStatus, subStatusComment || undefined);
+      message.success('子状态变更成功');
+      setSubStatusModalVisible(false);
+      setTargetSubStatus(undefined);
+      setSubStatusComment('');
+      fetchDetail();
+    } catch (error: any) {
+      message.error(error?.message || '子状态变更失败');
+    } finally {
+      setSubStatusLoading(false);
+    }
+  };
+
+  // ========== 数据获取 ==========
   const fetchDetail = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -114,7 +190,7 @@ const RequirementDetailPage: React.FC = () => {
     fetchDetail();
   }, [fetchDetail]);
 
-  // 加载中
+  // ========== 加载状态 ==========
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
@@ -123,7 +199,6 @@ const RequirementDetailPage: React.FC = () => {
     );
   }
 
-  // 加载失败
   if (error || !requirement) {
     return (
       <Result
@@ -139,7 +214,18 @@ const RequirementDetailPage: React.FC = () => {
     );
   }
 
-  const canEdit = canEditRequirement(requirement, user?.role, user?.id);
+  const canEdit = canEditRequirement(requirement, user?.role, user?.id, user?.systemIds || [], checkPermission);
+
+  const canSubmitReview = checkPermission(Operation.SUBMIT_REVIEW) && (user?.role !== Role.BA || (user?.systemIds || []).includes(requirement.system.id));
+
+  // 评审权限：REVIEW_REQ 操作
+  const canReview = checkPermission(Operation.REVIEW_REQ);
+
+  // 取消权限：CANCEL_REQ 操作
+  const canCancel = checkPermission(Operation.CANCEL_REQ);
+
+  // 重新编辑权限：EDIT_REQ 操作
+  const canReEdit = checkPermission(Operation.EDIT_REQ);
 
   const handleSubmitReview = async () => {
     try {
@@ -234,8 +320,6 @@ const RequirementDetailPage: React.FC = () => {
     });
   };
 
-  // ========== 需求变更处理 ==========
-  // 判断是否显示需求变更按钮：已就绪或已纳版（非封板）+ BA/TRAIN_ADMIN/SUPER_ADMIN
   const canChangeRequirement = () => {
     if (!user?.role || !user?.id) return false;
 
@@ -256,10 +340,6 @@ const RequirementDetailPage: React.FC = () => {
     }
     return false;
   };
-
-  const [changeModalVisible, setChangeModalVisible] = useState(false);
-  const [changeReason, setChangeReason] = useState('');
-  const [changeLoading, setChangeLoading] = useState(false);
 
   // 处理需求变更提交
   const handleChangeRequirement = async () => {
@@ -464,22 +544,34 @@ const RequirementDetailPage: React.FC = () => {
             <Space>
               {requirement.status === ReqStatus.DRAFT && (
                 <>
-                  <Button type="primary" onClick={() => navigate(`/requirements/${id}/edit`)}>
-                    编辑
-                  </Button>
-                  <Button onClick={handleSubmitReview}>发起评审</Button>
-                  <Button danger onClick={handleCancel}>取消</Button>
+                  {canEdit && (
+                    <Button type="primary" onClick={() => navigate(`/requirements/${id}/edit`)}>
+                      编辑
+                    </Button>
+                  )}
+                  {canSubmitReview && (
+                    <Button onClick={handleSubmitReview}>发起评审</Button>
+                  )}
+                  {canCancel && (
+                    <Button danger onClick={handleCancel}>取消</Button>
+                  )}
                 </>
               )}
               {requirement.status === ReqStatus.PENDING_REVIEW && (
                 <>
-                  <Button type="primary" onClick={handleReviewPass}>评审通过</Button>
-                  <Button danger onClick={handleReviewReject}>评审拒绝</Button>
+                  {canReview && (
+                    <>
+                      <Button type="primary" onClick={handleReviewPass}>评审通过</Button>
+                      <Button danger onClick={handleReviewReject}>评审拒绝</Button>
+                    </>
+                  )}
                 </>
               )}
               {requirement.status === ReqStatus.REJECTED && (
                 <>
-                  <Button type="primary" onClick={handleReEdit}>重新编辑</Button>
+                  {canReEdit && (
+                    <Button type="primary" onClick={handleReEdit}>重新编辑</Button>
+                  )}
                 </>
               )}
               {requirement.status === ReqStatus.READY && canChangeRequirement() && (
@@ -491,17 +583,28 @@ const RequirementDetailPage: React.FC = () => {
                 <>
                   {requirement.subStatus === ReqSubStatus.FROZEN ? (
                     <>
-                      <Button type="primary">紧急变更</Button>
-                      <Button danger>取消</Button>
-                    </>
-                  ) : canChangeRequirement() ? (
-                    <>
-                      <Button type="primary" onClick={() => setChangeModalVisible(true)}>需求变更</Button>
-                      <Button danger>取消</Button>
+                      {checkPermission(Operation.EMERGENCY_CHANGE) && (
+                        <Button type="primary">紧急变更</Button>
+                      )}
+                      {canCancel && (
+                        <Button danger>取消</Button>
+                      )}
                     </>
                   ) : (
                     <>
-                      <Button danger>取消</Button>
+                      {canChangeRequirement() && (
+                        <Button type="primary" onClick={() => setChangeModalVisible(true)}>需求变更</Button>
+                      )}
+                      {canChangeSubStatus() && (
+                        <Button type="primary" onClick={() => {
+                          setTargetSubStatus(undefined);
+                          setSubStatusComment('');
+                          setSubStatusModalVisible(true);
+                        }}>子状态变更</Button>
+                      )}
+                      {canCancel && (
+                        <Button danger>取消</Button>
+                      )}
                     </>
                   )}
                 </>
@@ -581,6 +684,73 @@ const RequirementDetailPage: React.FC = () => {
              showCount
            />
          </div>
+      </Modal>
+
+      {/* 子状态变更弹窗 */}
+      <Modal
+        title="子状态变更"
+        open={subStatusModalVisible}
+        onCancel={() => {
+          setSubStatusModalVisible(false);
+          setTargetSubStatus(undefined);
+          setSubStatusComment('');
+        }}
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => {
+              setSubStatusModalVisible(false);
+              setTargetSubStatus(undefined);
+              setSubStatusComment('');
+            }}
+          >
+            取消
+          </Button>,
+          <Button
+            key="submit"
+            type="primary"
+            loading={subStatusLoading}
+            onClick={handleChangeSubStatus}
+          >
+            确认变更
+          </Button>,
+        ]}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 8, color: '#64748b' }}>
+            当前子状态：
+            <Tag color={requirement.subStatus ? REQ_SUB_STATUS_COLORS[requirement.subStatus] : 'default'} style={{ marginLeft: 8 }}>
+              {requirement.subStatus ? REQ_SUB_STATUS_LABELS[requirement.subStatus] : '-'}
+            </Tag>
+          </div>
+          <div style={{ marginBottom: 8, color: '#64748b' }}>目标子状态（必选）</div>
+          <Select
+            style={{ width: '100%' }}
+            placeholder="请选择目标子状态"
+            value={targetSubStatus}
+            onChange={(value) => setTargetSubStatus(value)}
+            options={getAvailableSubStatuses().map((s) => ({
+              value: s,
+              label: (
+                <span>
+                  {REQ_SUB_STATUS_LABELS[s]}
+                  <Tag color={REQ_SUB_STATUS_COLORS[s]} style={{ marginLeft: 8 }}>{s}</Tag>
+                </span>
+              ),
+            }))}
+          />
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 8, color: '#64748b' }}>变更说明（可选，最多500字）</div>
+          <Input.TextArea
+            value={subStatusComment}
+            onChange={(e) => setSubStatusComment(e.target.value)}
+            placeholder="请输入子状态变更的原因..."
+            maxLength={500}
+            rows={4}
+            showCount
+          />
+        </div>
       </Modal>
     </div>
   );

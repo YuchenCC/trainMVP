@@ -28,6 +28,7 @@ import {
 } from '@release-train/shared';
 import { requirementService } from '../../services/requirement'; // 需求 API 服务
 import { systemService, SystemOption, SystemUserOption } from '../../services/system'; // 系统 API 服务
+import { useAuthStore } from '../../stores/auth'; // 认证状态（获取当前用户系统）
 
 // ========== Ant Design 子组件解构 ==========
 const { TextArea } = Input;          // 多行文本输入（需求描述）
@@ -152,20 +153,32 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
    */
   useEffect(() => {
     if (mode === 'edit' && initialData) {
-      // 回填表单字段
       form.setFieldsValue({
         ...initialData,
-        systemId: initialData.system.id,       // 展开 system 对象提取 ID
-        baId: initialData.ba.id,               // 展开 ba 对象提取 ID
-        pmId: initialData.pm?.id,             // PM 可选，提取 ID
+        systemId: initialData.system.id,
+        baId: initialData.ba.id,
+        pmId: initialData.pm?.id,
       });
-      setSelectedSystem(initialData.system.id);       // 设置选中系统 ID
-      setSelectedSystemName(initialData.system.name); // 设置选中系统名称（远程搜索模式下预览用）
-      setDeps(initialData.dependencies);               // 回填已有依赖列表
-      loadUsers(initialData.system.id);                // 加载该系统成员
+      setSelectedSystem(initialData.system.id);
+      setSelectedSystemName(initialData.system.name);
+      setDeps(initialData.dependencies);
+      loadUsers(initialData.system.id);
     } else if (mode === 'create') {
-      // 创建模式：设置默认值
-      form.setFieldsValue({ priority: Priority.P2, storyPoints: 5 }); // 默认 P2 + 5 点
+      form.setFieldsValue({ priority: Priority.P2, storyPoints: 5 });
+
+      const user = useAuthStore.getState().user;
+      const userSystemIds = user?.systemIds || [];
+      if (userSystemIds.length > 0) {
+        systemService.list().then((allSystems) => {
+          const firstUserSystem = allSystems.find((s) => userSystemIds.includes(s.id));
+          if (firstUserSystem) {
+            setSelectedSystem(firstUserSystem.id);
+            setSelectedSystemName(firstUserSystem.name);
+            form.setFieldsValue({ systemId: firstUserSystem.id });
+            loadUsers(firstUserSystem.id);
+          }
+        }).catch(() => {});
+      }
     }
   }, [mode, initialData, form, loadUsers]);
 
@@ -240,8 +253,19 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
       message.warning('该依赖已添加');
       return;
     }
-    // 添加到依赖列表
-    setDeps([...deps, { id: item.id, reqCode: item.reqCode, title: item.title, status: item.status as ReqStatus }]);
+    // 添加到依赖列表（riskLevel 由后端计算，前端根据状态估算）
+    const depStatus = item.status as ReqStatus;
+    let riskLevel: 'high' | 'warning' | 'critical' | null = null;
+    if (depStatus === ReqStatus.READY || depStatus === ReqStatus.ONBOARDED) {
+      riskLevel = null;
+    } else if (depStatus === ReqStatus.CANCELLED) {
+      riskLevel = 'critical';
+    } else if (depStatus === ReqStatus.PENDING_REVIEW) {
+      riskLevel = 'warning';
+    } else {
+      riskLevel = 'high';
+    }
+    setDeps([...deps, { id: item.id, reqCode: item.reqCode, title: item.title, status: depStatus, riskLevel }]);
     setDepSearchKeyword('');                                  // 清空搜索框
     setDepSearchResults([]);                                 // 清空搜索结果
   };
@@ -280,6 +304,8 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
    * 表单提交处理（保存 + 发起评审 / 保存修改）
    * 
    * 由 Ant Design Form 的 onFinish 触发。
+   * - 创建模式：直接创建需求（草稿状态）
+   * - 编辑模式：保存需求后，自动发起评审
    */
   const handleFinish = async (values: any) => {
     setIsSubmitting(true);                                     // 按钮 loading
@@ -288,7 +314,9 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
       if (mode === 'edit') {
         (data as UpdateRequirementRequest).version = values.version; // 编辑时附加版本号
         await requirementService.update(initialData!.id, data as UpdateRequirementRequest);
-        message.success('需求更新成功');
+        // 编辑模式下：保存成功后自动发起评审
+        await requirementService.submitReview(initialData!.id);
+        message.success('需求已更新并提交评审');
       } else {
         await requirementService.create(data as CreateRequirementRequest);
         message.success('需求创建成功');

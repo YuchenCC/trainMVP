@@ -19,12 +19,18 @@ import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { requirementService } from '../../services/requirement';
 import { systemService, SystemOption } from '../../services/system';
+import { useAuthStore } from '../../stores/auth';
 import {
   RequirementListItem,
   RequirementListQuery,
   ReqStatus,
+  ReqSubStatus,
   REQ_STATUS_LABELS,
+  REQ_SUB_STATUS_LABELS,
+  REQ_SUB_STATUS_COLORS,
   PRIORITY_LABELS,
+  Operation,
+  Role,
 } from '@release-train/shared';
 
 // ========== 常量定义 ==========
@@ -56,55 +62,96 @@ const PRIORITY_COLOR_MAP: Record<string, string> = {
 
 // ========== 操作按钮配置 ==========
 
-/** 根据需求状态返回操作按钮列表 */
+/**
+ * 根据需求状态和用户权限返回操作按钮列表
+ * 仅显示当前用户有权限操作的功能按钮
+ * @param record - 需求列表项
+ * @param currentUserId - 当前用户ID（用于判断是否是归属人）
+ * @param userSystemIds - 当前用户所属系统ID列表（BA只能操作自己系统的需求）
+ * @param checkPermission - 权限校验函数
+ * @param onEdit - 编辑回调
+ * @param onSubmitReview - 发起评审回调
+ * @param onApprove - 通过评审回调
+ * @param onReject - 驳回回调
+ * @param onOnboard - 纳版回调
+ * @param onResubmit - 重新提交回调
+ */
 function getActionButtons(
   record: RequirementListItem,
+  currentUserId: string,
+  userSystemIds: string[],
+  checkPermission: (op: Operation) => boolean,
   onEdit: (id: string) => void,
   onSubmitReview: (id: string) => void,
   onApprove: (id: string) => void,
   onReject: (id: string) => void,
   onOnboard: (id: string) => void,
   onResubmit: (id: string) => void,
+  onChangeSubStatus: (id: string) => void,
 ) {
   const buttons: React.ReactNode[] = [];
+  const isOwner = record.ba?.id === currentUserId || record.creator?.id === currentUserId;
+  const isInUserSystem = userSystemIds.includes(record.system.id);
+  const currentUser = useAuthStore.getState().user;
+  const isBA = currentUser?.role === Role.BA;
 
   switch (record.status) {
     case ReqStatus.DRAFT:
-      buttons.push(
-        <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); onEdit(record.id); }}>
-          编辑
-        </Button>,
-        <Button key="submit" type="link" size="small" icon={<SendOutlined />} onClick={(e) => { e.stopPropagation(); onSubmitReview(record.id); }}>
-          发起评审
-        </Button>,
-      );
+      if (checkPermission(Operation.EDIT_REQ) && (!isBA || isInUserSystem)) {
+        buttons.push(
+          <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); onEdit(record.id); }}>
+            编辑
+          </Button>,
+        );
+      }
+      if (checkPermission(Operation.SUBMIT_REVIEW) && (!isBA || isInUserSystem)) {
+        buttons.push(
+          <Button key="submit" type="link" size="small" icon={<SendOutlined />} onClick={(e) => { e.stopPropagation(); onSubmitReview(record.id); }}>
+            发起评审
+          </Button>,
+        );
+      }
       break;
     case ReqStatus.PENDING_REVIEW:
-      buttons.push(
-        <Button key="approve" type="link" size="small" icon={<CheckOutlined />} style={{ color: '#52c41a' }} onClick={(e) => { e.stopPropagation(); onApprove(record.id); }}>
-          通过评审
-        </Button>,
-        <Button key="reject" type="link" size="small" icon={<CloseOutlined />} danger onClick={(e) => { e.stopPropagation(); onReject(record.id); }}>
-          驳回
-        </Button>,
-      );
+      if (checkPermission(Operation.REVIEW_REQ)) {
+        buttons.push(
+          <Button key="approve" type="link" size="small" icon={<CheckOutlined />} style={{ color: '#52c41a' }} onClick={(e) => { e.stopPropagation(); onApprove(record.id); }}>
+            通过评审
+          </Button>,
+          <Button key="reject" type="link" size="small" icon={<CloseOutlined />} danger onClick={(e) => { e.stopPropagation(); onReject(record.id); }}>
+            驳回
+          </Button>,
+        );
+      }
       break;
     case ReqStatus.READY:
-      buttons.push(
-        <Button key="onboard" type="link" size="small" icon={<RocketOutlined />} onClick={(e) => { e.stopPropagation(); onOnboard(record.id); }}>
-          纳版
-        </Button>,
-      );
+      if (checkPermission(Operation.MANAGE_TRAIN)) {
+        buttons.push(
+          <Button key="onboard" type="link" size="small" icon={<RocketOutlined />} onClick={(e) => { e.stopPropagation(); onOnboard(record.id); }}>
+            纳版
+          </Button>,
+        );
+      }
       break;
     case ReqStatus.REJECTED:
-      buttons.push(
-        <Button key="resubmit" type="link" size="small" icon={<RedoOutlined />} onClick={(e) => { e.stopPropagation(); onResubmit(record.id); }}>
-          重新提交
-        </Button>,
-      );
+      if (checkPermission(Operation.EDIT_REQ) && isOwner) {
+        buttons.push(
+          <Button key="resubmit" type="link" size="small" icon={<RedoOutlined />} onClick={(e) => { e.stopPropagation(); onResubmit(record.id); }}>
+            重新提交
+          </Button>,
+        );
+      }
+      break;
+    case ReqStatus.ONBOARDED:
+      if (checkPermission(Operation.CHANGE_SUB_STATUS) && record.subStatus !== ReqSubStatus.FROZEN) {
+        buttons.push(
+          <Button key="changeSubStatus" type="link" size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); onChangeSubStatus(record.id); }}>
+            子状态变更
+          </Button>,
+        );
+      }
       break;
     default:
-      // ONBOARDED / RELEASED / CANCELLED 无操作按钮
       break;
   }
 
@@ -140,7 +187,7 @@ const RequirementsPage: React.FC = () => {
   const [keyword, setKeyword] = useState('');
 
   // ========== 排序状态 ==========
-  const [sortBy, setSortBy] = useState<'createdAt' | 'priority' | 'storyPoints' | undefined>(undefined);
+  const [sortBy, setSortBy] = useState<'createdAt' | 'priority' | 'storyPoints' | 'status' | undefined>(undefined);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | undefined>(undefined);
 
   // ========== 系统列表状态 ==========
@@ -211,26 +258,23 @@ const RequirementsPage: React.FC = () => {
     fetchList({ page: 1, pageSize });
   };
 
-  // 表格排序变化（立即触发查询）
-  const handleTableChange = (_pagination: any, _filters: any, sorter: any) => {
-    let newSortBy: 'createdAt' | 'priority' | 'storyPoints' | undefined;
-    let newSortOrder: 'asc' | 'desc' | undefined;
+  // 表格变化处理：仅排序变化时重置到第一页并发请求，翻页由 pagination.onChange 处理
+  const handleTableChange = (_pagination: any, _filters: any, sorter: any, extra: any) => {
+    if (extra.action !== 'sort') return;
 
-    if (sorter.order) {
-      const fieldMap: Record<string, 'createdAt' | 'priority' | 'storyPoints'> = {
-        createdAt: 'createdAt',
-        priority: 'priority',
-        storyPoints: 'storyPoints',
-      };
-      newSortBy = fieldMap[sorter.field];
-      newSortOrder = sorter.order === 'ascend' ? 'asc' : 'desc';
-    }
+    const fieldMap: Record<string, 'createdAt' | 'priority' | 'storyPoints' | 'status'> = {
+      createdAt: 'createdAt',
+      priority: 'priority',
+      storyPoints: 'storyPoints',
+      status: 'status',
+    };
+    const newSortBy = fieldMap[sorter.field];
+    const newSortOrder = sorter.order === 'ascend' ? 'asc' : 'desc';
 
     setSortBy(newSortBy);
     setSortOrder(newSortOrder);
     setPage(1);
 
-    // 立即用新排序参数发起查询
     fetchList({
       page: 1,
       pageSize,
@@ -333,6 +377,42 @@ const RequirementsPage: React.FC = () => {
     }
   };
 
+  // 子状态变更：打开弹窗
+  const [subStatusModalVisible, setSubStatusModalVisible] = useState(false);
+  const [subStatusTargetId, setSubStatusTargetId] = useState<string>('');
+  const [targetSubStatus, setTargetSubStatus] = useState<string | undefined>(undefined);
+  const [subStatusComment, setSubStatusComment] = useState('');
+  const [subStatusLoading, setSubStatusLoading] = useState(false);
+
+  const handleOpenChangeSubStatus = (id: string) => {
+    setSubStatusTargetId(id);
+    setTargetSubStatus(undefined);
+    setSubStatusComment('');
+    setSubStatusModalVisible(true);
+  };
+
+  const handleChangeSubStatus = async () => {
+    if (!targetSubStatus) {
+      message.warning('请选择目标子状态');
+      return;
+    }
+    if (subStatusComment.length > 500) {
+      message.warning('变更说明最多500字');
+      return;
+    }
+    setSubStatusLoading(true);
+    try {
+      await requirementService.changeSubStatus(subStatusTargetId, targetSubStatus, subStatusComment || undefined);
+      message.success('子状态变更成功');
+      setSubStatusModalVisible(false);
+      refreshList();
+    } catch (error: any) {
+      message.error(error?.message || '子状态变更失败');
+    } finally {
+      setSubStatusLoading(false);
+    }
+  };
+
   // ========== 表格列定义 ==========
   const columns: ColumnsType<RequirementListItem> = [
     {
@@ -351,11 +431,19 @@ const RequirementsPage: React.FC = () => {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      width: 100,
-      render: (status: string) => (
-        <Tag color={STATUS_COLOR_MAP[status] || 'default'}>
-          {REQ_STATUS_LABELS[status as ReqStatus] || status}
-        </Tag>
+      width: 140,
+      sorter: true,
+      render: (status: string, record: RequirementListItem) => (
+        <Space size={4} wrap>
+          <Tag color={STATUS_COLOR_MAP[status] || 'default'}>
+            {REQ_STATUS_LABELS[status as ReqStatus] || status}
+          </Tag>
+          {status === ReqStatus.ONBOARDED && record.subStatus && (
+            <Tag color={REQ_SUB_STATUS_COLORS[record.subStatus] || 'default'}>
+              {REQ_SUB_STATUS_LABELS[record.subStatus] || record.subStatus}
+            </Tag>
+          )}
+        </Space>
       ),
     },
     {
@@ -403,8 +491,23 @@ const RequirementsPage: React.FC = () => {
       title: '操作',
       key: 'action',
       width: 180,
-      render: (_: any, record: RequirementListItem) =>
-        getActionButtons(record, handleEdit, handleSubmitReview, handleApprove, handleReject, handleOnboard, handleResubmit),
+      render: (_: any, record: RequirementListItem) => {
+        const user = useAuthStore.getState().user;
+        const checkPermission = useAuthStore.getState().checkPermission;
+        return getActionButtons(
+          record,
+          user?.id || '',
+          user?.systemIds || [],
+          checkPermission,
+          handleEdit,
+          handleSubmitReview,
+          handleApprove,
+          handleReject,
+          handleOnboard,
+          handleResubmit,
+          handleOpenChangeSubStatus,
+        );
+      },
     },
   ];
 
@@ -478,10 +581,85 @@ const RequirementsPage: React.FC = () => {
           onChange: (p, ps) => {
             setPage(p);
             setPageSize(ps);
+            fetchList({
+              page: p,
+              pageSize: ps,
+              systemId: systemFilter,
+              status: statusFilter.length > 0 ? statusFilter : undefined,
+              keyword: keyword || undefined,
+              sortBy,
+              sortOrder,
+            });
           },
         }}
         locale={{ emptyText: '暂无需求，点击「新增需求」创建' }}
       />
+
+      {/* 子状态变更弹窗 */}
+      <Modal
+        title="子状态变更"
+        open={subStatusModalVisible}
+        onCancel={() => {
+          setSubStatusModalVisible(false);
+          setTargetSubStatus(undefined);
+          setSubStatusComment('');
+        }}
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => {
+              setSubStatusModalVisible(false);
+              setTargetSubStatus(undefined);
+              setSubStatusComment('');
+            }}
+          >
+            取消
+          </Button>,
+          <Button
+            key="submit"
+            type="primary"
+            loading={subStatusLoading}
+            onClick={handleChangeSubStatus}
+          >
+            确认变更
+          </Button>,
+        ]}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 8, color: '#64748b' }}>目标子状态（必选）</div>
+          <Select
+            style={{ width: '100%' }}
+            placeholder="请选择目标子状态"
+            value={targetSubStatus}
+            onChange={(value) => setTargetSubStatus(value)}
+            options={[
+              ReqSubStatus.DEV_IN_PROGRESS,
+              ReqSubStatus.SIT_TESTING,
+              ReqSubStatus.UAT_TESTING,
+              ReqSubStatus.FROZEN,
+            ].map((s) => ({
+              value: s,
+              label: (
+                <span>
+                  {REQ_SUB_STATUS_LABELS[s]}
+                  <Tag color={REQ_SUB_STATUS_COLORS[s]} style={{ marginLeft: 8 }}>{s}</Tag>
+                </span>
+              ),
+            }))}
+          />
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 8, color: '#64748b' }}>变更说明（可选，最多500字）</div>
+          <Input.TextArea
+            value={subStatusComment}
+            onChange={(e) => setSubStatusComment(e.target.value)}
+            placeholder="请输入子状态变更的原因..."
+            maxLength={500}
+            rows={4}
+            showCount
+          />
+        </div>
+      </Modal>
     </div>
   );
 };

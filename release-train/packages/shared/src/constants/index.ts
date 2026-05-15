@@ -265,6 +265,14 @@ export const REQ_SUB_STATUS_LABELS: Record<ReqSubStatus, string> = {
   [ReqSubStatus.FROZEN]: '封板',
 };
 
+// ========== 需求子状态 Tag 颜色映射 ==========
+export const REQ_SUB_STATUS_COLORS: Record<ReqSubStatus, string> = {
+  [ReqSubStatus.DEV_IN_PROGRESS]: 'blue',
+  [ReqSubStatus.SIT_TESTING]: 'orange',
+  [ReqSubStatus.UAT_TESTING]: 'purple',
+  [ReqSubStatus.FROZEN]: 'green',
+};
+
 // ========== 火车状态显示名称映射 ==========
 export const TRAIN_STATUS_LABELS: Record<TrainStatus, string> = {
   [TrainStatus.PLANNING]: '规划中',

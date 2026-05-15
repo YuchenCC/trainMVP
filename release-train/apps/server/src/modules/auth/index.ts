@@ -40,6 +40,11 @@ export async function loginRoute(fastify: FastifyInstance): Promise<void> {
 
       const user = await prisma.user.findUnique({
         where: { username },
+        include: {
+          systemMembers: {
+            select: { systemId: true },
+          },
+        },
       });
 
       // 防止时序攻击：无论用户是否存在，都执行 bcrypt.compare
@@ -70,6 +75,7 @@ export async function loginRoute(fastify: FastifyInstance): Promise<void> {
         displayName: user.displayName,
         email: user.email,
         role: user.role as Role,
+        systemIds: user.systemMembers.map((m) => m.systemId),
       };
 
       return reply.send({
@@ -105,7 +111,9 @@ export async function meRoute(fastify: FastifyInstance): Promise<void> {
           displayName: true,
           email: true,
           role: true,
-          // 不返回 password、ssoId
+          systemMembers: {
+            select: { systemId: true },
+          },
         },
       });
 
@@ -113,9 +121,16 @@ export async function meRoute(fastify: FastifyInstance): Promise<void> {
         throw errors.unauthorized();
       }
 
+      const { systemMembers, ...userData } = user;
+      const safeUser: SafeUser = {
+        ...userData,
+        role: userData.role as Role,
+        systemIds: systemMembers.map((m) => m.systemId),
+      };
+
       return {
         success: true,
-        data: user as SafeUser,
+        data: safeUser,
       };
     }
   );

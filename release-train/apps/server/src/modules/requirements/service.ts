@@ -15,6 +15,7 @@ import {
   StatusLogItem,              // 操作审计日志项类型
   OperationType,              // 操作类型枚举（用于 StatusLog 审计）
   ReqStatus,                  // 需求状态枚举（用于风险分级）
+  ReqSubStatus,               // 需求子状态枚举（用于子状态变更）
   Role,                       // 角色枚举（用于发起评审权限校验）
 } from '@release-train/shared';
 import { PaginatedResponse } from '@release-train/shared';
@@ -1497,4 +1498,128 @@ export async function listRequirements(
   }));
 
   return { list: formattedList, total, page, pageSize };
+}
+
+// ========== 子状态变更（已纳版需求推进/回退） ==========
+
+/**
+ * 子状态变更：变更已纳版需求的子状态（推进或回退）
+ * 
+ * US1.10 子状态变更功能：
+ * - 前置条件：主状态为 ONBOARDED（已纳版），子状态不为 FROZEN（封板）
+ * - 权限：PROJECT_MGR / TECH_MGR / TEST_MGR（中间件层已校验 CHANGE_SUB_STATUS）
+ * - 目标子状态不能等于当前子状态
+ * - 变更说明可选，最多 500 字
+ * - 使用乐观锁防止并发冲突
+ * - 状态变更和审计日志在同一事务中
+ * 
+ * @param id - 需求 ID
+ * @param operatorId - 操作人 ID（从 JWT 提取）
+ * @param subStatus - 目标子状态（DEV_IN_PROGRESS / SIT_TESTING / UAT_TESTING / FROZEN）
+ * @param comment - 变更说明（可选，最多 500 字）
+ * @returns 更新后的需求详情（含子状态和审计日志）
+ * @throws REQUIREMENT_NOT_FOUND - 需求不存在
+ * @throws REQUIREMENT_NOT_IN_TRAIN - 非已纳版状态
+ * @throws SUB_STATUS_CANNOT_CHANGE - 封板状态不可变更
+ * @throws SUB_STATUS_INVALID - 无效的子状态值
+ * @throws SUB_STATUS_SAME_AS_CURRENT - 目标子状态等于当前子状态
+ * @throws BAD_REQUEST - 变更说明超长
+ * @throws REQUIREMENT_VERSION_CONFLICT - 乐观锁冲突
+ */
+export async function changeSubStatus(
+  id: string,
+  operatorId: string,
+  subStatus: ReqSubStatus,
+  comment?: string,
+): Promise<RequirementDetail> {
+  // 1. 查询需求存在性（含版本号用于乐观锁）
+  const existing = await prisma.requirement.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      status: true,
+      subStatus: true,
+      version: true,
+    },
+  });
+
+  // 需求不存在
+  if (!existing) {
+    throw errors.requirementNotFound();
+  }
+
+  // 2. 校验主状态必须为已纳版（ONBOARDED）
+  if (existing.status !== 'ONBOARDED') {
+    throw errors.requirementNotInTrain('仅已纳版需求可变更子状态');
+  }
+
+  // 3. 校验子状态不为封板（FROZEN 是终态，不可变更）
+  if (existing.subStatus === 'FROZEN') {
+    throw errors.subStatusCannotChange('封板状态不可变更');
+  }
+
+  // 4. 校验目标子状态有效（必须是 ReqSubStatus 枚举值之一）
+  const validSubStatuses = [ReqSubStatus.DEV_IN_PROGRESS, ReqSubStatus.SIT_TESTING, ReqSubStatus.UAT_TESTING, ReqSubStatus.FROZEN];
+  if (!validSubStatuses.includes(subStatus as ReqSubStatus)) {
+    throw errors.subStatusInvalid('无效的子状态值');
+  }
+
+  // 5. 校验不能选择当前子状态
+  if (existing.subStatus === subStatus) {
+    throw errors.subStatusSameAsCurrent('不能选择当前状态');
+  }
+
+  // 6. 校验变更说明长度（可选，最多 500 字）
+  if (comment && comment.length > 500) {
+    throw errors.badRequest('变更说明最多 500 字');
+  }
+
+  // 7. 事务内：乐观锁更新子状态 + 创建审计日志
+  return prisma.$transaction(async (tx) => {
+    // 7a. 带版本号条件的更新（乐观锁）
+    const result = await tx.requirement.updateMany({
+      where: { id, version: existing.version },
+      data: {
+        subStatus: subStatus,
+        version: { increment: 1 },
+      },
+    });
+
+    // 7b. 更新影响行数为 0 → 版本冲突
+    if (result.count === 0) {
+      const current = await tx.requirement.findUnique({ where: { id } });
+      if (!current) {
+        throw errors.requirementNotFound();
+      }
+      throw errors.requirementVersionConflict();
+    }
+
+    // 7c. 创建状态变更日志（审计记录，含变更前后子状态）
+    await tx.statusLog.create({
+      data: {
+        requirementId: id,
+        operationType: 'CHANGE_SUB_STATUS' as any,
+        fromStatus: existing.status,
+        toStatus: existing.status, // 主状态不变
+        fromSubStatus: existing.subStatus,
+        toSubStatus: subStatus,
+        operatorId,
+        reason: comment?.trim() || undefined,
+      },
+    });
+
+    // 7d. 重新查询更新后的需求（含关联数据）
+    const updated = await tx.requirement.findUnique({
+      where: { id },
+      include: {
+        system: true,
+        ba: true,
+        pm: true,
+        creator: true,
+        train: true,
+      },
+    });
+
+    return buildRequirementDetail(updated!, tx);
+  });
 }

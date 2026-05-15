@@ -20,6 +20,7 @@ export interface SafeUser {
   displayName: string;
   email: string;
   role: Role;
+  systemIds: string[];
 }
 
 // JWT Token 载荷结构

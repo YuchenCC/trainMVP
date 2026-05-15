@@ -56,6 +56,104 @@ const CHINESE_NAMES: Record<string, string[]> = {
   '人力资源系统': ['周志强', '吴丽', '孙鹏', '黄婷', '马超', '林小红'],
 };
 
+// ========== 需求种子数据配置 ==========
+// 每个系统的示例需求，包含不同状态
+const REQUIREMENTS: Record<string, Array<{
+  title: string;
+  description: string;
+  priority: 'P0' | 'P1' | 'P2' | 'P3';
+  storyPoints: number;
+  status: 'DRAFT' | 'PENDING_REVIEW' | 'READY' | 'REJECTED' | 'ONBOARDED' | 'RELEASED' | 'CANCELLED';
+  reqType: 'NEW_FEATURE' | 'OPTIMIZATION' | 'BUG';
+  sourceChannel: 'BUSINESS' | 'USER_FEEDBACK' | 'DATA_ANALYSIS' | 'COMPETITOR';
+}>> = {
+  '普惠前端系统': [
+    {
+      title: '用户登录页面优化',
+      description: '<p>优化登录页面的用户体验，添加记住密码和自动登录功能</p>',
+      priority: 'P1',
+      storyPoints: 5,
+      status: 'DRAFT',
+      reqType: 'OPTIMIZATION',
+      sourceChannel: 'USER_FEEDBACK',
+    },
+    {
+      title: '新增贷款申请流程',
+      description: '<p>实现完整的贷款申请流程，包括资料填写、审批状态查询等功能</p>',
+      priority: 'P0',
+      storyPoints: 13,
+      status: 'PENDING_REVIEW',
+      reqType: 'NEW_FEATURE',
+      sourceChannel: 'BUSINESS',
+    },
+    {
+      title: '修复还款计算器精度问题',
+      description: '<p>修复还款计算器在大额贷款计算时的精度问题</p>',
+      priority: 'P1',
+      storyPoints: 3,
+      status: 'READY',
+      reqType: 'BUG',
+      sourceChannel: 'DATA_ANALYSIS',
+    },
+    {
+      title: '个人中心页面重构',
+      description: '<p>重构个人中心页面，提升加载速度和用户体验</p>',
+      priority: 'P2',
+      storyPoints: 8,
+      status: 'ONBOARDED',
+      reqType: 'OPTIMIZATION',
+      sourceChannel: 'COMPETITOR',
+    },
+    {
+      title: '添加短信验证码功能',
+      description: '<p>为登录和注册添加短信验证码验证机制</p>',
+      priority: 'P1',
+      storyPoints: 8,
+      status: 'RELEASED',
+      reqType: 'NEW_FEATURE',
+      sourceChannel: 'BUSINESS',
+    },
+  ],
+  '人力资源系统': [
+    {
+      title: '员工考勤记录查询',
+      description: '<p>实现员工考勤记录的查询和导出功能</p>',
+      priority: 'P1',
+      storyPoints: 5,
+      status: 'DRAFT',
+      reqType: 'NEW_FEATURE',
+      sourceChannel: 'BUSINESS',
+    },
+    {
+      title: '薪资计算模块优化',
+      description: '<p>优化薪资计算模块，支持更复杂的薪资规则</p>',
+      priority: 'P0',
+      storyPoints: 13,
+      status: 'PENDING_REVIEW',
+      reqType: 'OPTIMIZATION',
+      sourceChannel: 'USER_FEEDBACK',
+    },
+    {
+      title: '修复假期申请审批流程',
+      description: '<p>修复假期申请在多级审批时的状态更新问题</p>',
+      priority: 'P1',
+      storyPoints: 3,
+      status: 'READY',
+      reqType: 'BUG',
+      sourceChannel: 'DATA_ANALYSIS',
+    },
+    {
+      title: '新增员工培训管理',
+      description: '<p>实现员工培训计划管理和进度追踪功能</p>',
+      priority: 'P2',
+      storyPoints: 8,
+      status: 'REJECTED',
+      reqType: 'NEW_FEATURE',
+      sourceChannel: 'BUSINESS',
+    },
+  ],
+};
+
 /**
  * 主函数：导入种子数据
  * 
@@ -67,6 +165,7 @@ const CHINESE_NAMES: Record<string, string[]> = {
  *      - upsert 用户记录（密码已哈希）
  *      - 如果角色在 SYSTEM_ROLES 中 → upsert SystemMember 关联
  *      - 如果角色是 TRAIN_ADMIN → 跳过 SystemMember（系统级管理）
+ *    c. 创建该系统的示例需求数据
  * 3. 打印账号汇总表
  */
 async function main() {
@@ -85,6 +184,9 @@ async function main() {
       update: {},                                                // 已存在：不做任何更新
       create: { name: sys.name, description: sys.description }, // 不存在：创建新纪录
     });
+
+    // 存储用户对象，后续创建需求时需要使用
+    const users: Record<string, any> = {};
 
     // 2b. 遍历该系统的 6 个角色
     const names = CHINESE_NAMES[sys.name];                       // 获取该系统的人员姓名数组
@@ -107,6 +209,8 @@ async function main() {
           role,                                              // 全局角色（BA/PM/.../TRAIN_ADMIN）
         },
       });
+
+      users[role] = user; // 保存用户对象
 
       // 根据角色决定是否创建 SystemMember 关联
       if (SYSTEM_ROLES[role]) {
@@ -131,6 +235,89 @@ async function main() {
       } else {
         // 角色是 TRAIN_ADMIN → 不关联到具体系统（系统级管理角色）
         console.log(`  👤 ${role}: ${displayName} (${username} / 123456) ⚠️ 系统级管理，不关联系统成员`);
+      }
+    }
+
+    // 2c. 创建该系统的示例需求数据
+    const requirements = REQUIREMENTS[sys.name];
+    if (requirements && requirements.length > 0) {
+      console.log(`  📋 创建 ${requirements.length} 个示例需求...`);
+      
+      // 获取当前年份，用于生成需求编号
+      const currentYear = new Date().getFullYear();
+      
+      // 查找该年份下的所有需求，找到最大的编号
+      const allReqs = await prisma.requirement.findMany({
+        where: {
+          reqCode: {
+            startsWith: `REQ-${currentYear}-`,
+          },
+        },
+        select: { reqCode: true },
+      });
+      
+      let maxSeq = 0;
+      for (const req of allReqs) {
+        const match = req.reqCode.match(/^REQ-\d{4}-(\d{4})$/);
+        if (match) {
+          const seq = parseInt(match[1], 10);
+          if (seq > maxSeq) {
+            maxSeq = seq;
+          }
+        }
+      }
+      
+      let reqSeq = maxSeq + 1;
+
+      for (const reqData of requirements) {
+        // 检查需求是否已存在（通过标题和系统ID判断）
+        const existingReq = await prisma.requirement.findFirst({
+          where: {
+            title: reqData.title,
+            systemId: system.id,
+          },
+        });
+
+        if (!existingReq) {
+          // 尝试生成需求编号，直到找到一个可用的
+          let reqCode: string;
+          let created = false;
+          
+          while (!created && reqSeq <= 9999) {
+            reqCode = `REQ-${currentYear}-${String(reqSeq).padStart(4, '0')}`;
+            reqSeq++;
+            
+            try {
+              // 创建需求
+              await prisma.requirement.create({
+                data: {
+                  title: reqData.title,
+                  description: reqData.description,
+                  systemId: system.id,
+                  priority: reqData.priority,
+                  storyPoints: reqData.storyPoints,
+                  baId: users.BA.id,
+                  pmId: users.PM?.id,
+                  creatorId: users.BA.id,
+                  status: reqData.status,
+                  reqType: reqData.reqType,
+                  sourceChannel: reqData.sourceChannel,
+                  reqCode,
+                  version: 1,
+                },
+              });
+              console.log(`    ✅ 创建需求: ${reqData.title} (${reqData.status}) [${reqCode}]`);
+              created = true;
+            } catch (e: any) {
+              // 如果是唯一约束错误，继续尝试下一个编号
+              if (e.code !== 'P2002') {
+                throw e;
+              }
+            }
+          }
+        } else {
+          console.log(`    ⏭️  需求已存在: ${reqData.title}`);
+        }
       }
     }
 

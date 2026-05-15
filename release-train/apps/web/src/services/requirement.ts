@@ -152,6 +152,24 @@ export const requirementService = {
     const response = await api.get('/requirements/search', { params: { q: keyword } }); // GET /api/requirements/search?q=
     return response.data.data;                                  // 提取 data 数组
   },
+
+  /**
+   * 子状态变更（已纳版需求推进/回退）
+   * 
+   * US1.10 子状态变更功能：
+   * - 前置条件：主状态为已纳版，子状态不为封板
+   * - 权限：PROJECT_MGR / TECH_MGR / TEST_MGR
+   * - 目标子状态不能等于当前子状态
+   * 
+   * @param id - 需求 ID
+   * @param subStatus - 目标子状态（DEV_IN_PROGRESS / SIT_TESTING / UAT_TESTING / FROZEN）
+   * @param comment - 变更说明（可选，最多 500 字）
+   * @returns 更新后的需求详情
+   */
+  changeSubStatus: async (id: string, subStatus: string, comment?: string): Promise<ApiResponse<RequirementDetail>> => {
+    const response = await api.post(`/requirements/${id}/change-sub-status`, { subStatus, comment }); // POST /api/requirements/:id/change-sub-status
+    return response.data;
+  },
 };
 
 export default requirementService;

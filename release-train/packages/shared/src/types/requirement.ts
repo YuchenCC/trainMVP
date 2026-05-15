@@ -133,6 +133,6 @@ export interface RequirementListQuery {
   systemId?: string;                   // 归属系统ID（可选，默认全部）
   status?: ReqStatus | ReqStatus[];    // 按状态筛选，支持单选或多选（可选）
   keyword?: string;                    // 按编号/标题模糊搜索（可选）
-  sortBy?: 'createdAt' | 'priority' | 'storyPoints'; // 排序字段（可选，默认createdAt）
+  sortBy?: 'createdAt' | 'priority' | 'storyPoints' | 'status'; // 排序字段（可选，默认createdAt）
   sortOrder?: 'asc' | 'desc';          // 排序方向（可选，默认desc）
 }
