@@ -305,6 +305,12 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
             window.location.reload();
           },
         });
+      } else if (errCode === 'REQUIREMENT_CIRCULAR_DEPENDENCY') {
+        Modal.warning({
+          title: '循环依赖',
+          content: '您添加的依赖关系形成了循环引用（A依赖B，B又依赖A）。请检查依赖列表，移除导致循环的需求后重试。',
+          okText: '知道了',
+        });
       } else {
         message.error(error?.message || '操作失败');
       }
@@ -342,6 +348,12 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
           onOk: () => {
             window.location.reload();
           },
+        });
+      } else if (errCode === 'REQUIREMENT_CIRCULAR_DEPENDENCY') {
+        Modal.warning({
+          title: '循环依赖',
+          content: '您添加的依赖关系形成了循环引用（A依赖B，B又依赖A）。请检查依赖列表，移除导致循环的需求后重试。',
+          okText: '知道了',
         });
       } else {
         message.error(error?.message || '保存失败');
@@ -500,7 +512,7 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
             {onCancel && <Button onClick={onCancel}>取消</Button>}
             <Button type="default" icon={<SaveOutlined />} onClick={handleSaveDraft}>保存草稿</Button>
             <Button type="primary" icon={<SendOutlined />} htmlType="submit" loading={isSubmitting}>
-              {mode === 'create' ? '保存并发起评审' : '保存修改'}
+              {mode === 'create' ? '保存并发起评审' : '发起评审'}
             </Button>
           </div>
         </Form>

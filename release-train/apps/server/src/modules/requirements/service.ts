@@ -691,14 +691,20 @@ export async function searchRequirements(keyword: string): Promise<RequirementSe
 }
 
 /**
- * 需求列表查询（分页 + 筛选 + 搜索）
+ * 需求列表查询（分页 + 筛选 + 搜索 + 排序）
  * 
  * 遵循编码规范 9.4 分页规范：
  * - 使用偏移分页（skip + take）
  * - findMany 和 count 使用相同 where 条件
  * - pageSize 上限 100，page 下限 1
  * 
- * @param params - 查询参数（page/pageSize/status/keyword）
+ * US1.3 增强：
+ * - status 支持数组多选（如 ?status=DRAFT&status=PENDING_REVIEW）
+ * - systemId 按归属系统筛选
+ * - sortBy/sortOrder 动态排序
+ * - subStatus 字段返回
+ * 
+ * @param params - 查询参数（page/pageSize/systemId/status/keyword/sortBy/sortOrder）
  * @returns 分页响应 { list, total, page, pageSize }
  */
 export async function listRequirements(
@@ -711,9 +717,20 @@ export async function listRequirements(
   // 构建 where 条件
   const where: any = {};
 
-  // 按状态筛选
+  // 按归属系统筛选（US1.3 新增）
+  if (params.systemId) {
+    where.systemId = params.systemId;
+  }
+
+  // 按状态筛选（US1.3 增强：支持单选和多选）
   if (params.status) {
-    where.status = params.status;
+    if (Array.isArray(params.status)) {
+      // 多选：使用 Prisma in 操作符
+      where.status = { in: params.status };
+    } else {
+      // 单选：直接匹配
+      where.status = params.status;
+    }
   }
 
   // 按关键词模糊搜索（编号或标题）
@@ -724,18 +741,24 @@ export async function listRequirements(
     ];
   }
 
+  // 构建排序条件（US1.3 新增）
+  const sortBy = params.sortBy ?? 'createdAt';     // 默认按创建时间排序
+  const sortOrder = params.sortOrder ?? 'desc';     // 默认降序
+  const orderBy: any = { [sortBy]: sortOrder };
+
   // 并行查询：数据 + 总数（相同 where 条件）
   const [list, total] = await Promise.all([
     prisma.requirement.findMany({
       where,
       skip: (page - 1) * pageSize,   // 偏移量
       take: pageSize,                 // 每页条数
-      orderBy: { createdAt: 'desc' }, // 最新创建排前面
+      orderBy,                        // 动态排序
       select: {
         id: true,
         reqCode: true,
         title: true,
         status: true,
+        subStatus: true,              // US1.3 新增：子状态字段
         priority: true,
         storyPoints: true,
         createdAt: true,
@@ -752,6 +775,7 @@ export async function listRequirements(
   const formattedList: RequirementListItem[] = list.map((item) => ({
     ...item,
     status: item.status as unknown as RequirementListItem['status'],
+    subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
     priority: item.priority as unknown as RequirementListItem['priority'],
     createdAt: item.createdAt.toISOString(),
     updatedAt: item.updatedAt.toISOString(),

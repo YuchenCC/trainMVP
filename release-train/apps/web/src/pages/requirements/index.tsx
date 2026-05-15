@@ -1,13 +1,24 @@
-// ========== 需求池列表页面 ==========
-// 路由 /requirements：分页列表 + 状态筛选 + 关键词搜索 + 新增按钮
+// ========== 需求池列表页面（US1.3 增强） ==========
+// 路由 /requirements：分页列表 + 系统筛选 + 状态多选 + 关键词搜索 + 排序 + 操作按钮矩阵
 // 点击「新增需求」跳转 /requirements/new
 // 点击行跳转 /requirements/:id（需求详情）
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Table, Input, Select, Space, Tag } from 'antd';
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  SearchOutlined,
+  ReloadOutlined,
+  EditOutlined,
+  SendOutlined,
+  CheckOutlined,
+  CloseOutlined,
+  RocketOutlined,
+  RedoOutlined,
+} from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { requirementService } from '../../services/requirement';
+import { systemService, SystemOption } from '../../services/system';
 import {
   RequirementListItem,
   RequirementListQuery,
@@ -16,14 +27,13 @@ import {
   PRIORITY_LABELS,
 } from '@release-train/shared';
 
-// 状态筛选选项（全部 + 各状态枚举值）
-const STATUS_OPTIONS = [
-  { label: '全部状态', value: '' },
-  ...Object.values(ReqStatus).map((s) => ({
-    label: REQ_STATUS_LABELS[s],
-    value: s,
-  })),
-];
+// ========== 常量定义 ==========
+
+// 状态筛选选项（多选模式，不含"全部"选项）
+const STATUS_OPTIONS = Object.values(ReqStatus).map((s) => ({
+  label: REQ_STATUS_LABELS[s],
+  value: s,
+}));
 
 // 状态 Tag 颜色映射
 const STATUS_COLOR_MAP: Record<string, string> = {
@@ -44,24 +54,104 @@ const PRIORITY_COLOR_MAP: Record<string, string> = {
   P3: 'default',
 };
 
+// ========== 操作按钮配置 ==========
+
+/** 根据需求状态返回操作按钮列表 */
+function getActionButtons(
+  record: RequirementListItem,
+  onEdit: (id: string) => void,
+  onSubmitReview: (id: string) => void,
+  onApprove: (id: string) => void,
+  onReject: (id: string) => void,
+  onOnboard: (id: string) => void,
+  onResubmit: (id: string) => void,
+) {
+  const buttons: React.ReactNode[] = [];
+
+  switch (record.status) {
+    case ReqStatus.DRAFT:
+      buttons.push(
+        <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); onEdit(record.id); }}>
+          编辑
+        </Button>,
+        <Button key="submit" type="link" size="small" icon={<SendOutlined />} onClick={(e) => { e.stopPropagation(); onSubmitReview(record.id); }}>
+          发起评审
+        </Button>,
+      );
+      break;
+    case ReqStatus.PENDING_REVIEW:
+      buttons.push(
+        <Button key="approve" type="link" size="small" icon={<CheckOutlined />} style={{ color: '#52c41a' }} onClick={(e) => { e.stopPropagation(); onApprove(record.id); }}>
+          通过评审
+        </Button>,
+        <Button key="reject" type="link" size="small" icon={<CloseOutlined />} danger onClick={(e) => { e.stopPropagation(); onReject(record.id); }}>
+          驳回
+        </Button>,
+      );
+      break;
+    case ReqStatus.READY:
+      buttons.push(
+        <Button key="onboard" type="link" size="small" icon={<RocketOutlined />} onClick={(e) => { e.stopPropagation(); onOnboard(record.id); }}>
+          纳版
+        </Button>,
+      );
+      break;
+    case ReqStatus.REJECTED:
+      buttons.push(
+        <Button key="resubmit" type="link" size="small" icon={<RedoOutlined />} onClick={(e) => { e.stopPropagation(); onResubmit(record.id); }}>
+          重新提交
+        </Button>,
+      );
+      break;
+    default:
+      // ONBOARDED / RELEASED / CANCELLED 无操作按钮
+      break;
+  }
+
+  return <Space size={0}>{buttons}</Space>;
+}
+
+// ========== 组件 ==========
+
 /**
- * 需求池列表页面组件
+ * 需求池列表页面组件（US1.3 增强版）
  * 
  * 功能：
  * - 分页列表展示
- * - 状态筛选 + 关键词搜索
+ * - 系统筛选 + 状态多选 + 关键词搜索 + 查询/重置按钮
+ * - 表格列排序（创建时间、优先级、工作量）
+ * - 操作按钮矩阵（根据状态动态显示）
  * - 点击行跳转需求详情
  * - 新增按钮跳转创建页
  */
 const RequirementsPage: React.FC = () => {
   const navigate = useNavigate();
+
+  // ========== 列表数据状态 ==========
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<RequirementListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [statusFilter, setStatusFilter] = useState<string>('');
+
+  // ========== 筛选条件状态 ==========
+  const [systemFilter, setSystemFilter] = useState<string | undefined>(undefined);
+  const [statusFilter, setStatusFilter] = useState<ReqStatus[]>([]);
   const [keyword, setKeyword] = useState('');
+
+  // ========== 排序状态 ==========
+  const [sortBy, setSortBy] = useState<'createdAt' | 'priority' | 'storyPoints' | undefined>(undefined);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | undefined>(undefined);
+
+  // ========== 系统列表状态 ==========
+  const [systems, setSystems] = useState<SystemOption[]>([]);
+
+  // ========== 数据加载 ==========
+
+  // 页面初始化时加载系统列表
+  useEffect(() => {
+    systemService.list().then(setSystems).catch(() => {});
+  }, []);
 
   // 加载需求列表
   const fetchList = useCallback(async (params: RequirementListQuery) => {
@@ -81,29 +171,86 @@ const RequirementsPage: React.FC = () => {
     }
   }, []);
 
-  // 初始加载 + 分页/筛选变化时重新请求
+  // 初始加载
   useEffect(() => {
     fetchList({
       page,
       pageSize,
-      status: (statusFilter || undefined) as ReqStatus | undefined,
+      systemId: systemFilter,
+      status: statusFilter.length > 0 ? statusFilter : undefined,
       keyword: keyword || undefined,
+      sortBy,
+      sortOrder,
     });
-  }, [page, pageSize, statusFilter, keyword, fetchList]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 筛选条件变更时重置页码
-  const handleStatusChange = (value: string) => {
-    setStatusFilter(value);
+  // ========== 事件处理 ==========
+
+  // 点击查询按钮
+  const handleQuery = () => {
     setPage(1);
+    fetchList({
+      page: 1,
+      pageSize,
+      systemId: systemFilter,
+      status: statusFilter.length > 0 ? statusFilter : undefined,
+      keyword: keyword || undefined,
+      sortBy,
+      sortOrder,
+    });
   };
 
-  // 搜索关键词变更
-  const handleSearch = (value: string) => {
-    setKeyword(value);
+  // 点击重置按钮
+  const handleReset = () => {
+    setSystemFilter(undefined);
+    setStatusFilter([]);
+    setKeyword('');
+    setSortBy(undefined);
+    setSortOrder(undefined);
     setPage(1);
+    fetchList({ page: 1, pageSize });
   };
 
-  // 表格列定义
+  // 表格排序变化（立即触发查询）
+  const handleTableChange = (_pagination: any, _filters: any, sorter: any) => {
+    let newSortBy: 'createdAt' | 'priority' | 'storyPoints' | undefined;
+    let newSortOrder: 'asc' | 'desc' | undefined;
+
+    if (sorter.order) {
+      const fieldMap: Record<string, 'createdAt' | 'priority' | 'storyPoints'> = {
+        createdAt: 'createdAt',
+        priority: 'priority',
+        storyPoints: 'storyPoints',
+      };
+      newSortBy = fieldMap[sorter.field];
+      newSortOrder = sorter.order === 'ascend' ? 'asc' : 'desc';
+    }
+
+    setSortBy(newSortBy);
+    setSortOrder(newSortOrder);
+    setPage(1);
+
+    // 立即用新排序参数发起查询
+    fetchList({
+      page: 1,
+      pageSize,
+      systemId: systemFilter,
+      status: statusFilter.length > 0 ? statusFilter : undefined,
+      keyword: keyword || undefined,
+      sortBy: newSortBy,
+      sortOrder: newSortOrder,
+    });
+  };
+
+  // ========== 操作按钮回调（MVP 阶段弹窗提示，后续实现完整功能） ==========
+  const handleEdit = (id: string) => navigate(`/requirements/${id}/edit`);
+  const handleSubmitReview = (_id: string) => { /* TODO: US1.4 发起评审 */ };
+  const handleApprove = (_id: string) => { /* TODO: US1.4 通过评审 */ };
+  const handleReject = (_id: string) => { /* TODO: US1.4 驳回 */ };
+  const handleOnboard = (_id: string) => { /* TODO: T2 纳版 */ };
+  const handleResubmit = (_id: string) => { /* TODO: US1.4 重新提交 */ };
+
+  // ========== 表格列定义 ==========
   const columns: ColumnsType<RequirementListItem> = [
     {
       title: '需求编号',
@@ -112,7 +259,7 @@ const RequirementsPage: React.FC = () => {
       width: 150,
     },
     {
-      title: '需求标题',
+      title: '需求名称',
       dataIndex: 'title',
       key: 'title',
       ellipsis: true,
@@ -133,6 +280,7 @@ const RequirementsPage: React.FC = () => {
       dataIndex: 'priority',
       key: 'priority',
       width: 90,
+      sorter: true,
       render: (priority: string) => (
         <Tag color={PRIORITY_COLOR_MAP[priority] || 'default'}>
           {PRIORITY_LABELS[priority as keyof typeof PRIORITY_LABELS] || priority}
@@ -144,6 +292,7 @@ const RequirementsPage: React.FC = () => {
       dataIndex: 'storyPoints',
       key: 'storyPoints',
       width: 80,
+      sorter: true,
       render: (points: number) => `${points} 点`,
     },
     {
@@ -159,40 +308,62 @@ const RequirementsPage: React.FC = () => {
       width: 100,
     },
     {
-      title: '创建人',
-      dataIndex: ['creator', 'displayName'],
-      key: 'creator',
-      width: 100,
-    },
-    {
       title: '创建时间',
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 180,
+      sorter: true,
+      defaultSortOrder: 'descend',
       render: (val: string) => new Date(val).toLocaleString('zh-CN'),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 180,
+      render: (_: any, record: RequirementListItem) =>
+        getActionButtons(record, handleEdit, handleSubmitReview, handleApprove, handleReject, handleOnboard, handleResubmit),
     },
   ];
 
+  // ========== 渲染 ==========
   return (
     <div>
-      {/* 操作栏：新增按钮 + 筛选 + 搜索 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Space>
+      {/* 筛选栏：系统筛选 + 状态多选 + 关键字搜索 + 查询/重置按钮 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+        <Space wrap>
           <Select
-            placeholder="状态筛选"
-            value={statusFilter}
-            onChange={handleStatusChange}
-            options={STATUS_OPTIONS}
-            style={{ width: 140 }}
+            placeholder="归属系统"
+            value={systemFilter}
+            onChange={(value) => setSystemFilter(value)}
+            options={systems.map((s) => ({ label: s.name, value: s.id }))}
+            style={{ width: 160 }}
             allowClear
+          />
+          <Select
+            mode="multiple"
+            placeholder="需求状态"
+            value={statusFilter}
+            onChange={(value) => setStatusFilter(value)}
+            options={STATUS_OPTIONS}
+            style={{ minWidth: 200 }}
+            allowClear
+            maxTagCount={2}
           />
           <Input.Search
             placeholder="搜索需求编号或标题"
             allowClear
-            onSearch={handleSearch}
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            onSearch={(value) => { setKeyword(value); setPage(1); }}
             style={{ width: 280 }}
             prefix={<SearchOutlined />}
           />
+          <Button type="primary" icon={<SearchOutlined />} onClick={handleQuery}>
+            查询
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={handleReset}>
+            重置
+          </Button>
         </Space>
         <Button
           type="primary"
@@ -203,12 +374,13 @@ const RequirementsPage: React.FC = () => {
         </Button>
       </div>
 
-      {/* 需求列表表格（分页） */}
+      {/* 需求列表表格（分页 + 排序） */}
       <Table<RequirementListItem>
         rowKey="id"
         columns={columns}
         dataSource={data}
         loading={loading}
+        onChange={handleTableChange}
         onRow={(record) => ({
           onClick: () => navigate(`/requirements/${record.id}`),
           style: { cursor: 'pointer' },

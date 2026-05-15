@@ -103,6 +103,7 @@ export interface RequirementListItem {
   reqCode: string;                     // 需求编号
   title: string;                       // 需求标题
   status: ReqStatus;                   // 主状态
+  subStatus?: ReqSubStatus;            // 子状态（已纳版时有值）
   priority: Priority;                  // 优先级
   storyPoints: number;                 // 工作量点数
   system: { id: string; name: string }; // 归属系统摘要
@@ -116,6 +117,9 @@ export interface RequirementListItem {
 export interface RequirementListQuery {
   page?: number;                       // 页码，默认 1
   pageSize?: number;                   // 每页条数，默认 20，最大 100
-  status?: ReqStatus;                  // 按状态筛选（可选）
+  systemId?: string;                   // 归属系统ID（可选，默认全部）
+  status?: ReqStatus | ReqStatus[];    // 按状态筛选，支持单选或多选（可选）
   keyword?: string;                    // 按编号/标题模糊搜索（可选）
+  sortBy?: 'createdAt' | 'priority' | 'storyPoints'; // 排序字段（可选，默认createdAt）
+  sortOrder?: 'asc' | 'desc';          // 排序方向（可选，默认desc）
 }

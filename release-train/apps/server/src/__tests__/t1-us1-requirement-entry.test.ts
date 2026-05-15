@@ -720,4 +720,339 @@ describe('T1 US1.1 需求录入', () => {
       }
     });
   });
+
+  // ====================================================================
+  // US1.3 增强筛选与排序测试（TDD RED 阶段）
+  // ====================================================================
+  describe('US1.3 增强筛选与排序', () => {
+    let system2Id: string;
+    let reqDraftId: string;
+    let reqPendingReviewId: string;
+    let reqP0Id: string;
+    let reqP3Id: string;
+    let reqHighSPId: string;
+    let reqLowSPId: string;
+
+    let reqSystem2Id: string;
+
+    beforeAll(async () => {
+      // 清理上次测试可能残留的数据
+      await prisma.system.deleteMany({ where: { name: '测试系统_US1.3_系统2' } });
+
+      // 创建第二个系统（用于系统筛选测试）
+      const system2 = await prisma.system.create({
+        data: { name: '测试系统_US1.3_系统2', description: 'US1.3 系统筛选测试用' },
+      });
+      system2Id = system2.id;
+
+      // 创建不同状态的需求（用于状态多选测试）
+      const draft = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: 'US1.3-草稿需求-状态筛选测试',
+          description: '<p>用于状态多选测试的草稿需求</p>',
+          systemId,
+          priority: 'P2',
+          storyPoints: 3,
+          baId,
+        },
+      });
+      reqDraftId = draft.json().data.id;
+
+      // 创建一个待评审需求（手动改库）
+      const pendingReview = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: 'US1.3-待评审需求-状态筛选测试',
+          description: '<p>用于状态多选测试的待评审需求</p>',
+          systemId,
+          priority: 'P1',
+          storyPoints: 5,
+          baId,
+        },
+      });
+      reqPendingReviewId = pendingReview.json().data.id;
+      await prisma.requirement.update({
+        where: { id: reqPendingReviewId },
+        data: { status: 'PENDING_REVIEW' },
+      });
+
+      // 创建归属系统2的需求（用于系统筛选测试）
+      const sys2Req = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: 'US1.3-系统2需求-系统筛选测试',
+          description: '<p>归属系统2的需求</p>',
+          systemId: system2Id,
+          priority: 'P2',
+          storyPoints: 3,
+          baId,
+        },
+      });
+      reqSystem2Id = sys2Req.json().data.id;
+
+      // 创建不同优先级的需求（用于排序测试）
+      const p0Req = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: 'US1.3-P0需求-排序测试',
+          description: '<p>P0 优先级需求</p>',
+          systemId,
+          priority: 'P0',
+          storyPoints: 8,
+          baId,
+        },
+      });
+      reqP0Id = p0Req.json().data.id;
+
+      const p3Req = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: 'US1.3-P3需求-排序测试',
+          description: '<p>P3 优先级需求</p>',
+          systemId,
+          priority: 'P3',
+          storyPoints: 1,
+          baId,
+        },
+      });
+      reqP3Id = p3Req.json().data.id;
+
+      // 创建不同工作量的需求（用于排序测试）
+      const highSP = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: 'US1.3-高工作量需求-排序测试',
+          description: '<p>100点工作量需求</p>',
+          systemId,
+          priority: 'P2',
+          storyPoints: 100,
+          baId,
+        },
+      });
+      reqHighSPId = highSP.json().data.id;
+
+      const lowSP = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: 'US1.3-低工作量需求-排序测试',
+          description: '<p>1点工作量需求</p>',
+          systemId,
+          priority: 'P2',
+          storyPoints: 1,
+          baId,
+        },
+      });
+      reqLowSPId = lowSP.json().data.id;
+    });
+
+    afterAll(async () => {
+      // 清理 US1.3 测试数据（先删依赖和日志，再删需求，最后删系统）
+      const testIds = [reqDraftId, reqPendingReviewId, reqP0Id, reqP3Id, reqHighSPId, reqLowSPId, reqSystem2Id].filter(Boolean);
+      if (testIds.length > 0) {
+        await prisma.requirementDependency.deleteMany({
+          where: { dependantId: { in: testIds } },
+        });
+        await prisma.statusLog.deleteMany({
+          where: { requirementId: { in: testIds } },
+        });
+        await prisma.requirement.deleteMany({
+          where: { id: { in: testIds } },
+        });
+      }
+      if (system2Id) {
+        await prisma.system.deleteMany({ where: { id: system2Id } });
+      }
+    });
+
+    // TC1.3.5 状态多选
+    it('状态多选：同时筛选 DRAFT 和 PENDING_REVIEW', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?status=DRAFT&status=PENDING_REVIEW',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      // 所有结果的状态应为 DRAFT 或 PENDING_REVIEW
+      for (const item of body.data.list) {
+        expect(['DRAFT', 'PENDING_REVIEW']).toContain(item.status);
+      }
+      // 至少应包含我们创建的草稿和待评审需求
+      const statuses = body.data.list.map((item: any) => item.status);
+      expect(statuses).toContain('DRAFT');
+      expect(statuses).toContain('PENDING_REVIEW');
+    });
+
+    // TC1.3.3 按系统筛选
+    it('按系统筛选：只返回指定系统的需求', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/requirements?systemId=${system2Id}`,
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.total).toBeGreaterThanOrEqual(1);
+      // 所有结果应归属系统2
+      for (const item of body.data.list) {
+        expect(item.system.id).toBe(system2Id);
+      }
+    });
+
+    // TC1.3.7 组合筛选
+    it('组合筛选：系统 + 状态 + 关键字', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/requirements?systemId=${systemId}&status=DRAFT&keyword=US1.3-草稿`,
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      // 所有结果应同时满足：归属系统1、状态DRAFT、标题含关键词
+      for (const item of body.data.list) {
+        expect(item.system.id).toBe(systemId);
+        expect(item.status).toBe('DRAFT');
+        const matchTitle = item.title.includes('US1.3-草稿');
+        const matchCode = item.reqCode.includes('US1.3-草稿');
+        expect(matchTitle || matchCode).toBe(true);
+      }
+    });
+
+    // TC1.3.8 按创建时间排序（升序）
+    it('按创建时间升序排序', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?sortBy=createdAt&sortOrder=asc&pageSize=50',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      // 验证升序：前一条的创建时间 <= 后一条
+      const list = body.data.list;
+      for (let i = 1; i < list.length; i++) {
+        expect(new Date(list[i - 1].createdAt).getTime()).toBeLessThanOrEqual(
+          new Date(list[i].createdAt).getTime(),
+        );
+      }
+    });
+
+    // TC1.3.8 按创建时间排序（降序，默认）
+    it('按创建时间降序排序（默认）', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?sortBy=createdAt&sortOrder=desc&pageSize=50',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      // 验证降序：前一条的创建时间 >= 后一条
+      const list = body.data.list;
+      for (let i = 1; i < list.length; i++) {
+        expect(new Date(list[i - 1].createdAt).getTime()).toBeGreaterThanOrEqual(
+          new Date(list[i].createdAt).getTime(),
+        );
+      }
+    });
+
+    // TC1.3.9 按优先级排序
+    it('按优先级升序排序（P0→P3）', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?sortBy=priority&sortOrder=asc&pageSize=50',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      // 验证优先级升序：P0 < P1 < P2 < P3
+      const priorityOrder = ['P0', 'P1', 'P2', 'P3'];
+      const list = body.data.list;
+      for (let i = 1; i < list.length; i++) {
+        const prevIdx = priorityOrder.indexOf(list[i - 1].priority);
+        const currIdx = priorityOrder.indexOf(list[i].priority);
+        expect(prevIdx).toBeLessThanOrEqual(currIdx);
+      }
+    });
+
+    // TC1.3.10 按工作量排序
+    it('按工作量降序排序（大→小）', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?sortBy=storyPoints&sortOrder=desc&pageSize=50',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      // 验证工作量降序
+      const list = body.data.list;
+      for (let i = 1; i < list.length; i++) {
+        expect(list[i - 1].storyPoints).toBeGreaterThanOrEqual(list[i].storyPoints);
+      }
+    });
+
+    // TC1.3.13 subStatus 字段
+    it('列表项包含 subStatus 字段', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?pageSize=50',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      // 验证每个列表项都包含 subStatus 字段
+      for (const item of body.data.list) {
+        expect(item).toHaveProperty('subStatus');
+      }
+    });
+
+    // 排序默认值测试
+    it('不传排序参数时默认按创建时间降序', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/api/requirements?pageSize=50',
+        headers: { Authorization: `Bearer ${baToken}` },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      // 验证默认降序
+      const list = body.data.list;
+      for (let i = 1; i < list.length; i++) {
+        expect(new Date(list[i - 1].createdAt).getTime()).toBeGreaterThanOrEqual(
+          new Date(list[i].createdAt).getTime(),
+        );
+      }
+    });
+  });
 });
