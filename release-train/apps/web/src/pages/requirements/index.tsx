@@ -1,22 +1,20 @@
-// ========== 需求池页面 ==========
-// 需求池首页：分页列表 + 状态筛选 + 关键词搜索 + 新增需求按钮
-// 点击「新增需求」后切换为 RequirementForm 组件（创建模式）
-// 文件名：pages/requirements/index.tsx
+// ========== 需求池列表页面 ==========
+// 路由 /requirements：分页列表 + 状态筛选 + 关键词搜索 + 新增按钮
+// 点击「新增需求」跳转 /requirements/new
+// 点击行跳转 /requirements/:id（需求详情）
 import React, { useState, useEffect, useCallback } from 'react';
-import { Typography, Button, Table, Input, Select, Space, Tag } from 'antd'; // Ant Design 组件
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons'; // 图标
-import type { ColumnsType } from 'antd/es/table'; // Table 列定义类型
-import RequirementForm from '../../components/requirements/RequirementForm'; // 需求表单组件
-import { requirementService } from '../../services/requirement'; // 需求 API 服务
+import { Button, Table, Input, Select, Space, Tag } from 'antd';
+import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
+import type { ColumnsType } from 'antd/es/table';
+import { requirementService } from '../../services/requirement';
 import {
-  RequirementListItem,       // 需求列表项类型
-  RequirementListQuery,       // 需求列表查询参数类型
-  ReqStatus,                  // 需求状态枚举
-  REQ_STATUS_LABELS,          // 需求状态中文标签
-  PRIORITY_LABELS,            // 优先级中文标签
+  RequirementListItem,
+  RequirementListQuery,
+  ReqStatus,
+  REQ_STATUS_LABELS,
+  PRIORITY_LABELS,
 } from '@release-train/shared';
-
-const { Title } = Typography;
 
 // 状态筛选选项（全部 + 各状态枚举值）
 const STATUS_OPTIONS = [
@@ -47,28 +45,25 @@ const PRIORITY_COLOR_MAP: Record<string, string> = {
 };
 
 /**
- * 需求池页面组件
+ * 需求池列表页面组件
  * 
- * 两种模式：
- * - showForm = false → 分页列表 + 筛选 + 搜索 + 新增按钮
- * - showForm = true  → 需求表单（创建模式）
+ * 功能：
+ * - 分页列表展示
+ * - 状态筛选 + 关键词搜索
+ * - 点击行跳转需求详情
+ * - 新增按钮跳转创建页
  */
 const RequirementsPage: React.FC = () => {
-  const [showForm, setShowForm] = useState(false);       // 是否显示表单
-  const [loading, setLoading] = useState(false);          // 列表加载状态
-  const [data, setData] = useState<RequirementListItem[]>([]); // 当前页数据
-  const [total, setTotal] = useState(0);                  // 总记录数
-  const [page, setPage] = useState(1);                    // 当前页码
-  const [pageSize, setPageSize] = useState(20);           // 每页条数
-  const [statusFilter, setStatusFilter] = useState<string>(''); // 状态筛选
-  const [keyword, setKeyword] = useState('');             // 搜索关键词
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [data, setData] = useState<RequirementListItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [keyword, setKeyword] = useState('');
 
-  /**
-   * 加载需求列表
-   * 
-   * 依赖：page / pageSize / statusFilter / keyword
-   * 筛选条件变更时自动重置页码为 1
-   */
+  // 加载需求列表
   const fetchList = useCallback(async (params: RequirementListQuery) => {
     setLoading(true);
     try {
@@ -80,7 +75,7 @@ const RequirementsPage: React.FC = () => {
         setPageSize(res.data.pageSize);
       }
     } catch {
-      // 错误已由 Axios 拦截器统一处理（message.error）
+      // 错误已由 Axios 拦截器统一处理
     } finally {
       setLoading(false);
     }
@@ -99,13 +94,13 @@ const RequirementsPage: React.FC = () => {
   // 筛选条件变更时重置页码
   const handleStatusChange = (value: string) => {
     setStatusFilter(value);
-    setPage(1); // 重置到第一页
+    setPage(1);
   };
 
-  // 搜索关键词变更（防抖由用户点击搜索按钮触发）
+  // 搜索关键词变更
   const handleSearch = (value: string) => {
     setKeyword(value);
-    setPage(1); // 重置到第一页
+    setPage(1);
   };
 
   // 表格列定义
@@ -178,58 +173,35 @@ const RequirementsPage: React.FC = () => {
     },
   ];
 
-  // 表单模式：显示 RequirementForm
-  if (showForm) {
-    return (
-      <RequirementForm
-        mode="create"                               // 创建模式
-        onCancel={() => setShowForm(false)}         // 取消 → 返回列表
-        onSuccess={() => {
-          setShowForm(false);                       // 成功 → 返回列表
-          fetchList({
-            page: 1,
-            pageSize,
-            status: (statusFilter || undefined) as ReqStatus | undefined,
-            keyword: keyword || undefined,
-          }); // 刷新列表
-        }}
-      />
-    );
-  }
-
-  // 列表模式：筛选栏 + 表格
   return (
     <div>
-      {/* 标题栏：需求池 + 新增需求按钮 */}
+      {/* 操作栏：新增按钮 + 筛选 + 搜索 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>需求池</Title>
+        <Space>
+          <Select
+            placeholder="状态筛选"
+            value={statusFilter}
+            onChange={handleStatusChange}
+            options={STATUS_OPTIONS}
+            style={{ width: 140 }}
+            allowClear
+          />
+          <Input.Search
+            placeholder="搜索需求编号或标题"
+            allowClear
+            onSearch={handleSearch}
+            style={{ width: 280 }}
+            prefix={<SearchOutlined />}
+          />
+        </Space>
         <Button
           type="primary"
           icon={<PlusOutlined />}
-          onClick={() => setShowForm(true)}         // 点击切换到表单模式
+          onClick={() => navigate('/requirements/new')}
         >
           新增需求
         </Button>
       </div>
-
-      {/* 筛选栏：状态筛选 + 关键词搜索 */}
-      <Space style={{ marginBottom: 16 }}>
-        <Select
-          placeholder="状态筛选"
-          value={statusFilter}
-          onChange={handleStatusChange}
-          options={STATUS_OPTIONS}
-          style={{ width: 140 }}
-          allowClear
-        />
-        <Input.Search
-          placeholder="搜索需求编号或标题"
-          allowClear
-          onSearch={handleSearch}
-          style={{ width: 280 }}
-          prefix={<SearchOutlined />}
-        />
-      </Space>
 
       {/* 需求列表表格（分页） */}
       <Table<RequirementListItem>
@@ -237,13 +209,17 @@ const RequirementsPage: React.FC = () => {
         columns={columns}
         dataSource={data}
         loading={loading}
+        onRow={(record) => ({
+          onClick: () => navigate(`/requirements/${record.id}`),
+          style: { cursor: 'pointer' },
+        })}
         pagination={{
           current: page,
           pageSize,
           total,
-          showSizeChanger: true,                               // 允许切换每页条数
-          pageSizeOptions: ['10', '20', '50', '100'],          // 可选每页条数
-          showTotal: (t) => `共 ${t} 条`,                      // 显示总数
+          showSizeChanger: true,
+          pageSizeOptions: ['10', '20', '50', '100'],
+          showTotal: (t) => `共 ${t} 条`,
           onChange: (p, ps) => {
             setPage(p);
             setPageSize(ps);

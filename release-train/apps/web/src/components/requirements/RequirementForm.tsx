@@ -14,7 +14,6 @@ import {
   WarningOutlined,         // 依赖未满足 ⚠️ 图标
   SaveOutlined,            // 保存草稿按钮图标
   SendOutlined,            // 提交按钮图标
-  ArrowLeftOutlined,       // 返回按钮图标
   SearchOutlined,           // 依赖搜索框前缀图标
 } from '@ant-design/icons';
 import {
@@ -332,14 +331,6 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
     <div style={{ display: 'flex', gap: 24, minHeight: 'calc(100vh - 140px)' }}>
       {/* ======== 左侧：表单区域 ======== */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        {/* 标题栏：返回按钮 + 页面标题 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-          {onCancel && (
-            <Button type="text" icon={<ArrowLeftOutlined />} onClick={onCancel}>返回</Button>
-          )}
-          <Title level={4}>{mode === 'create' ? '新增需求' : '编辑需求'}</Title>
-        </div>
-
         {/* Ant Design 表单 */}
         <Form form={form} layout="vertical" onFinish={handleFinish} initialValues={{ priority: Priority.P2, storyPoints: 5 }}>
           {mode === 'edit' && <Form.Item name="version" hidden />} {/* 编辑模式：version 隐藏字段 */}

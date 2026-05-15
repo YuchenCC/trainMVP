@@ -37,9 +37,12 @@ api.interceptors.response.use(
       const status = error.response.status;
       if (status === 401) {
         // 技术错误：Token过期或无效，清除登录状态并跳转登录页
+        // 如果已在登录页则不跳转，避免重复刷新
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        window.location.href = '/login';
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
       } else if (status === 403) {
         // 技术错误：IP访问拒绝等基础设施层拦截
         return Promise.reject(new Error('访问被拒绝'));

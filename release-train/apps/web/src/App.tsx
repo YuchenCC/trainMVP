@@ -6,6 +6,9 @@ import MainLayout from './layouts/MainLayout';
 import LoginPage from './pages/login';
 import DashboardPage from './pages/dashboard';
 import RequirementsPage from './pages/requirements';
+import RequirementCreatePage from './pages/requirements/create';
+import RequirementDetailPage from './pages/requirements/detail';
+import RequirementEditPage from './pages/requirements/edit';
 import TrainsPage from './pages/trains';
 import SystemsPage from './pages/systems';
 import { AuthGuard, GuestGuard } from './components/AuthGuard';
@@ -36,7 +39,14 @@ const App: React.FC = () => {
           >
             {/* 默认重定向到需求列表 */}
             <Route index element={<Navigate to="/requirements" replace />} />
+
+            {/* 需求池模块 */}
             <Route path="/requirements" element={<RequirementsPage />} />
+            <Route path="/requirements/new" element={<RequirementCreatePage />} />
+            <Route path="/requirements/:id" element={<RequirementDetailPage />} />
+            <Route path="/requirements/:id/edit" element={<RequirementEditPage />} />
+
+            {/* 其他模块 */}
             <Route path="/trains" element={<TrainsPage />} />
             <Route path="/systems" element={<SystemsPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
