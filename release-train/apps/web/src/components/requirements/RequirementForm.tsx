@@ -295,7 +295,7 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
       }
       onSuccess?.(); // 通知父组件（如关闭表单）
     } catch (error: any) {
-      const errCode = error?.response?.data?.code;
+      const errCode = error?.code;
       if (errCode === 'REQUIREMENT_VERSION_CONFLICT') {
         Modal.warning({
           title: '编辑冲突',
@@ -306,7 +306,7 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
           },
         });
       } else {
-        message.error(error?.response?.data?.message || error?.message || '操作失败');
+        message.error(error?.message || '操作失败');
       }
     } finally {
       setIsSubmitting(false);                                  // 恢复按钮
@@ -333,7 +333,7 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
       message.success('草稿已保存');
       onSuccess?.();
     } catch (error: any) {
-      const errCode = error?.response?.data?.code;
+      const errCode = error?.code;
       if (errCode === 'REQUIREMENT_VERSION_CONFLICT') {
         Modal.warning({
           title: '编辑冲突',
@@ -344,7 +344,7 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
           },
         });
       } else {
-        message.error(error?.response?.data?.message || error?.message || '保存失败');
+        message.error(error?.message || '保存失败');
       }
     }
   };

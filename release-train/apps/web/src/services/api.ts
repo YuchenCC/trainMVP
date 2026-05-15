@@ -27,8 +27,11 @@ api.interceptors.response.use(
     const data = response.data as ApiResponse;
     if (data.success === false) {
       // 业务错误（HTTP 200 + success:false）：角色权限、参数校验、唯一/重复、业务规则等
-      // 直接抛出给调用方处理，message 已包含中文提示
-      return Promise.reject(new Error(data.message || '操作失败'));
+      // 构造带 code 的 Error 对象，保留业务错误码供调用方区分处理（如版本冲突 vs 权限不足）
+      const bizError = new Error(data.message || '操作失败') as any;
+      bizError.code = data.code;
+      bizError.isBusinessError = true;
+      return Promise.reject(bizError);
     }
     return response;
   },
