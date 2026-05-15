@@ -172,6 +172,13 @@ export const ERROR_CODE_MAP: Record<string, ErrorCodeEntry> = {
     statusCode: 200,
     message: '需求已被其他人修改，请刷新后重试',
   },
+
+  REQUIREMENT_PERMISSION_DENIED: {
+    code: 'REQUIREMENT_PERMISSION_DENIED',
+    type: ErrorType.BUSINESS,
+    statusCode: 200,
+    message: '无权编辑该需求',
+  },
 };
 
 // ========== 工具函数 ==========

@@ -91,6 +91,9 @@ export const errors = {
 
   requirementVersionConflict: (message?: string) =>
     makeError('REQUIREMENT_VERSION_CONFLICT', message), // 200 业务错误：需求版本冲突（并发修改）
+
+  requirementPermissionDenied: (message?: string) =>
+    makeError('REQUIREMENT_PERMISSION_DENIED', message), // 200 业务错误：无权编辑该需求（BA只能编辑自己的需求）
 };
 
 // ========== 错误处理函数（生产环境不暴露堆栈） ==========

@@ -267,6 +267,203 @@ describe('T1 US1.1 需求录入', () => {
       expect(body.success).toBe(false);
       expect(body.code).toBe('REQUIREMENT_NOT_FOUND');
     });
+
+    it('BA 编辑其他 BA 的需求应返回200，错误码 REQUIREMENT_PERMISSION_DENIED', async () => {
+      // 创建第二个 BA 用户
+      const ba2PasswordHash = await bcrypt.hash('BA2Pass123!', 10);
+      const ba2 = await prisma.user.create({
+        data: {
+          username: 'test_ba2_us1',
+          password: ba2PasswordHash,
+          displayName: '测试BA2_US1',
+          email: 'test_ba2_us1@test.com',
+          role: 'BA',
+        },
+      });
+      const ba2Login = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'test_ba2_us1', password: 'BA2Pass123!' },
+      });
+      const ba2Token = ba2Login.json().data.token;
+
+      // BA2 尝试编辑 BA1 创建的需求
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/requirements/${createdRequirementId}`,
+        headers: { Authorization: `Bearer ${ba2Token}` },
+        payload: {
+          version: 1,
+          title: 'BA2 越权编辑',
+        },
+      });
+
+      expect(res.statusCode).toBe(200); // 业务错误统一返回 200
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('REQUIREMENT_PERMISSION_DENIED');
+
+      // 清理 BA2
+      await prisma.user.delete({ where: { id: ba2.id } });
+    });
+
+    it('PM 可以编辑任意 BA 的草稿需求', async () => {
+      // 先查询当前版本号（前面的测试可能已修改）
+      const current = await prisma.requirement.findUnique({
+        where: { id: createdRequirementId },
+        select: { version: true },
+      });
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/requirements/${createdRequirementId}`,
+        headers: { Authorization: `Bearer ${pmToken}` },
+        payload: {
+          version: current!.version,
+          title: 'PM 编辑 BA 的需求',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.title).toBe('PM 编辑 BA 的需求');
+    });
+
+    it('编辑时添加自依赖应返回200，错误码 REQUIREMENT_CIRCULAR_DEPENDENCY', async () => {
+      const current = await prisma.requirement.findUnique({
+        where: { id: createdRequirementId },
+        select: { version: true },
+      });
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/requirements/${createdRequirementId}`,
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          version: current!.version,
+          dependencyIds: [createdRequirementId],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('REQUIREMENT_CIRCULAR_DEPENDENCY');
+    });
+  });
+
+  describe('依赖校验（创建时）', () => {
+    it('创建时添加自依赖应返回200，错误码 REQUIREMENT_CIRCULAR_DEPENDENCY', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: '自依赖测试需求',
+          description: '<p>测试自依赖</p>',
+          systemId,
+          priority: 'P3',
+          storyPoints: 1,
+          baId,
+        },
+      });
+      const newId = res.json().data.id;
+
+      const res2 = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: '自依赖测试需求2',
+          description: '<p>测试自依赖2</p>',
+          systemId,
+          priority: 'P3',
+          storyPoints: 1,
+          baId,
+          dependencyIds: [newId],
+        },
+      });
+
+      expect(res2.statusCode).toBe(200);
+      const body = res2.json();
+      expect(body.success).toBe(true);
+
+      // 清理
+      await prisma.requirementDependency.deleteMany({
+        where: { dependantId: res2.json().data.id },
+      });
+      await prisma.statusLog.deleteMany({
+        where: { requirementId: { in: [newId, res2.json().data.id] } },
+      });
+      await prisma.requirement.deleteMany({
+        where: { id: { in: [newId, res2.json().data.id] } },
+      });
+    });
+
+    it('创建时循环依赖应返回200，错误码 REQUIREMENT_CIRCULAR_DEPENDENCY', async () => {
+      const reqA = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: '循环依赖测试A',
+          description: '<p>A</p>',
+          systemId,
+          priority: 'P3',
+          storyPoints: 1,
+          baId,
+        },
+      });
+      const idA = reqA.json().data.id;
+
+      const reqB = await app.inject({
+        method: 'POST',
+        url: '/api/requirements',
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          title: '循环依赖测试B',
+          description: '<p>B</p>',
+          systemId,
+          priority: 'P3',
+          storyPoints: 1,
+          baId,
+          dependencyIds: [idA],
+        },
+      });
+      const idB = reqB.json().data.id;
+
+      // 尝试让 A 依赖 B（形成 A→B→A 循环）
+      const current = await prisma.requirement.findUnique({
+        where: { id: idA },
+        select: { version: true },
+      });
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/requirements/${idA}`,
+        headers: { Authorization: `Bearer ${baToken}` },
+        payload: {
+          version: current!.version,
+          dependencyIds: [idB],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('REQUIREMENT_CIRCULAR_DEPENDENCY');
+
+      // 清理
+      await prisma.requirementDependency.deleteMany({
+        where: { dependantId: { in: [idA, idB] } },
+      });
+      await prisma.statusLog.deleteMany({
+        where: { requirementId: { in: [idA, idB] } },
+      });
+      await prisma.requirement.deleteMany({
+        where: { id: { in: [idA, idB] } },
+      });
+    });
   });
 
   describe('POST /api/requirements/:id/cancel', () => {

@@ -448,6 +448,15 @@ export async function updateRequirement(
     throw errors.requirementNotDraft();
   }
 
+  // 2b. BA 只能编辑自己的需求（PM/TRAIN_ADMIN/SUPER_ADMIN 无此限制）
+  const operator = await prisma.user.findUnique({
+    where: { id: operatorId },
+    select: { role: true },
+  });
+  if (operator?.role === 'BA' && existing.baId !== operatorId) {
+    throw errors.requirementPermissionDenied();
+  }
+
   // 3. 乐观锁校验：version 不匹配说明已被其他人修改
   if (existing.version !== data.version) {
     throw errors.requirementVersionConflict();
