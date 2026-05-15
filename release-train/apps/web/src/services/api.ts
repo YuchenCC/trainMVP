@@ -22,12 +22,20 @@ api.interceptors.request.use((config) => {
 });
 
 // ========== 响应拦截器：统一错误处理 ==========
+// 后端所有响应统一 HTTP 200，通过 success 字段区分成功/失败
 api.interceptors.response.use(
   (response) => {
     const data = response.data as ApiResponse;
     if (data.success === false) {
-      // 业务错误（HTTP 200 + success:false）：角色权限、参数校验、唯一/重复、业务规则等
-      // 构造带 code 的 Error 对象，保留业务错误码供调用方区分处理（如版本冲突 vs 权限不足）
+      // 认证失效：清除登录状态并跳转登录页
+      if (data.code === 'UNAUTHORIZED') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+      }
+      // 构造带 code 的 Error 对象，保留业务错误码供调用方区分处理
       const bizError = new Error(data.message || '操作失败') as any;
       bizError.code = data.code;
       bizError.isBusinessError = true;
@@ -36,26 +44,13 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    if (error.response) {
-      const status = error.response.status;
-      if (status === 401) {
-        // 技术错误：Token过期或无效，清除登录状态并跳转登录页
-        // 如果已在登录页则不跳转，避免重复刷新
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
-        }
-      } else if (status === 403) {
-        // 技术错误：IP访问拒绝等基础设施层拦截
-        return Promise.reject(new Error('访问被拒绝'));
-      } else {
-        // 其他技术错误（404/429/500）：取后端返回的 message
-        const message = error.response.data?.message || '请求失败';
-        return Promise.reject(new Error(message));
-      }
+    // 仅处理网络错误（无响应），后端所有错误均走 HTTP 200
+    if (!error.response) {
+      return Promise.reject(new Error('网络连接失败'));
     }
-    return Promise.reject(new Error('网络连接失败'));
+    // 兜底：万一有非 200 响应（如网关层），取后端返回的 message
+    const message = error.response.data?.message || '请求失败';
+    return Promise.reject(new Error(message));
   }
 );
 

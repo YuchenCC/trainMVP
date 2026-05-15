@@ -6,7 +6,7 @@ export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   message?: string;
-  code?: number;
+  code?: string;
 }
 
 // 分页响应数据
