@@ -1,22 +1,29 @@
-// ========== 火车班次管理路由 ==========
-// POST /api/trains/:id/schedule - 创建班次
-// PATCH /api/trains/:id/schedule - 更新班次
-// GET /api/trains/:id/key-dates - 获取关键日期
+// ========== 火车班次管理路由 (v2.0) ==========
+// POST /api/trains/:trainId/schedules - 创建班次
+// PATCH /api/trains/:trainId/schedules/:scheduleId - 更新班次
+// DELETE /api/trains/:trainId/schedules/:scheduleId - 取消班次
+// GET /api/trains/:trainId/schedules - 班次列表
+// GET /api/trains/:trainId/schedules/:scheduleId - 班次详情
+// POST /api/trains/schedules/preview - 预览关键日期
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { rbacMiddleware } from '../../../common/middleware/index.js';
 import {
   Operation,
   CreateTrainScheduleRequest,
   UpdateTrainScheduleRequest,
+  PreviewKeyDatesRequest,
   ApiResponse,
   JwtPayload,
-  KeyDatesResponse,
 } from '@release-train/shared';
 import {
   createTrainSchedule,
   updateTrainSchedule,
-  getKeyDates,
-  TrainDetailResponse,
+  cancelTrainSchedule,
+  listTrainSchedules,
+  getTrainScheduleById,
+  previewKeyDates,
+  TrainScheduleDetailResponse,
+  TrainScheduleListItemResponse,
 } from '../services/train.service.js';
 
 // ========== Schema 定义 ==========
@@ -25,6 +32,7 @@ const createScheduleBodySchema = {
   type: 'object',
   required: ['startDate', 'endDate'],
   properties: {
+    name: { type: 'string' },
     startDate: { type: 'string', minLength: 1 },
     endDate: { type: 'string', minLength: 1 },
   },
@@ -33,36 +41,52 @@ const createScheduleBodySchema = {
 const updateScheduleBodySchema = {
   type: 'object',
   properties: {
+    name: { type: 'string' },
+    startDate: { type: ['string', 'null'] },
+    endDate: { type: ['string', 'null'] },
+    boardingDate: { type: ['string', 'null'] },
+    lockdownDate: { type: ['string', 'null'] },
+    releaseDate: { type: ['string', 'null'] },
+    version: { type: 'integer' },
+  },
+};
+
+const previewKeyDatesBodySchema = {
+  type: 'object',
+  required: ['startDate', 'endDate'],
+  properties: {
     startDate: { type: 'string', minLength: 1 },
     endDate: { type: 'string', minLength: 1 },
-    boardingDate: { type: 'string' },
-    lockdownDate: { type: 'string' },
-    releaseDate: { type: 'string' },
   },
 };
 
 const scheduleParamsSchema = {
   type: 'object',
-  required: ['id'],
+  required: ['trainId'],
   properties: {
-    id: { type: 'string', minLength: 1 },
+    trainId: { type: 'string', minLength: 1 },
+  },
+};
+
+const scheduleIdParamsSchema = {
+  type: 'object',
+  required: ['trainId', 'scheduleId'],
+  properties: {
+    trainId: { type: 'string', minLength: 1 },
+    scheduleId: { type: 'string', minLength: 1 },
   },
 };
 
 // ========== 路由注册 ==========
 
-/**
- * 注册火车班次管理路由
- * @param fastify - Fastify 实例
- */
 export async function scheduleRoutes(fastify: FastifyInstance): Promise<void> {
   // 创建班次
   fastify.post<{
-    Params: { id: string };
+    Params: { trainId: string };
     Body: CreateTrainScheduleRequest;
-    Reply: ApiResponse<TrainDetailResponse>;
+    Reply: ApiResponse<TrainScheduleDetailResponse>;
   }>(
-    '/api/trains/:id/schedule',
+    '/api/trains/:trainId/schedules',
     {
       onRequest: [
         fastify.authenticate,
@@ -74,40 +98,85 @@ export async function scheduleRoutes(fastify: FastifyInstance): Promise<void> {
       },
     },
     async (request, reply) => {
-      const result = await createTrainSchedule(request.params.id, request.body);
+      const userId = (request.user as JwtPayload).sub;
+      const result = await createTrainSchedule(request.params.trainId, request.body, userId);
       return reply.status(200).send({ success: true, data: result });
     },
   );
 
-  // 更新班次
+  // 更新班次 - PATCH
   fastify.patch<{
-    Params: { id: string };
+    Params: { trainId: string; scheduleId: string };
     Body: UpdateTrainScheduleRequest;
-    Reply: ApiResponse<TrainDetailResponse>;
+    Reply: ApiResponse<TrainScheduleDetailResponse>;
   }>(
-    '/api/trains/:id/schedule',
+    '/api/trains/:trainId/schedules/:scheduleId',
     {
       onRequest: [
         fastify.authenticate,
         rbacMiddleware(Operation.MANAGE_TRAIN),
       ],
       schema: {
-        params: scheduleParamsSchema,
+        params: scheduleIdParamsSchema,
         body: updateScheduleBodySchema,
       },
     },
     async (request, reply) => {
-      const result = await updateTrainSchedule(request.params.id, request.body);
+      const result = await updateTrainSchedule(request.params.scheduleId, request.body);
       return reply.status(200).send({ success: true, data: result });
     },
   );
 
-  // 获取关键日期
-  fastify.get<{
-    Params: { id: string };
-    Reply: ApiResponse<KeyDatesResponse>;
+  // 更新班次 - PUT
+  fastify.put<{
+    Params: { trainId: string; scheduleId: string };
+    Body: UpdateTrainScheduleRequest;
+    Reply: ApiResponse<TrainScheduleDetailResponse>;
   }>(
-    '/api/trains/:id/key-dates',
+    '/api/trains/:trainId/schedules/:scheduleId',
+    {
+      onRequest: [
+        fastify.authenticate,
+        rbacMiddleware(Operation.MANAGE_TRAIN),
+      ],
+      schema: {
+        params: scheduleIdParamsSchema,
+        body: updateScheduleBodySchema,
+      },
+    },
+    async (request, reply) => {
+      const result = await updateTrainSchedule(request.params.scheduleId, request.body);
+      return reply.status(200).send({ success: true, data: result });
+    },
+  );
+
+  // 取消班次
+  fastify.delete<{
+    Params: { trainId: string; scheduleId: string };
+    Reply: ApiResponse<TrainScheduleDetailResponse>;
+  }>(
+    '/api/trains/:trainId/schedules/:scheduleId',
+    {
+      onRequest: [
+        fastify.authenticate,
+        rbacMiddleware(Operation.MANAGE_TRAIN),
+      ],
+      schema: {
+        params: scheduleIdParamsSchema,
+      },
+    },
+    async (request, reply) => {
+      const result = await cancelTrainSchedule(request.params.scheduleId);
+      return reply.status(200).send({ success: true, data: result });
+    },
+  );
+
+  // 班次列表
+  fastify.get<{
+    Params: { trainId: string };
+    Reply: ApiResponse<{ list: TrainScheduleListItemResponse[] }>;
+  }>(
+    '/api/trains/:trainId/schedules',
     {
       onRequest: [
         fastify.authenticate,
@@ -117,7 +186,48 @@ export async function scheduleRoutes(fastify: FastifyInstance): Promise<void> {
       },
     },
     async (request, reply) => {
-      const result = await getKeyDates(request.params.id);
+      const result = await listTrainSchedules(request.params.trainId);
+      return reply.status(200).send({ success: true, data: result });
+    },
+  );
+
+  // 班次详情
+  fastify.get<{
+    Params: { trainId: string; scheduleId: string };
+    Reply: ApiResponse<TrainScheduleDetailResponse>;
+  }>(
+    '/api/trains/:trainId/schedules/:scheduleId',
+    {
+      onRequest: [
+        fastify.authenticate,
+      ],
+      schema: {
+        params: scheduleIdParamsSchema,
+      },
+    },
+    async (request, reply) => {
+      const result = await getTrainScheduleById(request.params.scheduleId);
+      return reply.status(200).send({ success: true, data: result });
+    },
+  );
+
+  // 预览关键日期
+  fastify.post<{
+    Body: PreviewKeyDatesRequest;
+    Reply: ApiResponse<{ boardingDate: string; lockdownDate: string; releaseDate: string }>;
+  }>(
+    '/api/trains/schedules/preview',
+    {
+      onRequest: [
+        fastify.authenticate,
+        rbacMiddleware(Operation.MANAGE_TRAIN),
+      ],
+      schema: {
+        body: previewKeyDatesBodySchema,
+      },
+    },
+    async (request, reply) => {
+      const result = await previewKeyDates(request.body);
       return reply.status(200).send({ success: true, data: result });
     },
   );

@@ -9,8 +9,6 @@ import { Typography, Button, Spin, Result, Card, Descriptions, Tag, Space, messa
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import {
   TrainDetail,           // 火车详情类型
-  TrainStatus,          // 火车状态枚举
-  TRAIN_STATUS_LABELS, // 火车状态标签
   Role,               // 角色枚举
   Operation,         // 操作枚举
 } from '@release-train/shared';
@@ -19,14 +17,6 @@ import { useAuthStore } from '../../stores/auth';
 import TrainForm from '../../components/trains/TrainForm';
 
 const { Title, Text } = Typography;
-
-// ========== 火车状态颜色映射 ==========
-const TRAIN_STATUS_COLORS: Record<TrainStatus, string> = {
-  [TrainStatus.PLANNING]: 'processing',
-  [TrainStatus.IN_PROGRESS]: 'blue',
-  [TrainStatus.COMPLETED]: 'success',
-  [TrainStatus.CANCELLED]: 'default',
-};
 
 /**
  * 编辑版本火车页面
@@ -69,7 +59,7 @@ const TrainEditPage: React.FC = () => {
     if (!user?.role || !train) return false;
     if (user.role === Role.SUPER_ADMIN) return true;
     if (!checkPermission(Operation.CREATE_TRAIN)) return false;
-    return train.status === TrainStatus.PLANNING;
+    return true;
   };
 
   // ========== 加载状态 ==========
@@ -92,24 +82,6 @@ const TrainEditPage: React.FC = () => {
           <Button onClick={() => navigate('/trains')}>
             返回火车列表
           </Button>
-        }
-      />
-    );
-  }
-
-  // ========== 非规划中状态 ==========
-  // 仅允许编辑规划中的火车
-  if (train.status !== TrainStatus.PLANNING) {
-    return (
-      <Result
-        status="warning"
-        title="无法编辑"
-        subTitle={`该火车当前状态为「${TRAIN_STATUS_LABELS[train.status]}」，仅允许编辑规划中的火车。`}
-        extra={
-          <Space>
-            <Button onClick={() => navigate(`/trains/${id}`)}>查看详情</Button>
-            <Button type="primary" onClick={() => navigate('/trains')}>返回列表</Button>
-          </Space>
         }
       />
     );
@@ -145,17 +117,6 @@ const TrainEditPage: React.FC = () => {
         </Button>
         <Title level={4} style={{ margin: 0 }}>编辑版本火车</Title>
       </div>
-
-      {/* 当前火车状态提示 */}
-      <Card style={{ marginBottom: 16, background: '#f6ffed', border: '1px solid #b7eb8f' }}>
-        <Space>
-          <Text>当前状态：</Text>
-          <Tag color={TRAIN_STATUS_COLORS[train.status]}>
-            {TRAIN_STATUS_LABELS[train.status]}
-          </Tag>
-          <Text type="secondary">（规划中的火车可编辑基本信息，搭载系统配置请在详情页操作）</Text>
-        </Space>
-      </Card>
 
       {/* 火车表单组件 */}
       <TrainForm

@@ -11,8 +11,6 @@ import {
 } from '@ant-design/icons';
 import {
   TrainSystemDetail,           // 搭载系统详情类型
-  TrainStatus,                // 火车状态枚举
-  TRAIN_STATUS_LABELS,        // 火车状态标签
   AvailableSystem,            // 可选系统类型
   AddTrainSystemRequest,      // 添加搭载系统请求类型
   UpdateTrainSystemRequest,   // 更新搭载系统请求类型
@@ -27,7 +25,6 @@ const { Text } = Typography;
 interface TrainSystemListProps {
   trainId: string;                  // 火车 ID
   systems: TrainSystemDetail[];      // 搭载系统列表
-  trainStatus: TrainStatus;         // 火车状态
   onRefresh: () => void;            // 刷新回调
 }
 
@@ -55,7 +52,6 @@ const getUsageRateStatus = (rate: number): 'success' | 'normal' | 'exception' =>
 const TrainSystemList: React.FC<TrainSystemListProps> = ({
   trainId,
   systems,
-  trainStatus,
   onRefresh,
 }) => {
   // ========== 状态 ==========
@@ -75,10 +71,6 @@ const TrainSystemList: React.FC<TrainSystemListProps> = ({
   const [techMgrUserId, setTechMgrUserId] = useState<string | undefined>(undefined);
   const [testMgrUserId, setTestMgrUserId] = useState<string | undefined>(undefined);
   const [devTeamUserIds, setDevTeamUserIds] = useState<string[]>([]);
-
-  // ========== 判断是否为规划中状态 ==========
-  // 规划中状态才允许添加/移除/编辑系统
-  const isPlanning = trainStatus === TrainStatus.PLANNING;
 
   // ========== 加载可选系统列表 ==========
   const loadAvailableSystems = useCallback(async () => {
@@ -315,27 +307,25 @@ const TrainSystemList: React.FC<TrainSystemListProps> = ({
       key: 'actions',
       width: 120,
       render: (_: any, record: TrainSystemDetail) => (
-        isPlanning && (
-          <Space>
-            <Button
-              type="text"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => handleOpenEditModal(record)}
-            >
-              编辑
-            </Button>
-            <Button
-              type="text"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleRemoveSystem(record)}
-            >
-              移除
-            </Button>
-          </Space>
-        )
+        <Space>
+          <Button
+            type="text"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleOpenEditModal(record)}
+          >
+            编辑
+          </Button>
+          <Button
+            type="text"
+            size="small"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleRemoveSystem(record)}
+          >
+            移除
+          </Button>
+        </Space>
       ),
     },
   ];
@@ -357,15 +347,13 @@ const TrainSystemList: React.FC<TrainSystemListProps> = ({
     <div>
       {/* 操作栏 */}
       <div style={{ marginBottom: 16 }}>
-        {isPlanning && (
-          <Button
-            type="primary"
-            icon={<EditOutlined />}
-            onClick={handleOpenAddModal}
-          >
-            添加搭载系统
-          </Button>
-        )}
+        <Button
+          type="primary"
+          icon={<EditOutlined />}
+          onClick={handleOpenAddModal}
+        >
+          添加搭载系统
+        </Button>
       </div>
 
       {/* 系统列表表格 */}

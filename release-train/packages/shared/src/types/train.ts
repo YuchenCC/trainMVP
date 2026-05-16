@@ -7,9 +7,19 @@ import { TrainStatus } from '../constants';
 export interface Train {
   id: string;
   name: string;
-  cycleWeeks: number;
   status: TrainStatus;
   description?: string;
+  createdById: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// ========== 火车班次实体类型（Prisma 模型 v2.0） ==========
+export interface TrainSchedule {
+  id: string;
+  trainId: string;
+  name: string;
+  status: TrainStatus;
   startDate?: Date;
   endDate?: Date;
   boardingDate?: Date;
@@ -27,12 +37,25 @@ export interface TrainItem {
   name: string;                    // 火车名称
   status: TrainStatus;             // 火车状态
   description?: string;           // 火车描述
-  startDate?: string;              // 开始日期（US2.2 创建班次后填充）
-  endDate?: string;               // 结束日期（US2.2 创建班次后填充）
+  systemCount: number;             // 搭载系统数量
+  scheduleCount: number;          // 班次数量
+  createdAt: string;              // 创建时间（ISO 字符串）
+}
+
+// ========== 火车班次列表项 ==========
+// 对应 GET /api/trains/:trainId/schedules 返回的单条记录
+export interface TrainScheduleItem {
+  id: string;                     // 班次 ID
+  name: string;                    // 班次名称
+  status: TrainStatus;             // 班次状态
+  startDate?: string;              // 开始日期
+  endDate?: string;               // 结束日期
+  boardingDate?: string;           // 纳版截止日期
+  lockdownDate?: string;          // 封板日期
+  releaseDate?: string;            // 投产日期
   systemCount: number;             // 搭载系统数量
   totalCapacity: number;           // 总容量点数
   usedCapacity: number;            // 已使用容量点数
-  remainingCapacity: number;       // 剩余容量点数
   requirementCount: number;        // 已纳版需求数量
   createdAt: string;              // 创建时间（ISO 字符串）
 }
@@ -81,15 +104,30 @@ export interface TrainDetail {
   status: TrainStatus;             // 火车状态
   description?: string;            // 火车描述
   version: number;                 // 乐观锁版本号
-  startDate?: string;              // 开始日期
-  endDate?: string;               // 结束日期
-  boardingDate?: string;           // 纳版截止日期（US2.2 自动计算）
-  lockdownDate?: string;          // 封板日期（US2.2 自动计算）
-  releaseDate?: string;            // 投产日期（US2.2 自动计算）
   createdBy: { id: string; displayName: string }; // 创建人
   createdAt: string;              // 创建时间（ISO 字符串）
   updatedAt: string;              // 更新时间（ISO 字符串）
   systems: TrainSystemDetail[];    // 搭载系统列表
+}
+
+// ========== 班次详情 ==========
+// 对应 GET /api/trains/:trainId/schedules/:scheduleId 响应体
+export interface TrainScheduleDetail {
+  id: string;                     // 班次 ID
+  trainId: string;               // 火车 ID
+  name: string;                    // 班次名称
+  status: TrainStatus;             // 班次状态
+  startDate?: string;              // 开始日期
+  endDate?: string;               // 结束日期
+  boardingDate?: string;           // 纳版截止日期
+  lockdownDate?: string;          // 封板日期
+  releaseDate?: string;            // 投产日期
+  version: number;                 // 乐观锁版本号
+  createdBy: { id: string; displayName: string }; // 创建人
+  createdAt: string;              // 创建时间（ISO 字符串）
+  updatedAt: string;              // 更新时间（ISO 字符串）
+  train: { id: string; name: string }; // 所属火车信息
+  snapshots: TrainSystemSnapshot[]; // 容量快照列表
 }
 
 // ========== 创建版本火车请求参数 ==========
@@ -161,23 +199,36 @@ export interface AvailableSystem {
   };
 }
 
+// ========== 自定义关键日期类型 ==========
+export interface CustomKeyDate {
+  id?: string;
+  name: string;
+  date?: string | null;
+}
+
 // ========== 创建火车班次请求参数 ==========
-// 对应 POST /api/trains/:id/schedule 请求体（US2.2）
+// 对应 POST /api/trains/:id/schedules 请求体（US2.2）
 export interface CreateTrainScheduleRequest {
+  name?: string;                 // 可选，班次名称，默认自动生成
   startDate: string;              // 必填，开始日期，格式 YYYY-MM-DD
   endDate: string;               // 必填，结束日期，格式 YYYY-MM-DD
-  version?: number;               // 可选，乐观锁版本号（创建时不需要，兼容更新逻辑）
+  boardingDate?: string;         // 可选，统一纳版日
+  lockdownDate?: string;        // 可选，统一封板日
+  releaseDate?: string;          // 可选，统一投产日
+  customKeyDates?: CustomKeyDate[]; // 可选，自定义关键日期
 }
 
 // ========== 更新火车班次请求参数 ==========
-// 对应 PATCH /api/trains/:id/schedule 请求体（US2.2）
+// 对应 PATCH /api/trains/:id/schedules/:scheduleId 请求体（US2.2）
 export interface UpdateTrainScheduleRequest {
-  startDate?: string;              // 可选，开始日期
-  endDate?: string;                // 可选，结束日期
-  boardingDate?: string;               // 可选，统一纳版日
-  lockdownDate?: string;              // 可选，统一封板日
-  releaseDate?: string;               // 可选，统一投产日
-  version: number;                // 必填，乐观锁版本号
+  name?: string;                 // 可选，班次名称
+  startDate?: string | null;      // 可选，开始日期
+  endDate?: string | null;        // 可选，结束日期
+  boardingDate?: string | null;   // 可选，统一纳版日
+  lockdownDate?: string | null;  // 可选，统一封板日
+  releaseDate?: string | null;    // 可选，统一投产日
+  customKeyDates?: CustomKeyDate[]; // 可选，自定义关键日期
+  version?: number;               // 可选，乐观锁版本号
 }
 
 // ========== 关键日期响应 ==========
@@ -196,5 +247,37 @@ export interface KeyDatesResponse {
 export interface CalculatedKeyDates {
   boardingDate: Date;              // 统一纳版日
   lockdownDate: Date;              // 统一封板日
-  releaseDate: Date;               // 统一投产日
+  releaseDate: Date;              // 统一投产日
+}
+
+// ========== 班次容量快照（US2.2 新增）
+// 对应 TrainSystemSnapshot 模型
+export interface TrainSystemSnapshot {
+  id: string;                     // 快照 ID
+  trainScheduleId: string;        // 班次 ID
+  systemId: string;               // 系统 ID
+  system: { id: string; name: string };  // 系统信息
+  capacityPoints: number;          // 快照时的容量点
+  usedPoints: number;              // 快照时的已用点
+  remainingPoints: number;          // 剩余容量点（计算字段）
+  usageRate: number;              // 使用率（计算字段）
+}
+
+// ========== 班次列表响应（US2.3 新增）
+// 对应 GET /api/trains/:id/schedules 响应体
+export interface TrainScheduleListResponse {
+  list: TrainScheduleItem[];     // 班次列表（按创建时间倒序）
+}
+
+// ========== 预览关键日期请求（US2.2 新增）
+export interface PreviewKeyDatesRequest {
+  startDate: string;
+  endDate: string;
+}
+
+// ========== 预览关键日期响应（US2.2 新增）
+export interface PreviewKeyDatesResponse {
+  boardingDate: string;
+  lockdownDate: string;
+  releaseDate: string;
 }

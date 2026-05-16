@@ -44,7 +44,7 @@ export const trainService = {
    * @param params - 查询参数（status/page/pageSize）
    * @returns 分页响应 { list, pagination }
    */
-  list: async (params: TrainListParams = {}): Promise<ApiResponse<TrainListResponse>> => {
+  list: async (params: TrainListParams = {}): Promise<ApiResponse<any>> => {
     const response = await api.get('/trains', { params }); // GET /api/trains?status=&page=&pageSize=
     return response.data;
   },
@@ -155,7 +155,7 @@ export const trainService = {
     trainId: string,
     data: CreateTrainScheduleRequest,
   ): Promise<ApiResponse<TrainDetail>> => {
-    const response = await api.post(`/trains/${trainId}/schedule`, data); // POST /api/trains/:id/schedule
+    const response = await api.post(`/trains/${trainId}/schedules`, data); // POST /api/trains/:id/schedules
     return response.data;
   },
 
@@ -170,7 +170,18 @@ export const trainService = {
     trainId: string,
     data: UpdateTrainScheduleRequest,
   ): Promise<ApiResponse<TrainDetail>> => {
-    const response = await api.patch(`/trains/${trainId}/schedule`, data); // PATCH /api/trains/:id/schedule
+    const response = await api.patch(`/trains/${trainId}/schedules`, data); // PATCH /api/trains/:id/schedules
+    return response.data;
+  },
+
+  /**
+   * 获取班次信息（含容量快照）
+   * 
+   * @param trainId - 火车 ID
+   * @returns 班次详情和容量快照
+   */
+  getSchedule: async (trainId: string): Promise<ApiResponse<any>> => {
+    const response = await api.get(`/trains/${trainId}/schedules`); // GET /api/trains/:id/schedules
     return response.data;
   },
 

@@ -6,15 +6,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Descriptions, Tag, Button, Space, Spin, Result, Typography, Row, Col, Tabs, message, Modal,
-  Form, DatePicker, Checkbox, Divider,
+  Form, DatePicker, Checkbox, Divider, Input,
 } from 'antd';
 import {
   EditOutlined, ArrowLeftOutlined, CloseOutlined, CalendarOutlined,
 } from '@ant-design/icons';
 import {
   TrainDetail,                // 火车详情类型
-  TrainStatus,              // 火车状态枚举
-  TRAIN_STATUS_LABELS,      // 火车状态标签
   Role,                   // 角色枚举
   Operation,             // 操作枚举
   KeyDatesResponse,       // 关键日期响应
@@ -28,14 +26,6 @@ import dayjs from 'dayjs';
 
 const { Text, Title } = Typography;
 const { RangePicker } = DatePicker;
-
-// ========== 火车状态颜色映射 ==========
-const TRAIN_STATUS_COLORS: Record<TrainStatus, string> = {
-  [TrainStatus.PLANNING]: 'processing',
-  [TrainStatus.IN_PROGRESS]: 'blue',
-  [TrainStatus.COMPLETED]: 'success',
-  [TrainStatus.CANCELLED]: 'default',
-};
 
 // ========== 容量颜色映射 ==========
 const getCapacityColor = (used: number, total: number): string => {
@@ -90,21 +80,21 @@ const TrainDetailPage: React.FC = () => {
     if (!user?.role || !train) return false;
     if (user.role === Role.SUPER_ADMIN) return true;
     if (!checkPermission(Operation.CREATE_TRAIN)) return false;
-    return train.status === TrainStatus.PLANNING;
+    return true;
   };
 
   const canCancel = () => {
     if (!user?.role || !train) return false;
     if (user.role === Role.SUPER_ADMIN) return true;
     if (!checkPermission(Operation.CREATE_TRAIN)) return false;
-    return train.status === TrainStatus.PLANNING;
+    return true;
   };
 
   const canManageSchedule = () => {
     if (!user?.role || !train) return false;
     if (user.role === Role.SUPER_ADMIN) return true;
     if (!checkPermission(Operation.CREATE_TRAIN)) return false;
-    return train.status === TrainStatus.PLANNING || train.status === TrainStatus.IN_PROGRESS;
+    return true;
   };
 
   // ========== 班次操作处理 ==========
@@ -154,6 +144,11 @@ const TrainDetailPage: React.FC = () => {
       endDate,
       version: train.version,
     };
+
+    // 班次名称（可选，不填则后端自动生成）
+    if (values.name) {
+      (requestData as any).name = values.name;
+    }
 
     if (isManualMode) {
       (requestData as any).boardingDate = values.boardingDate?.format('YYYY-MM-DD');
@@ -256,7 +251,6 @@ const TrainDetailPage: React.FC = () => {
         <TrainSystemList
           trainId={train.id}
           systems={train.systems}
-          trainStatus={train.status}
           onRefresh={fetchDetail}
         />
       ),
@@ -284,27 +278,23 @@ const TrainDetailPage: React.FC = () => {
               {train.startDate && train.endDate ? '编辑班次' : '创建班次'}
             </Button>
           )}
-          {train.status === TrainStatus.PLANNING && (
-            <>
-              {canEdit() && (
-                <Button
-                  icon={<EditOutlined />}
-                  onClick={() => navigate(`/trains/${id}/edit`)}
-                >
-                  编辑
-                </Button>
-              )}
-              {canCancel() && (
-                <Button
-                  danger
-                  icon={<CloseOutlined />}
-                  onClick={handleCancel}
-                  loading={cancelLoading}
-                >
-                  取消火车
-                </Button>
-              )}
-            </>
+          {canEdit() && (
+            <Button
+              icon={<EditOutlined />}
+              onClick={() => navigate(`/trains/${id}/edit`)}
+            >
+              编辑
+            </Button>
+          )}
+          {canCancel() && (
+            <Button
+              danger
+              icon={<CloseOutlined />}
+              onClick={handleCancel}
+              loading={cancelLoading}
+            >
+              取消火车
+            </Button>
           )}
         </Space>
       </div>
@@ -317,11 +307,6 @@ const TrainDetailPage: React.FC = () => {
             <Descriptions column={2} size="small" labelStyle={{ color: '#64748b', width: 100 }}>
               <Descriptions.Item label="火车名称">
                 <Text strong>{train.name}</Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="状态">
-                <Tag color={TRAIN_STATUS_COLORS[train.status]}>
-                  {TRAIN_STATUS_LABELS[train.status]}
-                </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="版本号">
                 v{train.version}
@@ -459,6 +444,14 @@ const TrainDetailPage: React.FC = () => {
           layout="vertical"
           onFinish={handleSaveSchedule}
         >
+          <Form.Item
+            label="班次名称"
+            name="name"
+            extra="不填则自动生成，格式：火车名 + 序号"
+          >
+            <Input placeholder={`例如：${train?.name || '版本火车'}第1班`} />
+          </Form.Item>
+
           <Form.Item
             label="时间范围"
             name="dateRange"

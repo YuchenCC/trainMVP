@@ -23,6 +23,7 @@ model User {
   pmRequirements      Requirement[]  @relation("PM")        // 作为产品经理的需求
   createdRequirements Requirement[]  @relation("Creator")   // 创建的需求
   createdTrains       Train[]        @relation("TrainCreator") // 创建的火车
+  createdSchedules    TrainSchedule[] @relation("ScheduleCreator") // 创建的班次
   statusLogs          StatusLog[]    @relation("StatusOperator") // 操作的状态日志
   emergencyApprovals  EmergencyChange[] @relation("Approver")     // 审批的紧急变更
   systemMembers       SystemMember[]                       // 所属系统成员
@@ -48,6 +49,7 @@ model System {
 
   requirements Requirement[]                         // 系统下的需求
   trainSystems TrainSystem[]                        // 系统参与的火车
+  snapshots    TrainSystemSnapshot[]               // 系统参与的班次快照
   members      SystemMember[]                      // 系统成员
 }
 
@@ -88,7 +90,7 @@ model Requirement {
   creatorId       String                                    // 创建人ID，实际创建该需求的用户
   status          ReqStatus     @default(DRAFT)             // 主状态，需求生命周期当前阶段
   subStatus       ReqSubStatus?                              // 子状态，仅已纳版状态有值
-  trainId         String?                                   // 所属版本火车ID，已纳版时关联
+  scheduleId      String?                                   // 所属班次ID（v2.0：需求关联班次，而非火车）
   version         Int           @default(1)                  // 乐观锁版本号，每次更新自增，防止并发冲突
   reqType         ReqType?                                   // 需求类型：新功能/优化/缺陷（可选）
   sourceChannel   SourceChannel?                             // 来源渠道：业务提出/用户反馈等（可选）
@@ -100,7 +102,7 @@ model Requirement {
   ba              User          @relation("BA", fields: [baId], references: [id])           // 业务归属人
   pm              User?         @relation("PM", fields: [pmId], references: [id])           // 产品经理
   creator         User          @relation("Creator", fields: [creatorId], references: [id]) // 创建人
-  train           Train?        @relation(fields: [trainId], references: [id])              // 所属火车
+  trainSchedule   TrainSchedule?   @relation(fields: [scheduleId], references: [id])       // 所属班次
 
   // 依赖关系（双向：作为依赖方和被依赖方）
   dependants      RequirementDependency[] @relation("DependantRequirement")  // 本需求依赖的其他需求
@@ -114,7 +116,7 @@ model Requirement {
   @@index([status, subStatus])   // 按主状态+子状态筛选（看板分组）
   @@index([systemId])            // 按系统筛选需求列表
   @@index([baId])                // BA查看自己的需求
-  @@index([trainId])             // 按火车筛选（Task 2启用）
+  @@index([scheduleId])          // 按班次筛选（v2.0）
   @@index([priority])            // 按优先级排序
 }
 
@@ -222,21 +224,41 @@ model Train {
   description   String?      @db.Text                     // 火车描述
   version       Int          @default(1)                  // 乐观锁版本号
 
-  startDate     DateTime?                               // 开始日期（可选，班次创建时设置）
-  endDate       DateTime?                               // 结束日期（可选，班次创建时设置）
-  boardingDate  DateTime?                               // 统一纳版日（自动计算）
-  lockdownDate  DateTime?                               // 统一封板日（自动计算）
-  releaseDate   DateTime?                               // 统一投产日（自动计算）
-
   createdById   String                                     // 创建人ID
   createdBy     User         @relation("TrainCreator", fields: [createdById], references: [id]) // 创建人
   createdAt     DateTime     @default(now())              // 创建时间
   updatedAt     DateTime     @updatedAt                   // 更新时间
 
-  requirements  Requirement[]                            // 火车下的需求
   trainSystems  TrainSystem[]                            // 火车-系统关联
+  schedules     TrainSchedule[]                         // 火车下的班次（1火车→多班次）
 
   @@index([status])                                      // 按火车状态筛选
+}
+
+// ========== 火车班次 ==========
+model TrainSchedule {
+  id            String       @id @default(cuid())         // 班次ID
+  trainId       String                                     // 火车ID
+  name          String                                     // 班次名称（如：第1班、Q2A1等）
+  status        TrainStatus  @default(PLANNING)          // 班次状态
+  startDate     DateTime?                               // 开始日期
+  endDate       DateTime?                               // 结束日期
+  boardingDate  DateTime?                               // 统一纳版日
+  lockdownDate  DateTime?                               // 统一封板日
+  releaseDate   DateTime?                               // 统一投产日
+  version       Int          @default(1)                  // 乐观锁版本号
+
+  createdById   String                                     // 创建人ID
+  createdBy     User         @relation("ScheduleCreator", fields: [createdById], references: [id]) // 创建人
+  createdAt     DateTime     @default(now())              // 创建时间
+  updatedAt     DateTime     @updatedAt                   // 更新时间
+
+  train         Train         @relation(fields: [trainId], references: [id], onDelete: Cascade)
+  requirements  Requirement[]                            // 本班次下的需求
+  snapshots     TrainSystemSnapshot[]                   // 本班次的容量快照
+  keyDates      TrainScheduleKeyDate[]                // 自定义关键日期
+
+  @@index([trainId, createdAt(sort: Desc)])             // 按火车和创建时间查询班次
 }
 
 enum TrainStatus {
@@ -266,6 +288,47 @@ model TrainSystem {
 
   @@unique([trainId, systemId])                            // 同一火车同一系统唯一
   @@index([trainId])                                       // 按火车查询搭载系统
+}
+
+// ========== 火车班次容量快照 ==========
+// 班次创建时保存搭载系统的容量配置快照，后续调整火车容量不影响已创建的班次
+model TrainSystemSnapshot {
+  id             String   @id @default(cuid())             // 快照ID
+  trainScheduleId String                                     // 班次ID
+  systemId       String                                     // 系统ID
+
+  // 容量快照
+  capacityPoints Int       @default(0)                       // 快照时的容量点
+  usedPoints     Int       @default(0)                       // 快照时的已用点
+
+  // 团队成员快照（创建时复制）
+  baUserId       String?
+  pmUserId       String?
+  techMgrUserId  String?
+  testMgrUserId  String?
+  devTeamUserIds String[]   @default([])
+
+  trainSchedule  TrainSchedule @relation(fields: [trainScheduleId], references: [id], onDelete: Cascade)
+  system         System        @relation(fields: [systemId], references: [id], onDelete: Cascade)
+
+  createdAt      DateTime @default(now())
+
+  @@unique([trainScheduleId, systemId])                 // 同一班次同一系统唯一
+  @@index([trainScheduleId])                              // 按班次查询快照
+}
+
+// ========== 班次自定义关键日期 ==========
+model TrainScheduleKeyDate {
+  id             String       @id @default(cuid())         // 关键日期ID
+  trainScheduleId String                                     // 班次ID
+  name           String                                     // 关键日期名称
+  date           DateTime?                                  // 日期
+  createdAt      DateTime     @default(now())              // 创建时间
+  updatedAt      DateTime     @updatedAt                   // 更新时间
+
+  trainSchedule  TrainSchedule @relation(fields: [trainScheduleId], references: [id], onDelete: Cascade)
+
+  @@index([trainScheduleId])
 }
 
 // ========== 紧急变更审批 ==========

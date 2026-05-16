@@ -36,6 +36,8 @@ const DYNAMIC_BREADCRUMB: { pattern: RegExp; breadcrumb: string[] }[] = [
   // 火车相关
   { pattern: /^\/trains\/[^/]+\/edit$/, breadcrumb: ['版本火车', '编辑火车'] },
   { pattern: /^\/trains\/[^/]+$/, breadcrumb: ['版本火车', '火车详情'] },
+  // 班次详情
+  { pattern: /^\/trains\/[^/]+\/schedules\/[^/]+$/, breadcrumb: ['版本火车', '班次详情'] },
 ];
 
 // 根据路径生成面包屑

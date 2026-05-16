@@ -4,6 +4,14 @@ import { createApp } from '../app.js';
 import { prisma } from '../prisma/index.js';
 import { FastifyInstance } from 'fastify';
 
+const TEST_TRAIN_ADMIN = {
+  username: 't2_train_admin_' + Date.now(),
+  password: 'TestPass123!',
+  displayName: 'T2火车管理员',
+  email: 't2_train_admin_' + Date.now() + '@test.com',
+  role: 'TRAIN_ADMIN',
+};
+
 describe('T2 US2.1 版本火车创建', () => {
   let app: FastifyInstance;
   let adminToken: string;
@@ -36,16 +44,38 @@ describe('T2 US2.1 版本火车创建', () => {
       systemIds.push(system.id);
     }
 
+    // 使用 seed 接口创建火车管理员
+    await app.inject({
+      method: 'POST',
+      url: '/api/auth/seed',
+      payload: TEST_TRAIN_ADMIN,
+    });
+
     // 登录获取 token
     const adminLoginRes = await app.inject({
       method: 'POST',
       url: '/api/auth/login',
-      payload: { username: 'admin', password: 'admin123' },
+      payload: { username: TEST_TRAIN_ADMIN.username, password: TEST_TRAIN_ADMIN.password },
     });
     adminToken = adminLoginRes.json().data.token;
   });
 
   afterAll(async () => {
+    // 清理测试数据（按外键依赖顺序删除）
+    // 注意：由于 Train.createdById 有外键约束且未设置 cascade delete，
+    // User 的清理放在最后，且单独处理
+    await prisma.train.deleteMany({
+      where: { name: { startsWith: '[UT]' } },
+    });
+    await prisma.system.deleteMany({
+      where: { name: { startsWith: '[UT]' } },
+    });
+    // User 清理失败不影响测试结果（测试已通过），忽略错误即可
+    try {
+      await prisma.user.deleteMany({ where: { username: TEST_TRAIN_ADMIN.username } });
+    } catch (e) {
+      console.warn('清理测试用户失败（可能是外键约束）:', (e as Error).message);
+    }
     await app.close();
   });
 

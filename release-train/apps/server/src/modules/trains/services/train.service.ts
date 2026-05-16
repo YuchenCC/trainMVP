@@ -1,5 +1,5 @@
-// ========== 火车模块 Service 层 ==========
-// 实现版本火车和搭载系统的业务逻辑：创建、查询、更新、取消、搭载系统管理
+// ========== 火车模块 Service 层（v2.0） ==========
+// 实现版本火车、班次、搭载系统的业务逻辑
 import { Prisma } from '@prisma/client';
 import {
   CreateTrainRequest,
@@ -8,31 +8,13 @@ import {
   UpdateTrainSystemRequest,
   CreateTrainScheduleRequest,
   UpdateTrainScheduleRequest,
-  KeyDatesResponse,
+  PreviewKeyDatesRequest,
 } from '@release-train/shared';
 import { errors } from '../../../common/errors/index.js';
 import { prisma } from '../../../prisma/index.js';
 import { calculateKeyDates } from '../utils/key-dates.js';
 
-// ========== 内部响应类型（避免 Prisma 枚举与 shared 枚举冲突） ==========
-interface TrainDetailResponse {
-  id: string;
-  name: string;
-  status: string;
-  description?: string;
-  version: number;
-  startDate?: string;
-  endDate?: string;
-  boardingDate?: string;
-  lockdownDate?: string;
-  releaseDate?: string;
-  createdById: string;
-  createdBy: { id: string; displayName: string };
-  createdAt: string;
-  updatedAt: string;
-  systems: TrainSystemDetailResponse[];
-}
-
+// ========== 内部响应类型 ==========
 interface TrainSystemDetailResponse {
   id: string;
   system: { id: string; name: string };
@@ -47,18 +29,23 @@ interface TrainSystemDetailResponse {
   devTeamUsers?: { id: string; displayName: string }[];
 }
 
+interface TrainDetailResponse {
+  id: string;
+  name: string;
+  description?: string;
+  version: number;
+  createdBy: { id: string; displayName: string };
+  createdAt: string;
+  updatedAt: string;
+  systems: TrainSystemDetailResponse[];
+}
+
 interface TrainListItemResponse {
   id: string;
   name: string;
-  status: string;
   description?: string;
-  startDate?: string;
-  endDate?: string;
   systemCount: number;
-  totalCapacity: number;
-  usedCapacity: number;
-  remainingCapacity: number;
-  requirementCount: number;
+  scheduleCount: number;
   createdAt: string;
 }
 
@@ -82,42 +69,48 @@ interface AvailableSystemResponse {
   };
 }
 
-// ========== 系统冲突校验 ==========
-
-/**
- * 校验系统是否可添加到火车
- */
-async function checkSystemConflict(
-  systemId: string,
-  excludeTrainId?: string,
-): Promise<{ conflict: boolean; train?: { id: string; name: string; status: string } }> {
-  const trainSystems = await prisma.trainSystem.findMany({
-    where: { systemId },
-    include: {
-      train: {
-        select: { id: true, name: true, status: true },
-      },
-    },
-  });
-
-  const conflictTrain = trainSystems.find((ts) => {
-    if (excludeTrainId && ts.train.id === excludeTrainId) {
-      return false;
-    }
-    return ts.train.status === 'PLANNING' || ts.train.status === 'IN_PROGRESS';
-  });
-
-  if (conflictTrain) {
-    return {
-      conflict: true,
-      train: conflictTrain.train as { id: string; name: string; status: string },
-    };
-  }
-
-  return { conflict: false };
+interface TrainScheduleListItemResponse {
+  id: string;
+  name: string;
+  startDate?: string;
+  endDate?: string;
+  boardingDate?: string;
+  lockdownDate?: string;
+  releaseDate?: string;
+  systemCount: number;
+  totalCapacity: number;
+  usedCapacity: number;
+  requirementCount: number;
+  createdAt: string;
 }
 
-// ========== 查询用户信息 ==========
+interface TrainScheduleDetailResponse {
+  id: string;
+  trainId: string;
+  name: string;
+  startDate?: string;
+  endDate?: string;
+  boardingDate?: string;
+  lockdownDate?: string;
+  releaseDate?: string;
+  version: number;
+  createdBy: { id: string; displayName: string };
+  createdAt: string;
+  updatedAt: string;
+  train: { id: string; name: string };
+  snapshots: {
+    id: string;
+    trainScheduleId: string;
+    systemId: string;
+    system: { id: string; name: string };
+    capacityPoints: number;
+    usedPoints: number;
+    remainingPoints: number;
+    usageRate: number;
+  }[];
+}
+
+// ========== 辅助函数 ==========
 
 async function getUserDisplayName(userId: string | null): Promise<{ id: string; displayName: string } | undefined> {
   if (!userId) return undefined;
@@ -126,6 +119,36 @@ async function getUserDisplayName(userId: string | null): Promise<{ id: string; 
     select: { id: true, displayName: true },
   });
   return user ? { id: user.id, displayName: user.displayName } : undefined;
+}
+
+async function checkSystemConflict(
+  systemId: string,
+  excludeTrainId?: string,
+): Promise<{ conflict: boolean; train?: { id: string; name: string } }> {
+  const trainSystems = await prisma.trainSystem.findMany({
+    where: { systemId },
+    include: {
+      train: {
+        select: { id: true, name: true },
+      },
+    },
+  });
+
+  const conflictTrain = trainSystems.find((ts) => {
+    if (excludeTrainId && ts.train.id === excludeTrainId) {
+      return false;
+    }
+    return true;
+  });
+
+  if (conflictTrain) {
+    return {
+      conflict: true,
+      train: conflictTrain.train as { id: string; name: string },
+    };
+  }
+
+  return { conflict: false };
 }
 
 // ========== 火车创建 ==========
@@ -174,7 +197,6 @@ export async function createTrain(
       data: {
         name: data.name.trim(),
         description: data.description?.trim(),
-        status: 'PLANNING',
         createdById: userId,
       },
     });
@@ -222,35 +244,23 @@ export async function listTrains(
       orderBy: { createdAt: 'desc' },
       include: {
         trainSystems: {
-          select: { id: true, capacityPoints: true, usedPoints: true },
+          select: { id: true },
         },
-        requirements: {
+        schedules: {
           select: { id: true },
         },
       },
     }),
   ]);
 
-  const list: TrainListItemResponse[] = trains.map((train) => {
-    const totalCapacity = train.trainSystems.reduce((sum, ts) => sum + ts.capacityPoints, 0);
-    const usedCapacity = train.trainSystems.reduce((sum, ts) => sum + ts.usedPoints, 0);
-    const remainingCapacity = totalCapacity - usedCapacity;
-
-    return {
-      id: train.id,
-      name: train.name,
-      status: train.status,
-      description: train.description || undefined,
-      startDate: train.startDate?.toISOString(),
-      endDate: train.endDate?.toISOString(),
-      systemCount: train.trainSystems.length,
-      totalCapacity,
-      usedCapacity,
-      remainingCapacity,
-      requirementCount: train.requirements.length,
-      createdAt: train.createdAt.toISOString(),
-    };
-  });
+  const list: TrainListItemResponse[] = trains.map((train) => ({
+    id: train.id,
+    name: train.name,
+    description: train.description || undefined,
+    systemCount: train.trainSystems.length,
+    scheduleCount: train.schedules.length,
+    createdAt: train.createdAt.toISOString(),
+  }));
 
   return {
     list,
@@ -328,15 +338,8 @@ export async function getTrainById(trainId: string): Promise<TrainDetailResponse
   return {
     id: train.id,
     name: train.name,
-    status: train.status,
     description: train.description || undefined,
     version: train.version,
-    startDate: train.startDate?.toISOString().split('T')[0],
-    endDate: train.endDate?.toISOString().split('T')[0],
-    boardingDate: train.boardingDate?.toISOString().split('T')[0],
-    lockdownDate: train.lockdownDate?.toISOString().split('T')[0],
-    releaseDate: train.releaseDate?.toISOString().split('T')[0],
-    createdById: train.createdById,
     createdBy: train.createdBy,
     createdAt: train.createdAt.toISOString(),
     updatedAt: train.updatedAt.toISOString(),
@@ -344,7 +347,7 @@ export async function getTrainById(trainId: string): Promise<TrainDetailResponse
   };
 }
 
-// ========== 火车更新（支持同时更新搭载系统） ==========
+// ========== 火车更新 ==========
 
 export async function updateTrain(
   trainId: string,
@@ -363,10 +366,6 @@ export async function updateTrain(
     throw errors.trainNotFound();
   }
 
-  if (existing.status !== 'PLANNING') {
-    throw errors.trainInvalidStatus('只有规划中的火车才能编辑');
-  }
-
   if (data.name !== undefined) {
     if (data.name.trim().length === 0) {
       throw errors.trainNameRequired();
@@ -379,7 +378,6 @@ export async function updateTrain(
     }
   }
 
-  // 如果传了 systems，则更新搭载系统配置
   if (data.systems !== undefined) {
     for (const sysItem of data.systems) {
       const system = await prisma.system.findUnique({
@@ -409,7 +407,6 @@ export async function updateTrain(
     }
 
     await prisma.$transaction(async (tx) => {
-      // 更新火车基本信息
       await tx.train.updateMany({
         where: { id: trainId, version: data.version },
         data: {
@@ -419,8 +416,7 @@ export async function updateTrain(
         },
       });
 
-      // 删除不在新列表中的搭载系统
-      const newSystemIds = data.systems.map(s => s.systemId);
+      const newSystemIds = data.systems!.map(s => s.systemId);
       const toDelete = existing.trainSystems.filter(ts => !newSystemIds.includes(ts.systemId));
       for (const ts of toDelete) {
         if (ts.usedPoints > 0) {
@@ -433,8 +429,7 @@ export async function updateTrain(
         });
       }
 
-      // 更新或创建搭载系统
-      for (const sysItem of data.systems) {
+      for (const sysItem of data.systems!) {
         const existingSystem = existing.trainSystems.find(ts => ts.systemId === sysItem.systemId);
 
         if (existingSystem) {
@@ -467,7 +462,6 @@ export async function updateTrain(
       }
     });
   } else {
-    // 只更新基本信息
     const result = await prisma.train.updateMany({
       where: { id: trainId, version: data.version },
       data: {
@@ -494,13 +488,11 @@ export async function updateTrain(
 
 // ========== 取消火车 ==========
 
-export async function cancelTrain(trainId: string): Promise<TrainDetailResponse> {
+export async function cancelTrain(trainId: string): Promise<void> {
   const train = await prisma.train.findUnique({
     where: { id: trainId },
     include: {
-      requirements: {
-        select: { id: true, status: true },
-      },
+      trainSystems: true,
     },
   });
 
@@ -508,29 +500,17 @@ export async function cancelTrain(trainId: string): Promise<TrainDetailResponse>
     throw errors.trainNotFound();
   }
 
-  if (train.status !== 'PLANNING') {
-    throw errors.trainInvalidStatus('只有规划中的火车才能取消');
+  const hasOnboardedRequirements = train.trainSystems.some(ts => ts.usedPoints > 0);
+  if (hasOnboardedRequirements) {
+    throw errors.trainHasOnboardedRequirements('该火车已有需求纳版，无法取消');
   }
 
-  const hasOnboarded = train.requirements.some(
-    (req) => req.status === 'ONBOARDED' || req.status === 'RELEASED',
-  );
-  if (hasOnboarded) {
-    throw errors.trainHasOnboardedRequirements();
-  }
-
-  await prisma.train.update({
+  await prisma.train.delete({
     where: { id: trainId },
-    data: {
-      status: 'CANCELLED',
-      version: { increment: 1 },
-    },
   });
-
-  return getTrainById(trainId) as Promise<TrainDetailResponse>;
 }
 
-// ========== 添加搭载系统 ==========
+// ========== 添加/更新/移除搭载系统（保持原有逻辑） ==========
 
 export async function addTrainSystem(
   trainId: string,
@@ -542,10 +522,6 @@ export async function addTrainSystem(
 
   if (!train) {
     throw errors.trainNotFound();
-  }
-
-  if (train.status !== 'PLANNING') {
-    throw errors.trainInvalidStatus('只有规划中的火车才能添加搭载系统');
   }
 
   const system = await prisma.system.findUnique({
@@ -617,17 +593,11 @@ export async function addTrainSystem(
   };
 }
 
-// ========== 移除搭载系统 ==========
-
 export async function removeTrainSystem(trainId: string, systemId: string): Promise<void> {
   const train = await prisma.train.findUnique({ where: { id: trainId } });
 
   if (!train) {
     throw errors.trainNotFound();
-  }
-
-  if (train.status !== 'PLANNING') {
-    throw errors.trainInvalidStatus('只有规划中的火车才能移除搭载系统');
   }
 
   const trainSystem = await prisma.trainSystem.findUnique({
@@ -638,18 +608,6 @@ export async function removeTrainSystem(trainId: string, systemId: string): Prom
     throw errors.trainSystemNotFound();
   }
 
-  const systemRequirements = await prisma.requirement.findMany({
-    where: { systemId: trainSystem.systemId, trainId: trainId },
-    select: { id: true, status: true },
-  });
-
-  const hasOnboardedSystem = systemRequirements.some(
-    (req) => req.status === 'ONBOARDED' || req.status === 'RELEASED',
-  );
-  if (hasOnboardedSystem) {
-    throw errors.trainSystemHasOnboardedRequirements();
-  }
-
   await prisma.trainSystem.delete({ where: { id: systemId } });
 
   await prisma.train.update({
@@ -657,8 +615,6 @@ export async function removeTrainSystem(trainId: string, systemId: string): Prom
     data: { version: { increment: 1 } },
   });
 }
-
-// ========== 更新搭载系统配置 ==========
 
 export async function updateTrainSystem(
   trainId: string,
@@ -669,10 +625,6 @@ export async function updateTrainSystem(
 
   if (!train) {
     throw errors.trainNotFound();
-  }
-
-  if (train.status !== 'PLANNING') {
-    throw errors.trainInvalidStatus('只有规划中的火车才能更新搭载系统');
   }
 
   const trainSystem = await prisma.trainSystem.findUnique({
@@ -737,14 +689,21 @@ export async function updateTrainSystem(
   };
 }
 
-// ========== 获取可选系统列表 ==========
+interface AvailableSystemResponse {
+  id: string;
+  name: string;
+  conflictTrain?: {
+    id: string;
+    name: string;
+  };
+}
 
 export async function getAvailableSystems(trainId?: string): Promise<AvailableSystemResponse[]> {
   const systems = await prisma.system.findMany({
     orderBy: { name: 'asc' },
     include: {
       trainSystems: {
-        include: { train: { select: { id: true, name: true, status: true } } },
+        include: { train: { select: { id: true, name: true } } },
       },
     },
   });
@@ -752,44 +711,34 @@ export async function getAvailableSystems(trainId?: string): Promise<AvailableSy
   return systems.map((system) => {
     const conflictTrain = system.trainSystems.find((ts) => {
       if (trainId && ts.train.id === trainId) return false;
-      return ts.train.status === 'PLANNING' || ts.train.status === 'IN_PROGRESS';
+      return true;
     });
 
     return {
       id: system.id,
       name: system.name,
       conflictTrain: conflictTrain
-        ? { id: conflictTrain.train.id, name: conflictTrain.train.name, status: conflictTrain.train.status }
+        ? { id: conflictTrain.train.id, name: conflictTrain.train.name }
         : undefined,
     };
   });
 }
 
-export type {
-  TrainDetailResponse,
-  TrainSystemDetailResponse,
-  TrainListItemResponse,
-  TrainListResponseData,
-  AvailableSystemResponse,
-};
+// ========== 班次相关函数（v2.0 核心新增） ==========
 
-// ========== 创建火车班次 ==========
 export async function createTrainSchedule(
   trainId: string,
-  data: CreateTrainScheduleRequest,
-): Promise<TrainDetailResponse> {
-  // 校验火车
-  const train = await prisma.train.findUnique({ where: { id: trainId } });
+  data: CreateTrainScheduleRequest & { customKeyDates?: Array<{ name: string; date?: string | null }> },
+  userId: string,
+): Promise<TrainScheduleDetailResponse> {
+  const train = await prisma.train.findUnique({
+    where: { id: trainId },
+    include: { trainSystems: true },
+  });
   if (!train) {
     throw errors.trainNotFound();
   }
 
-  // 校验状态必须为 PLANNING
-  if (train.status !== 'PLANNING') {
-    throw errors.trainNotPlanning();
-  }
-
-  // 校验日期
   if (!data.startDate || data.startDate.trim().length === 0) {
     throw errors.trainScheduleStartDateRequired();
   }
@@ -804,118 +753,337 @@ export async function createTrainSchedule(
     throw errors.trainScheduleEndDateInvalid('结束时间必须晚于开始时间');
   }
 
-  // 计算关键日期
-  const keyDates = calculateKeyDates(startDate, endDate);
+  // 如果用户手动设置了关键日期，使用用户设置的；否则自动计算
+  let boardingDate, lockdownDate, releaseDate;
+  if (data.boardingDate || data.lockdownDate || data.releaseDate) {
+    boardingDate = data.boardingDate ? new Date(data.boardingDate) : undefined;
+    lockdownDate = data.lockdownDate ? new Date(data.lockdownDate) : undefined;
+    releaseDate = data.releaseDate ? new Date(data.releaseDate) : undefined;
+  } else {
+    const keyDates = calculateKeyDates(startDate, endDate);
+    boardingDate = keyDates.boardingDate;
+    lockdownDate = keyDates.lockdownDate;
+    releaseDate = keyDates.releaseDate;
+  }
 
-  // 更新火车
-  await prisma.train.update({
-    where: { id: trainId },
-    data: {
-      startDate,
-      endDate,
-      boardingDate: keyDates.boardingDate,
-      lockdownDate: keyDates.lockdownDate,
-      releaseDate: keyDates.releaseDate,
-      status: 'IN_PROGRESS',
-      version: { increment: 1 },
-    },
+  const scheduleCount = await prisma.trainSchedule.count({ where: { trainId } });
+  const scheduleName = data.name?.trim() || `${train.name} - 第${scheduleCount + 1}班`;
+
+  const schedule = await prisma.$transaction(async (tx) => {
+    const newSchedule = await tx.trainSchedule.create({
+      data: {
+        trainId,
+        name: scheduleName,
+        startDate,
+        endDate,
+        boardingDate,
+        lockdownDate,
+        releaseDate,
+        createdById: userId,
+      },
+      include: {
+        createdBy: { select: { id: true, displayName: true } },
+      },
+    });
+
+    for (const trainSystem of train.trainSystems) {
+      await tx.trainSystemSnapshot.create({
+        data: {
+          trainScheduleId: newSchedule.id,
+          systemId: trainSystem.systemId,
+          capacityPoints: trainSystem.capacityPoints,
+          usedPoints: trainSystem.usedPoints,
+          baUserId: trainSystem.baUserId,
+          pmUserId: trainSystem.pmUserId,
+          techMgrUserId: trainSystem.techMgrUserId,
+          testMgrUserId: trainSystem.testMgrUserId,
+          devTeamUserIds: trainSystem.devTeamUserIds,
+        },
+      });
+    }
+
+    if (data.customKeyDates && data.customKeyDates.length > 0) {
+      for (const customKeyDate of data.customKeyDates) {
+        await tx.trainScheduleKeyDate.create({
+          data: {
+            trainScheduleId: newSchedule.id,
+            name: customKeyDate.name,
+            date: customKeyDate.date ? new Date(customKeyDate.date) : null,
+          },
+        });
+      }
+    }
+
+    return newSchedule;
   });
 
-  return getTrainById(trainId) as Promise<TrainDetailResponse>;
+  return getTrainScheduleById(schedule.id) as Promise<TrainScheduleDetailResponse>;
 }
 
-// ========== 更新火车班次 ==========
-export async function updateTrainSchedule(
+export async function listTrainSchedules(
   trainId: string,
-  data: UpdateTrainScheduleRequest,
-): Promise<TrainDetailResponse> {
-  // 校验火车
+): Promise<{ list: TrainScheduleListItemResponse[] }> {
   const train = await prisma.train.findUnique({ where: { id: trainId } });
   if (!train) {
     throw errors.trainNotFound();
   }
 
-  // 校验版本号（乐观锁）
-  if (train.version !== data.version) {
-    throw errors.trainVersionConflict();
+  const schedules = await prisma.trainSchedule.findMany({
+    where: { trainId },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      snapshots: {
+        select: { id: true, capacityPoints: true, usedPoints: true },
+      },
+      requirements: {
+        select: { id: true },
+      },
+    },
+  });
+
+  const list: TrainScheduleListItemResponse[] = schedules.map((s) => {
+    const totalCapacity = s.snapshots.reduce((sum, snap) => sum + snap.capacityPoints, 0);
+    const usedCapacity = s.snapshots.reduce((sum, snap) => sum + snap.usedPoints, 0);
+
+    return {
+      id: s.id,
+      name: s.name,
+      startDate: s.startDate?.toISOString().split('T')[0],
+      endDate: s.endDate?.toISOString().split('T')[0],
+      boardingDate: s.boardingDate?.toISOString().split('T')[0],
+      lockdownDate: s.lockdownDate?.toISOString().split('T')[0],
+      releaseDate: s.releaseDate?.toISOString().split('T')[0],
+      systemCount: s.snapshots.length,
+      totalCapacity,
+      usedCapacity,
+      requirementCount: s.requirements.length,
+      createdAt: s.createdAt.toISOString(),
+    };
+  });
+
+  return { list };
+}
+
+export async function getTrainScheduleById(
+  scheduleId: string,
+): Promise<any> {
+  const schedule = await prisma.trainSchedule.findUnique({
+    where: { id: scheduleId },
+    include: {
+      createdBy: { select: { id: true, displayName: true } },
+      train: { select: { id: true, name: true } },
+      snapshots: {
+        include: {
+          system: { select: { id: true, name: true } },
+        },
+      },
+      keyDates: true,
+    },
+  });
+
+  if (!schedule) {
+    throw errors.trainNotFound();
   }
 
-  // 准备更新数据
+  const snapshots = schedule.snapshots.map((snap) => {
+    const remainingPoints = snap.capacityPoints - snap.usedPoints;
+    const usageRate = snap.capacityPoints > 0
+      ? Math.round((snap.usedPoints / snap.capacityPoints) * 10000) / 100
+      : 0;
+
+    return {
+      id: snap.id,
+      trainScheduleId: snap.trainScheduleId,
+      systemId: snap.systemId,
+      system: snap.system,
+      capacityPoints: snap.capacityPoints,
+      usedPoints: snap.usedPoints,
+      remainingPoints,
+      usageRate,
+    };
+  });
+
+  const customKeyDates = schedule.keyDates.map((kd) => ({
+    id: kd.id,
+    name: kd.name,
+    date: kd.date?.toISOString().split('T')[0] || null,
+  }));
+
+  return {
+    id: schedule.id,
+    trainId: schedule.trainId,
+    name: schedule.name,
+    startDate: schedule.startDate?.toISOString().split('T')[0],
+    endDate: schedule.endDate?.toISOString().split('T')[0],
+    boardingDate: schedule.boardingDate?.toISOString().split('T')[0],
+    lockdownDate: schedule.lockdownDate?.toISOString().split('T')[0],
+    releaseDate: schedule.releaseDate?.toISOString().split('T')[0],
+    customKeyDates,
+    version: schedule.version,
+    createdBy: schedule.createdBy,
+    createdAt: schedule.createdAt.toISOString(),
+    updatedAt: schedule.updatedAt.toISOString(),
+    train: schedule.train,
+    snapshots,
+  };
+}
+
+export async function updateTrainSchedule(
+  scheduleId: string,
+  data: UpdateTrainScheduleRequest & { customKeyDates?: Array<{ id?: string; name: string; date?: string | null }> },
+): Promise<TrainScheduleDetailResponse> {
+  const schedule = await prisma.trainSchedule.findUnique({
+    where: { id: scheduleId },
+  });
+
+  if (!schedule) {
+    throw errors.trainNotFound();
+  }
+
   const updateData: any = {
     version: { increment: 1 },
   };
 
-  // 如果提供了新的开始或结束日期，重新计算关键日期
-  let newKeyDates: any = null;
-  if (data.startDate || data.endDate) {
-    const startDate = data.startDate ? new Date(data.startDate) : train.startDate;
-    const endDate = data.endDate ? new Date(data.endDate) : train.endDate;
+  if (data.name !== undefined) {
+    updateData.name = data.name.trim();
+  }
 
-    if (!startDate || !endDate) {
-      throw errors.trainScheduleDateInvalid();
-    }
+  // 处理日期更新
+  let startDate = schedule.startDate;
+  let endDate = schedule.endDate;
+  let needCalculateKeyDates = false;
 
+  if (data.startDate !== undefined) {
+    startDate = data.startDate ? new Date(data.startDate) : null;
+    updateData.startDate = startDate;
+    needCalculateKeyDates = true;
+  }
+
+  if (data.endDate !== undefined) {
+    endDate = data.endDate ? new Date(data.endDate) : null;
+    updateData.endDate = endDate;
+    needCalculateKeyDates = true;
+  }
+
+  // 如果更新了开始或结束日期，验证日期有效性
+  if (needCalculateKeyDates && startDate && endDate) {
     if (endDate <= startDate) {
       throw errors.trainScheduleEndDateInvalid('结束时间必须晚于开始时间');
     }
-
-    updateData.startDate = startDate;
-    updateData.endDate = endDate;
-
-    newKeyDates = calculateKeyDates(startDate, endDate);
   }
 
-  // 如果用户手动设置了关键日期，覆盖自动计算的值
-  if (data.boardingDate) {
-    updateData.boardingDate = new Date(data.boardingDate);
-  } else if (newKeyDates) {
+  // 处理关键日期 - 优先使用用户手动设置的
+  if (data.boardingDate !== undefined) {
+    updateData.boardingDate = data.boardingDate ? new Date(data.boardingDate) : null;
+  } else if (needCalculateKeyDates && startDate && endDate) {
+    // 只有在用户没有手动设置，并且更新了开始/结束日期时，才重新计算
+    const newKeyDates = calculateKeyDates(startDate, endDate);
     updateData.boardingDate = newKeyDates.boardingDate;
   }
 
-  if (data.lockdownDate) {
-    updateData.lockdownDate = new Date(data.lockdownDate);
-  } else if (newKeyDates) {
+  if (data.lockdownDate !== undefined) {
+    updateData.lockdownDate = data.lockdownDate ? new Date(data.lockdownDate) : null;
+  } else if (needCalculateKeyDates && startDate && endDate) {
+    const newKeyDates = calculateKeyDates(startDate, endDate);
     updateData.lockdownDate = newKeyDates.lockdownDate;
   }
 
-  if (data.releaseDate) {
-    updateData.releaseDate = new Date(data.releaseDate);
-  } else if (newKeyDates) {
+  if (data.releaseDate !== undefined) {
+    updateData.releaseDate = data.releaseDate ? new Date(data.releaseDate) : null;
+  } else if (needCalculateKeyDates && startDate && endDate) {
+    const newKeyDates = calculateKeyDates(startDate, endDate);
     updateData.releaseDate = newKeyDates.releaseDate;
   }
 
-  // 执行更新
-  await prisma.train.update({
-    where: { id: trainId },
-    data: updateData,
+  // 处理自定义关键日期
+  await prisma.$transaction(async (tx) => {
+    await tx.trainSchedule.update({
+      where: { id: scheduleId },
+      data: updateData,
+    });
+
+    if (data.customKeyDates !== undefined) {
+      // 删除旧的自定义关键日期
+      await tx.trainScheduleKeyDate.deleteMany({
+        where: { trainScheduleId: scheduleId },
+      });
+
+      // 创建新的自定义关键日期
+      if (data.customKeyDates.length > 0) {
+        for (const customKeyDate of data.customKeyDates) {
+          await tx.trainScheduleKeyDate.create({
+            data: {
+              trainScheduleId: scheduleId,
+              name: customKeyDate.name,
+              date: customKeyDate.date ? new Date(customKeyDate.date) : null,
+            },
+          });
+        }
+      }
+    }
   });
 
-  return getTrainById(trainId) as Promise<TrainDetailResponse>;
+  return getTrainScheduleById(scheduleId) as Promise<TrainScheduleDetailResponse>;
 }
 
-// ========== 获取关键日期信息 ==========
-export async function getKeyDates(trainId: string): Promise<KeyDatesResponse> {
-  const train = await prisma.train.findUnique({ where: { id: trainId } });
+export async function cancelTrainSchedule(scheduleId: string): Promise<void> {
+  const schedule = await prisma.trainSchedule.findUnique({
+    where: { id: scheduleId },
+    include: {
+      requirements: {
+        select: { id: true, status: true },
+      },
+    },
+  });
 
-  if (!train) {
+  if (!schedule) {
     throw errors.trainNotFound();
   }
 
-  if (!train.startDate || !train.endDate) {
-    throw errors.trainNoSchedule('该火车尚未创建班次');
+  const hasOnboarded = schedule.requirements.some(
+    (req) => req.status === 'ONBOARDED' || req.status === 'RELEASED',
+  );
+  if (hasOnboarded) {
+    throw errors.trainHasOnboardedRequirements('该班次有已纳版的需求，无法取消');
   }
 
-  // 计算天数
-  const totalDays = Math.ceil(
-    (train.endDate.getTime() - train.startDate.getTime()) / (1000 * 60 * 60 * 24) + 1
-  );
+  await prisma.trainSchedule.delete({
+    where: { id: scheduleId },
+  });
+}
+
+export async function previewKeyDates(
+  data: PreviewKeyDatesRequest,
+): Promise<{ boardingDate: string; lockdownDate: string; releaseDate: string }> {
+  const startDate = new Date(data.startDate);
+  const endDate = new Date(data.endDate);
+
+  if (isNaN(startDate.getTime())) {
+    throw errors.trainScheduleDateInvalid('开始日期格式无效');
+  }
+  if (isNaN(endDate.getTime())) {
+    throw errors.trainScheduleDateInvalid('结束日期格式无效');
+  }
+
+  if (endDate <= startDate) {
+    throw errors.trainScheduleEndDateInvalid('结束时间必须晚于开始时间');
+  }
+
+  const keyDates = calculateKeyDates(startDate, endDate);
 
   return {
-    startDate: train.startDate.toISOString().split('T')[0],
-    endDate: train.endDate.toISOString().split('T')[0],
-    boardingDate: train.boardingDate?.toISOString().split('T')[0] || '',
-    lockdownDate: train.lockdownDate?.toISOString().split('T')[0] || '',
-    releaseDate: train.releaseDate?.toISOString().split('T')[0] || '',
-    daysCount: totalDays,
+    boardingDate: keyDates.boardingDate.toISOString().split('T')[0],
+    lockdownDate: keyDates.lockdownDate.toISOString().split('T')[0],
+    releaseDate: keyDates.releaseDate.toISOString().split('T')[0],
   };
 }
+
+export type {
+  TrainDetailResponse,
+  TrainSystemDetailResponse,
+  TrainListItemResponse,
+  TrainListResponseData,
+  AvailableSystemResponse,
+  TrainScheduleListItemResponse,
+  TrainScheduleDetailResponse,
+};
