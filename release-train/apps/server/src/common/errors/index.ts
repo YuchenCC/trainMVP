@@ -124,11 +124,76 @@ export const errors = {
   requirementChangeReasonTooLong: (message?: string) =>
     makeError('REQUIREMENT_CHANGE_REASON_TOO_LONG', message),
 
+  requirementSealedCannotChange: (message?: string) =>
+    makeError('REQUIREMENT_SEALED_CANNOT_CHANGE', message),
+
   requirementNotReadyOrInTrain: (message?: string) =>
     makeError('REQUIREMENT_NOT_READY_OR_IN_TRAIN', message),
 
-  requirementSealedCannotChange: (message?: string) =>
-    makeError('REQUIREMENT_SEALED_CANNOT_CHANGE', message),
+  // ---- 火车模块错误 ----
+  trainNotFound: (message?: string) =>
+    makeError('TRAIN_NOT_FOUND', message),
+
+  trainSystemNotFound: (message?: string) =>
+    makeError('TRAIN_SYSTEM_NOT_FOUND', message),
+
+  trainSystemConflict: (message?: string) =>
+    makeError('TRAIN_SYSTEM_CONFLICT', message),
+
+  trainInvalidStatus: (message?: string) =>
+    makeError('TRAIN_INVALID_STATUS', message),
+
+  trainHasOnboardedRequirements: (message?: string) =>
+    makeError('TRAIN_HAS_ONBOARDED_REQUIREMENTS', message),
+
+  trainSystemHasOnboardedRequirements: (message?: string) =>
+    makeError('TRAIN_SYSTEM_HAS_ONBOARDED_REQUIREMENTS', message),
+
+  trainVersionConflict: (message?: string) =>
+    makeError('TRAIN_VERSION_CONFLICT', message),
+
+  trainNameRequired: (message?: string) =>
+    makeError('TRAIN_NAME_REQUIRED', message),
+
+  trainNameTooLong: (message?: string) =>
+    makeError('TRAIN_NAME_TOO_LONG', message),
+
+  trainNameTooShort: (message?: string) =>
+    makeError('TRAIN_NAME_TOO_SHORT', message),
+
+  trainCapacityOutOfRange: (message?: string) =>
+    makeError('TRAIN_CAPACITY_OUT_OF_RANGE', message),
+
+  trainSystemRequired: (message?: string) =>
+    makeError('TRAIN_SYSTEM_REQUIRED', message),
+
+  trainSystemNotInTrain: (message?: string) =>
+    makeError('TRAIN_SYSTEM_NOT_IN_TRAIN', message),
+
+  // ---- US2.2 火车班次相关错误 ----
+  trainScheduleStartDateRequired: (message?: string) =>
+    makeError('TRAIN_SCHEDULE_START_DATE_REQUIRED', message),
+
+  trainScheduleEndDateRequired: (message?: string) =>
+    makeError('TRAIN_SCHEDULE_END_DATE_REQUIRED', message),
+
+  trainScheduleEndDateInvalid: (message?: string) =>
+    makeError('TRAIN_SCHEDULE_END_DATE_INVALID', message),
+
+  trainNotPlanning: (message?: string) =>
+    makeError('TRAIN_NOT_PLANNING', message),
+
+  trainScheduleDateInvalid: (message?: string) =>
+    makeError('TRAIN_SCHEDULE_DATE_INVALID', message),
+
+  trainNoSchedule: (message?: string) =>
+    makeError('TRAIN_NO_SCHEDULE', message),
+
+  systemNotFound: (message?: string) =>
+    makeError('SYSTEM_NOT_FOUND', message),
+
+  userNotFound: (message?: string) =>
+    makeError('USER_NOT_FOUND', message),
 };
 
 // ========== 全局错误处理器 ==========

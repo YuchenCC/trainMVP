@@ -170,6 +170,25 @@ export const requirementService = {
     const response = await api.post(`/requirements/${id}/change-sub-status`, { subStatus, comment }); // POST /api/requirements/:id/change-sub-status
     return response.data;
   },
+
+  /**
+   * 紧急变更（封板状态 → 提交审批）
+   * 
+   * US1.12 紧急变更功能：
+   * - 前置条件：状态为已纳版-封板
+   * - 权限：BA（归属人）、TRAIN_ADMIN
+   * - 提交后创建 EmergencyChange 记录，状态 PENDING
+   * - 审批操作在 Task 2 实现
+   * 
+   * @param id - 需求 ID
+   * @param urgency - 紧急程度（P0/P1）
+   * @param reason - 紧急变更原因（必填，最多 500 字）
+   * @returns 更新后的需求详情
+   */
+  emergencyChange: async (id: string, urgency: string, reason: string): Promise<ApiResponse<RequirementDetail>> => {
+    const response = await api.post(`/requirements/${id}/emergency-change`, { urgency, reason }); // POST /api/requirements/:id/emergency-change
+    return response.data;
+  },
 };
 
 export default requirementService;

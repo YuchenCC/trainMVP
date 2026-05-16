@@ -20,6 +20,7 @@ import {
   Modal,
   Input,
   Select,
+  Radio,
 } from 'antd';
 import {
   EditOutlined,
@@ -131,6 +132,12 @@ const RequirementDetailPage: React.FC = () => {
   const [targetSubStatus, setTargetSubStatus] = useState<string | undefined>(undefined);
   const [subStatusComment, setSubStatusComment] = useState('');
   const [subStatusLoading, setSubStatusLoading] = useState(false);
+
+  // ========== 紧急变更处理 ==========
+  const [emergencyModalVisible, setEmergencyModalVisible] = useState(false);
+  const [emergencyUrgency, setEmergencyUrgency] = useState<string>('P0');
+  const [emergencyReason, setEmergencyReason] = useState('');
+  const [emergencyLoading, setEmergencyLoading] = useState(false);
 
   // 获取可选的子状态列表（排除当前子状态）
   const getAvailableSubStatuses = () => {
@@ -366,6 +373,32 @@ const RequirementDetailPage: React.FC = () => {
     }
   };
 
+  // 处理紧急变更提交
+  const handleEmergencyChange = async () => {
+    if (!emergencyReason.trim()) {
+      message.warning('请填写紧急变更原因');
+      return;
+    }
+    if (emergencyReason.length > 500) {
+      message.warning('变更原因最多500字');
+      return;
+    }
+
+    setEmergencyLoading(true);
+    try {
+      await requirementService.emergencyChange(id!, emergencyUrgency, emergencyReason);
+      message.success('紧急变更申请已提交，等待审批');
+      setEmergencyModalVisible(false);
+      setEmergencyUrgency('P0');
+      setEmergencyReason('');
+      fetchDetail();
+    } catch (error: any) {
+      message.error(error?.message || '提交失败');
+    } finally {
+      setEmergencyLoading(false);
+    }
+  };
+
   // 依赖列表表格列定义（新增风险等级列）
   const dependencyColumns = [
     {
@@ -424,13 +457,12 @@ const RequirementDetailPage: React.FC = () => {
 
   return (
     <div>
-      {/* 操作栏：返回列表 + 编辑按钮 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+      {/* 操作栏：返回列表 + 操作按钮 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Button
           type="link"
           icon={<ArrowLeftOutlined />}
           onClick={() => {
-            // 保留之前的筛选条件（通过 URL query 参数传递）
             const searchParams = new URLSearchParams(location.search);
             const queryString = searchParams.toString();
             navigate(`/requirements${queryString ? `?${queryString}` : ''}`);
@@ -439,14 +471,76 @@ const RequirementDetailPage: React.FC = () => {
           返回列表
         </Button>
         <Space>
-          {canEdit && (
-            <Button
-              type="primary"
-              icon={<EditOutlined />}
-              onClick={() => navigate(`/requirements/${id}/edit`)}
-            >
-              编辑
-            </Button>
+          {requirement.status === ReqStatus.DRAFT && (
+            <>
+              {canEdit && (
+                <Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/requirements/${id}/edit`)}>
+                  编辑
+                </Button>
+              )}
+              {canSubmitReview && (
+                <Button onClick={handleSubmitReview}>发起评审</Button>
+              )}
+              {canCancel && (
+                <Button danger onClick={handleCancel}>取消</Button>
+              )}
+            </>
+          )}
+          {requirement.status === ReqStatus.PENDING_REVIEW && (
+            <>
+              {canReview && (
+                <>
+                  <Button type="primary" onClick={handleReviewPass}>评审通过</Button>
+                  <Button danger onClick={handleReviewReject}>评审拒绝</Button>
+                </>
+              )}
+            </>
+          )}
+          {requirement.status === ReqStatus.REJECTED && (
+            <>
+              {canReEdit && (
+                <Button type="primary" onClick={handleReEdit}>重新编辑</Button>
+              )}
+            </>
+          )}
+          {requirement.status === ReqStatus.READY && canChangeRequirement() && (
+            <>
+              <Button type="primary" onClick={() => setChangeModalVisible(true)}>需求变更</Button>
+            </>
+          )}
+          {requirement.status === ReqStatus.ONBOARDED && (
+            <>
+              {requirement.subStatus === ReqSubStatus.FROZEN ? (
+                <>
+                  {checkPermission(Operation.EMERGENCY_CHANGE) && (
+                    <Button type="primary" onClick={() => {
+                      setEmergencyUrgency('P0');
+                      setEmergencyReason('');
+                      setEmergencyModalVisible(true);
+                    }}>紧急变更</Button>
+                  )}
+                  {canCancel && (
+                    <Button danger onClick={handleCancel}>取消</Button>
+                  )}
+                </>
+              ) : (
+                <>
+                  {canChangeRequirement() && (
+                    <Button type="primary" onClick={() => setChangeModalVisible(true)}>需求变更</Button>
+                  )}
+                  {canChangeSubStatus() && (
+                    <Button type="primary" onClick={() => {
+                      setTargetSubStatus(undefined);
+                      setSubStatusComment('');
+                      setSubStatusModalVisible(true);
+                    }}>子状态变更</Button>
+                  )}
+                  {canCancel && (
+                    <Button danger onClick={handleCancel}>取消</Button>
+                  )}
+                </>
+              )}
+            </>
           )}
         </Space>
       </div>
@@ -539,79 +633,6 @@ const RequirementDetailPage: React.FC = () => {
             )}
           </Card>
 
-          {/* 底部操作按钮区域 */}
-          <Card style={{ marginBottom: 16 }}>
-            <Space>
-              {requirement.status === ReqStatus.DRAFT && (
-                <>
-                  {canEdit && (
-                    <Button type="primary" onClick={() => navigate(`/requirements/${id}/edit`)}>
-                      编辑
-                    </Button>
-                  )}
-                  {canSubmitReview && (
-                    <Button onClick={handleSubmitReview}>发起评审</Button>
-                  )}
-                  {canCancel && (
-                    <Button danger onClick={handleCancel}>取消</Button>
-                  )}
-                </>
-              )}
-              {requirement.status === ReqStatus.PENDING_REVIEW && (
-                <>
-                  {canReview && (
-                    <>
-                      <Button type="primary" onClick={handleReviewPass}>评审通过</Button>
-                      <Button danger onClick={handleReviewReject}>评审拒绝</Button>
-                    </>
-                  )}
-                </>
-              )}
-              {requirement.status === ReqStatus.REJECTED && (
-                <>
-                  {canReEdit && (
-                    <Button type="primary" onClick={handleReEdit}>重新编辑</Button>
-                  )}
-                </>
-              )}
-              {requirement.status === ReqStatus.READY && canChangeRequirement() && (
-                <>
-                  <Button type="primary" onClick={() => setChangeModalVisible(true)}>需求变更</Button>
-                </>
-              )}
-              {requirement.status === ReqStatus.ONBOARDED && (
-                <>
-                  {requirement.subStatus === ReqSubStatus.FROZEN ? (
-                    <>
-                      {checkPermission(Operation.EMERGENCY_CHANGE) && (
-                        <Button type="primary">紧急变更</Button>
-                      )}
-                      {canCancel && (
-                        <Button danger>取消</Button>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {canChangeRequirement() && (
-                        <Button type="primary" onClick={() => setChangeModalVisible(true)}>需求变更</Button>
-                      )}
-                      {canChangeSubStatus() && (
-                        <Button type="primary" onClick={() => {
-                          setTargetSubStatus(undefined);
-                          setSubStatusComment('');
-                          setSubStatusModalVisible(true);
-                        }}>子状态变更</Button>
-                      )}
-                      {canCancel && (
-                        <Button danger>取消</Button>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-              {/* 已投产和已取消状态不显示操作按钮 */}
-            </Space>
-          </Card>
         </Col>
 
         {/* 右列 */}
@@ -746,6 +767,65 @@ const RequirementDetailPage: React.FC = () => {
             value={subStatusComment}
             onChange={(e) => setSubStatusComment(e.target.value)}
             placeholder="请输入子状态变更的原因..."
+            maxLength={500}
+            rows={4}
+            showCount
+          />
+        </div>
+      </Modal>
+
+      {/* 紧急变更弹窗 */}
+      <Modal
+        title="紧急变更申请"
+        open={emergencyModalVisible}
+        onCancel={() => {
+          setEmergencyModalVisible(false);
+          setEmergencyUrgency('P0');
+          setEmergencyReason('');
+        }}
+        footer={[
+          <Button
+            key="cancel"
+            onClick={() => {
+              setEmergencyModalVisible(false);
+              setEmergencyUrgency('P0');
+              setEmergencyReason('');
+            }}
+          >
+            取消
+          </Button>,
+          <Button
+            key="submit"
+            type="primary"
+            danger
+            loading={emergencyLoading}
+            onClick={handleEmergencyChange}
+          >
+            提交审批
+          </Button>,
+        ]}
+      >
+        <div style={{ marginBottom: 16, padding: 12, background: '#fff7e6', borderRadius: 4, border: '1px solid #ffd591' }}>
+          <Text type="warning" strong>⚠️ 封板后变更需审批：</Text>
+          <div style={{ marginTop: 8, color: '#64748b', fontSize: 13 }}>
+            <div>• 提交后将通知项目经理/火车管理员审批</div>
+            <div>• 审批通过后需求退回草稿，从版本火车移除</div>
+            <div>• 变更后需重新发起评审和纳版流程</div>
+          </div>
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 8, color: '#64748b' }}>紧急程度（必选）</div>
+          <Radio.Group value={emergencyUrgency} onChange={(e) => setEmergencyUrgency(e.target.value)}>
+            <Radio value="P0">P0 紧急（影响上线）</Radio>
+            <Radio value="P1">P1 较紧急</Radio>
+          </Radio.Group>
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 8, color: '#64748b' }}>紧急变更原因（必填，最多500字）</div>
+          <Input.TextArea
+            value={emergencyReason}
+            onChange={(e) => setEmergencyReason(e.target.value)}
+            placeholder="请说明为何封板后仍需变更..."
             maxLength={500}
             rows={4}
             showCount

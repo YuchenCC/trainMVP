@@ -232,6 +232,136 @@ export const ERROR_CODE_MAP: Record<string, ErrorCodeEntry> = {
     type: ErrorType.BUSINESS,
     message: '封板状态不可发起变更，请使用紧急变更',
   },
+
+  // ==========================================
+  // 火车模块业务错误（BUSINESS）
+  // ==========================================
+
+  TRAIN_NOT_FOUND: {
+    code: 'TRAIN_NOT_FOUND',
+    type: ErrorType.BUSINESS,
+    message: '版本火车不存在',
+  },
+
+  TRAIN_SYSTEM_NOT_FOUND: {
+    code: 'TRAIN_SYSTEM_NOT_FOUND',
+    type: ErrorType.BUSINESS,
+    message: '搭载系统不存在',
+  },
+
+  TRAIN_SYSTEM_CONFLICT: {
+    code: 'TRAIN_SYSTEM_CONFLICT',
+    type: ErrorType.BUSINESS,
+    message: '系统已在其他火车中，无法重复添加',
+  },
+
+  TRAIN_INVALID_STATUS: {
+    code: 'TRAIN_INVALID_STATUS',
+    type: ErrorType.BUSINESS,
+    message: '火车状态不允许此操作',
+  },
+
+  TRAIN_HAS_ONBOARDED_REQUIREMENTS: {
+    code: 'TRAIN_HAS_ONBOARDED_REQUIREMENTS',
+    type: ErrorType.BUSINESS,
+    message: '火车中存在已纳版需求，无法取消',
+  },
+
+  TRAIN_SYSTEM_HAS_ONBOARDED_REQUIREMENTS: {
+    code: 'TRAIN_SYSTEM_HAS_ONBOARDED_REQUIREMENTS',
+    type: ErrorType.BUSINESS,
+    message: '该系统下存在已纳版需求，无法移除',
+  },
+
+  TRAIN_VERSION_CONFLICT: {
+    code: 'TRAIN_VERSION_CONFLICT',
+    type: ErrorType.BUSINESS,
+    message: '版本火车已被其他人修改，请刷新后重试',
+  },
+
+  TRAIN_NAME_REQUIRED: {
+    code: 'TRAIN_NAME_REQUIRED',
+    type: ErrorType.BUSINESS,
+    message: '火车名称不能为空',
+  },
+
+  TRAIN_NAME_TOO_LONG: {
+    code: 'TRAIN_NAME_TOO_LONG',
+    type: ErrorType.BUSINESS,
+    message: '火车名称长度不能超过100字符',
+  },
+
+  TRAIN_NAME_TOO_SHORT: {
+    code: 'TRAIN_NAME_TOO_SHORT',
+    type: ErrorType.BUSINESS,
+    message: '火车名称长度不能少于2字符',
+  },
+
+  TRAIN_CAPACITY_OUT_OF_RANGE: {
+    code: 'TRAIN_CAPACITY_OUT_OF_RANGE',
+    type: ErrorType.BUSINESS,
+    message: '容量点数必须为1-500的正整数',
+  },
+
+  TRAIN_SYSTEM_REQUIRED: {
+    code: 'TRAIN_SYSTEM_REQUIRED',
+    type: ErrorType.BUSINESS,
+    message: '至少需要添加一个搭载系统',
+  },
+
+  TRAIN_SYSTEM_NOT_IN_TRAIN: {
+    code: 'TRAIN_SYSTEM_NOT_IN_TRAIN',
+    type: ErrorType.BUSINESS,
+    message: '该系统未搭载此火车',
+  },
+
+  TRAIN_SCHEDULE_START_DATE_REQUIRED: {
+    code: 'TRAIN_SCHEDULE_START_DATE_REQUIRED',
+    type: ErrorType.BUSINESS,
+    message: '开始时间不能为空',
+  },
+
+  TRAIN_SCHEDULE_END_DATE_REQUIRED: {
+    code: 'TRAIN_SCHEDULE_END_DATE_REQUIRED',
+    type: ErrorType.BUSINESS,
+    message: '结束时间不能为空',
+  },
+
+  TRAIN_SCHEDULE_END_DATE_INVALID: {
+    code: 'TRAIN_SCHEDULE_END_DATE_INVALID',
+    type: ErrorType.BUSINESS,
+    message: '结束时间必须晚于开始时间',
+  },
+
+  TRAIN_NOT_PLANNING: {
+    code: 'TRAIN_NOT_PLANNING',
+    type: ErrorType.BUSINESS,
+    message: '仅规划中的火车可创建班次',
+  },
+
+  TRAIN_SCHEDULE_DATE_INVALID: {
+    code: 'TRAIN_SCHEDULE_DATE_INVALID',
+    type: ErrorType.BUSINESS,
+    message: '日期格式无效，请使用 YYYY-MM-DD 格式',
+  },
+
+  TRAIN_NO_SCHEDULE: {
+    code: 'TRAIN_NO_SCHEDULE',
+    type: ErrorType.BUSINESS,
+    message: '该火车尚未创建班次',
+  },
+
+  SYSTEM_NOT_FOUND: {
+    code: 'SYSTEM_NOT_FOUND',
+    type: ErrorType.BUSINESS,
+    message: '系统不存在',
+  },
+
+  USER_NOT_FOUND: {
+    code: 'USER_NOT_FOUND',
+    type: ErrorType.BUSINESS,
+    message: '用户不存在',
+  },
 };
 
 // ========== 工具函数 ==========

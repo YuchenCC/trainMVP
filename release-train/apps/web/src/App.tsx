@@ -10,6 +10,9 @@ import RequirementCreatePage from './pages/requirements/create';
 import RequirementDetailPage from './pages/requirements/detail';
 import RequirementEditPage from './pages/requirements/edit';
 import TrainsPage from './pages/trains';
+import TrainCreatePage from './pages/trains/create';
+import TrainDetailPage from './pages/trains/[id]';
+import TrainEditPage from './pages/trains/edit';
 import SystemsPage from './pages/systems';
 import { AuthGuard, GuestGuard } from './components/AuthGuard';
 
@@ -46,8 +49,13 @@ const App: React.FC = () => {
             <Route path="/requirements/:id" element={<RequirementDetailPage />} />
             <Route path="/requirements/:id/edit" element={<RequirementEditPage />} />
 
-            {/* 其他模块 */}
+            {/* 版本火车模块 */}
             <Route path="/trains" element={<TrainsPage />} />
+            <Route path="/trains/new" element={<TrainCreatePage />} />
+            <Route path="/trains/:id" element={<TrainDetailPage />} />
+            <Route path="/trains/:id/edit" element={<TrainEditPage />} />
+
+            {/* 其他模块 */}
             <Route path="/systems" element={<SystemsPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
           </Route>

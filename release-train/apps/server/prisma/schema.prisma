@@ -218,15 +218,15 @@ enum OperationType {
 model Train {
   id            String       @id @default(cuid())         // 火车ID
   name          String                                     // 火车名称
-  cycleWeeks    Int          @default(4)                   // 版本周期（周）
-  status        TrainStatus  @default(PLANNING)            // 火车状态
+  status        TrainStatus  @default(PLANNING)          // 火车状态
   description   String?      @db.Text                     // 火车描述
+  version       Int          @default(1)                  // 乐观锁版本号
 
-  startDate     DateTime                                   // 开始日期
-  endDate       DateTime                                   // 结束日期
-  boardingDate  DateTime?                                  // 统一纳版日（自动计算）
-  lockdownDate  DateTime?                                  // 统一封板日（自动计算）
-  releaseDate   DateTime?                                  // 统一投产日（自动计算）
+  startDate     DateTime?                               // 开始日期（可选，班次创建时设置）
+  endDate       DateTime?                               // 结束日期（可选，班次创建时设置）
+  boardingDate  DateTime?                               // 统一纳版日（自动计算）
+  lockdownDate  DateTime?                               // 统一封板日（自动计算）
+  releaseDate   DateTime?                               // 统一投产日（自动计算）
 
   createdById   String                                     // 创建人ID
   createdBy     User         @relation("TrainCreator", fields: [createdById], references: [id]) // 创建人
@@ -237,7 +237,6 @@ model Train {
   trainSystems  TrainSystem[]                            // 火车-系统关联
 
   @@index([status])                                      // 按火车状态筛选
-  @@index([startDate])                                   // 按时间范围查询火车
 }
 
 enum TrainStatus {
@@ -255,10 +254,18 @@ model TrainSystem {
   capacityPoints Int     @default(0)                       // 容量点数（系统可承接的最大工作量）
   usedPoints     Int     @default(0)                       // 已用点数（已分配的需求工作量）
 
+  // 团队成员配置
+  baUserId       String?                                   // 业务BA用户ID
+  pmUserId       String?                                   // 产品经理用户ID
+  techMgrUserId  String?                                   // 技术经理用户ID
+  testMgrUserId  String?                                   // 测试负责人用户ID
+  devTeamUserIds String[]   @default([])                   // 开发团队用户ID列表（JSON数组存储）
+
   train          Train   @relation(fields: [trainId], references: [id], onDelete: Cascade) // 所属火车
   system         System  @relation(fields: [systemId], references: [id], onDelete: Cascade) // 所属系统
 
   @@unique([trainId, systemId])                            // 同一火车同一系统唯一
+  @@index([trainId])                                       // 按火车查询搭载系统
 }
 
 // ========== 紧急变更审批 ==========

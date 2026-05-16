@@ -281,6 +281,14 @@ export const TRAIN_STATUS_LABELS: Record<TrainStatus, string> = {
   [TrainStatus.CANCELLED]: '已取消',
 };
 
+// ========== 火车状态选项（用于筛选和选择） ==========
+export const TRAIN_STATUS_OPTIONS = [
+  { value: TrainStatus.PLANNING, label: '规划中', color: 'blue' },
+  { value: TrainStatus.IN_PROGRESS, label: '进行中', color: 'processing' },
+  { value: TrainStatus.COMPLETED, label: '已完成', color: 'success' },
+  { value: TrainStatus.CANCELLED, label: '已取消', color: 'default' },
+];
+
 // ========== 需求状态 Tag 颜色映射 ==========
 export const REQ_STATUS_COLORS: Record<ReqStatus, string> = {
   [ReqStatus.DRAFT]: 'default',

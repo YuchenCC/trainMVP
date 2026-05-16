@@ -643,6 +643,100 @@ export async function updateRequirement(
   });
 }
 
+// ========== 紧急变更（封板状态 → 提交审批） ==========
+
+/**
+ * 紧急变更：对封板状态的需求提交紧急变更申请
+ * 
+ * US1.12 紧急变更功能：
+ * - 前置条件：状态为 ONBOARDED + 子状态为 FROZEN（封板）
+ * - 权限：BA（归属人）、TRAIN_ADMIN、SUPER_ADMIN（RBAC 中间件已校验）
+ * - 创建 EmergencyChange 记录，状态为 PENDING
+ * - 记录 EMERGENCY_CHANGE 审计日志
+ * - Task 1 仅实现提交，审批操作在 Task 2 实现
+ * 
+ * @param id - 需求 ID
+ * @param operatorId - 操作人 ID（从 JWT 提取）
+ * @param operatorRole - 操作人角色（从 JWT 提取）
+ * @param urgency - 紧急程度（P0/P1）
+ * @param reason - 紧急变更原因（必填，最多 500 字）
+ * @returns 更新后的需求详情
+ */
+export async function emergencyChange(
+  id: string,
+  operatorId: string,
+  _operatorRole: string,
+  urgency: string,
+  reason: string,
+): Promise<RequirementDetail> {
+  // 1. 查询需求存在性（含版本号用于乐观锁）
+  const existing = await prisma.requirement.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      status: true,
+      subStatus: true,
+      systemId: true,
+      version: true,
+    },
+  });
+
+  if (!existing) {
+    throw errors.requirementNotFound();
+  }
+
+  // 2. 状态校验：必须是已纳版 + 封板子状态
+  if (existing.status !== 'ONBOARDED' || existing.subStatus !== 'FROZEN') {
+    throw errors.requirementSealedCannotChange('仅封板状态的需求可发起紧急变更');
+  }
+
+  // 3. 紧急程度校验：仅 P0/P1
+  if (!['P0', 'P1'].includes(urgency)) {
+    throw errors.badRequest('紧急程度无效，仅支持 P0/P1');
+  }
+
+  // 4. 事务内：创建 EmergencyChange 记录 + 审计日志
+  return prisma.$transaction(async (tx) => {
+    // 4a. 创建紧急变更记录（状态 PENDING，审批在 Task 2 实现）
+    await tx.emergencyChange.create({
+      data: {
+        requirementId: id,
+        urgency: urgency as any,
+        reason,
+        status: 'PENDING',
+      },
+    });
+
+    // 4b. 创建审计日志
+    await tx.statusLog.create({
+      data: {
+        requirementId: id,
+        operationType: 'EMERGENCY_CHANGE' as any,
+        fromStatus: existing.status,
+        toStatus: existing.status, // 主状态不变
+        fromSubStatus: existing.subStatus,
+        toSubStatus: existing.subStatus, // 子状态不变
+        operatorId,
+        reason: `紧急程度: ${urgency}, 原因: ${reason}`,
+      },
+    });
+
+    // 4c. 重新查询更新后的需求（含关联数据）
+    const updated = await tx.requirement.findUnique({
+      where: { id },
+      include: {
+        system: true,
+        ba: true,
+        pm: true,
+        creator: true,
+        train: true,
+      },
+    });
+
+    return buildRequirementDetail(updated!, tx);
+  });
+}
+
 /**
  * 取消需求（草稿状态）
  * 

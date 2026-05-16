@@ -23,43 +23,77 @@ const BREADCRUMB_MAP: Record<string, string> = {
   '/requirements': '需求池',
   '/requirements/new': '新增需求',
   '/trains': '版本火车',
+  '/trains/new': '新增火车',
   '/systems': '系统管理',
   '/dashboard': '仪表盘',
 };
 
-// 动态路由模式
-const DYNAMIC_BREADCRUMB: { pattern: RegExp; name: string }[] = [
-  { pattern: /^\/requirements\/[^/]+\/edit$/, name: '编辑需求' },
-  { pattern: /^\/requirements\/[^/]+$/, name: '需求详情' },
+// 动态路由模式：首页 + 父级 + 当前页面
+const DYNAMIC_BREADCRUMB: { pattern: RegExp; breadcrumb: string[] }[] = [
+  // 需求相关
+  { pattern: /^\/requirements\/[^/]+\/edit$/, breadcrumb: ['需求池', '编辑需求'] },
+  { pattern: /^\/requirements\/[^/]+$/, breadcrumb: ['需求池', '需求详情'] },
+  // 火车相关
+  { pattern: /^\/trains\/[^/]+\/edit$/, breadcrumb: ['版本火车', '编辑火车'] },
+  { pattern: /^\/trains\/[^/]+$/, breadcrumb: ['版本火车', '火车详情'] },
 ];
 
 // 根据路径生成面包屑
 function buildBreadcrumbs(pathname: string) {
   const items: { title: string; path?: string }[] = [];
-  for (const { pattern, name } of DYNAMIC_BREADCRUMB) {
+  
+  // 首页始终是第一个
+  const homeItem = { title: '首页', path: '/' };
+  
+  // 检查动态路由模式
+  for (const { pattern, breadcrumb } of DYNAMIC_BREADCRUMB) {
     if (pattern.test(pathname)) {
-      items.push({ title: '需求池', path: '/requirements' });
-      items.push({ title: name });
+      items.push(homeItem);
+      breadcrumb.forEach((name, index) => {
+        if (index === breadcrumb.length - 1) {
+          items.push({ title: name });
+        } else {
+          const path = name === '需求池' ? '/requirements' : '/trains';
+          items.push({ title: name, path });
+        }
+      });
       return items;
     }
   }
+  
+  // 检查静态路由映射
   const name = BREADCRUMB_MAP[pathname];
-  if (name) items.push({ title: name });
+  if (name) {
+    items.push(homeItem);
+    items.push({ title: name });
+  }
+  
   return items;
 }
 
 // 根据当前路径获取语义父级路由（避免 navigate(-1) 依赖浏览器历史栈导致套圈）
 function getParentPath(pathname: string): string {
   // /requirements/:id/edit → /requirements/:id
-  const editMatch = pathname.match(/^(\/requirements\/[^/]+)\/edit$/);
-  if (editMatch) return editMatch[1];
+  const reqEditMatch = pathname.match(/^(\/requirements\/[^/]+)\/edit$/);
+  if (reqEditMatch) return reqEditMatch[1];
 
   // /requirements/:id → /requirements
-  const detailMatch = pathname.match(/^\/requirements\/[^/]+$/);
-  if (detailMatch) return '/requirements';
+  const reqDetailMatch = pathname.match(/^\/requirements\/[^/]+$/);
+  if (reqDetailMatch) return '/requirements';
 
   // /requirements/new → /requirements
   if (pathname === '/requirements/new') return '/requirements';
+
+  // /trains/:id/edit → /trains/:id
+  const trainEditMatch = pathname.match(/^(\/trains\/[^/]+)\/edit$/);
+  if (trainEditMatch) return trainEditMatch[1];
+
+  // /trains/:id → /trains
+  const trainDetailMatch = pathname.match(/^\/trains\/[^/]+$/);
+  if (trainDetailMatch) return '/trains';
+
+  // /trains/new → /trains
+  if (pathname === '/trains/new') return '/trains';
 
   // 其他子页面兜底返回首页
   return '/requirements';

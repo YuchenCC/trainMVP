@@ -1,9 +1,10 @@
 // ========== 系统模块路由 ==========
-// 注册系统相关的 HTTP 路由：系统列表查询、系统成员查询
+// 注册系统相关的 HTTP 路由：系统列表查询、系统成员查询、可选系统列表
 // 路由文件（index.ts）负责接收请求参数、调用 service 层逻辑、返回响应
 import { FastifyInstance } from 'fastify';               // Fastify 类型
-import { ApiResponse, System } from '@release-train/shared'; // 通用响应类型 + System 类型
+import { ApiResponse } from '@release-train/shared'; // 通用响应类型
 import { listSystems, getSystemUsers, SystemItem, SystemUserItem } from './service.js'; // service 层和本地类型
+import { availableSystemsRoute } from '../trains/index.js'; // 可选系统路由
 
 // ========== 系统用户响应类型（本地定义，避免 shared 类型冗余） ==========
 /** 系统成员单条项（供前端下拉框使用） */
@@ -32,7 +33,7 @@ export async function systemRoutes(fastify: FastifyInstance): Promise<void> {
   );
 
   // ======================== 系统成员列表 ========================
-  fastify.get<{ Params: { id: string }; Reply: ApiResponse<SystemUser[]> }>(
+  fastify.get<{ Params: { id: string }; Reply: ApiResponse<SystemUserItem[]> }>(
     '/api/systems/:id/users',                          // GET /api/systems/:id/users
     {
       onRequest: [fastify.authenticate],                // 需要登录（所有角色可查看）
@@ -43,4 +44,8 @@ export async function systemRoutes(fastify: FastifyInstance): Promise<void> {
       return reply.send({ success: true, data: users }); // 返回成员列表
     },
   );
+
+  // ======================== 可选系统列表（供火车创建/编辑使用） ========================
+  // 注意：此路由必须在 /api/systems/:id/users 之后注册
+  await availableSystemsRoute(fastify);
 }

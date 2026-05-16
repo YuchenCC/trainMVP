@@ -28,6 +28,7 @@ import {
   listRequirements,                 // 需求列表 service（分页）
   changeRequirement,                // 需求变更 service
   changeSubStatus,                  // 子状态变更 service
+  emergencyChange,                  // 紧急变更 service
   RequirementSearchItem,            // 搜索单项类型
 } from './service.js';
 
@@ -324,6 +325,40 @@ export async function requirementRoutes(fastify: FastifyInstance): Promise<void>
       const subStatus = request.body.subStatus as ReqSubStatus;     // 目标子状态（类型转换）
       const comment = request.body.comment;                          // 变更说明（可选）
       const result = await changeSubStatus(request.params.id, userId, subStatus, comment); // 调用 service 子状态变更
+      return reply.send({ success: true, data: result });
+    },
+  );
+
+  // ======================== 紧急变更 ========================
+  fastify.post<{
+    Params: { id: string };
+    Body: { urgency: string; reason: string };
+    Reply: ApiResponse<RequirementDetail>;
+  }>(
+    '/api/requirements/:id/emergency-change',          // POST /api/requirements/:id/emergency-change
+    {
+      onRequest: [
+        fastify.authenticate,                            // 需要登录
+        rbacMiddleware(Operation.EMERGENCY_CHANGE),       // 需要 EMERGENCY_CHANGE 权限（BA/TRAIN_ADMIN）
+      ],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['urgency', 'reason'],                // 紧急程度和原因必填
+          properties: {
+            urgency: { type: 'string', enum: ['P0', 'P1'] }, // P0紧急/P1较紧急
+            reason: { type: 'string', minLength: 1, maxLength: 500 }, // 1-500 字
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const user = request.user as JwtPayload;                       // 从 JWT 提取用户信息
+      const userId = user.sub;                                       // 操作人 ID
+      const operatorRole = user.role;                                // 操作人角色
+      const urgency = request.body.urgency;                          // 紧急程度
+      const reason = request.body.reason;                            // 变更原因
+      const result = await emergencyChange(request.params.id, userId, operatorRole, urgency, reason); // 调用 service 紧急变更
       return reply.send({ success: true, data: result });
     },
   );
