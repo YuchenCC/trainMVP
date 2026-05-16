@@ -1,7 +1,7 @@
 # 代码结构映射 — 用户故事 → 代码文件
 
-**版本号**: v1.0
-**日期**: 2026-05-15
+**版本号**: v1.1
+**日期**: 2026-05-17
 **用途**: Bug 修复时快速定位代码文件，先判断属于哪个 US，再查此表
 
 ---
@@ -15,7 +15,8 @@ release-train/
 │   │   ├── modules/
 │   │   │   ├── auth/         # 认证模块
 │   │   │   ├── requirements/ # 需求模块 (核心)
-│   │   │   └── systems/      # 系统模块
+│   │   │   ├── systems/      # 系统模块
+│   │   │   └── trains/       # 版本火车模块
 │   │   ├── common/
 │   │   │   ├── errors/       # 错误处理
 │   │   │   ├── middleware/   # 中间件 (鉴权/校验)
@@ -30,6 +31,7 @@ release-train/
 │       │   └── dashboard/    # 仪表盘
 │       ├── components/
 │       │   ├── requirements/ # 需求组件
+│       │   ├── trains/       # 火车组件
 │       │   └── AuthGuard.tsx # 路由守卫
 │       ├── services/         # API 调用层
 │       ├── stores/           # 状态管理 (Zustand)
@@ -149,6 +151,88 @@ release-train/
 | 业务 | `apps/server/src/modules/requirements/service.ts` → `changeSubStatus()` | 后端业务逻辑 |
 | 常量 | `packages/shared/src/constants/index.ts` → `REQ_SUB_STATUS_*` | 子状态标签/颜色 |
 
+### US2.1 版本火车创建
+
+| 层级 | 文件 | 说明 |
+|------|------|------|
+| 页面 | `apps/web/src/pages/trains/create.tsx` | 创建火车页面 |
+| 组件 | `apps/web/src/components/trains/TrainForm.tsx` | 火车表单组件 |
+| API | `apps/web/src/services/train.ts` → `createTrain()` | 前端 API 调用 |
+| 路由 | `apps/server/src/modules/trains/index.ts` → `POST /api/trains` | 后端路由 |
+| 业务 | `apps/server/src/modules/trains/services/train.service.ts` → `createTrain()` | 后端业务逻辑 |
+| 类型 | `packages/shared/src/types/train.ts` | 火车类型定义 |
+| 测试 | `apps/server/src/__tests__/t2-us2.1-train-create.test.ts` | 后端测试 |
+
+### US2.2 火车班次创建
+
+| 层级 | 文件 | 说明 |
+|------|------|------|
+| 页面 | `apps/web/src/pages/trains/index.tsx` → 模态框 | 列表页创建班次模态框 |
+| API | `apps/web/src/pages/trains/index.tsx` → `handleCreateSubmit()` | 前端 API 调用 |
+| 路由 | `apps/server/src/modules/trains/routes/schedule.ts` → `POST /api/trains/:trainId/schedules` | 后端路由 |
+| 业务 | `apps/server/src/modules/trains/services/train.service.ts` → `createTrainSchedule()` | 后端业务逻辑（含自动生成班次名称逻辑） |
+| 工具 | `apps/server/src/modules/trains/utils/key-dates.ts` | 关键日期计算工具 |
+| 类型 | `packages/shared/src/types/train.ts` | 班次类型定义 |
+| 测试 | `apps/server/src/__tests__/t2-us2.2-train-schedule-create.test.ts` | 后端测试 |
+
+### US2.3 版本火车列表
+
+| 层级 | 文件 | 说明 |
+|------|------|------|
+| 页面 | `apps/web/src/pages/trains/index.tsx` | 火车+班次列表页 |
+| API | `apps/web/src/services/train.ts` → `listTrains()` | 前端 API 调用 |
+| 路由 | `apps/server/src/modules/trains/index.ts` → `GET /api/trains` | 后端路由 |
+| 业务 | `apps/server/src/modules/trains/services/train.service.ts` → `listTrains()` | 后端业务逻辑 |
+
+### US2.4 版本火车详情查看
+
+| 层级 | 文件 | 说明 |
+|------|------|------|
+| 页面 | `apps/web/src/pages/trains/[id].tsx` | 火车详情页 |
+| API | `apps/web/src/services/train.ts` → `getTrain()` | 前端 API 调用 |
+| 路由 | `apps/server/src/modules/trains/index.ts` → `GET /api/trains/:id` | 后端路由 |
+| 业务 | `apps/server/src/modules/trains/services/train.service.ts` → `getTrainById()` | 后端业务逻辑 |
+
+### US2.5 纳版搭载
+
+| 层级 | 文件 | 说明 |
+|------|------|------|
+| 页面 | `apps/web/src/pages/requirements/` 相关 | 需求列表/详情页纳版功能 |
+| 路由 | `apps/server/src/modules/trains/` 相关 | 后端路由 |
+| 业务 | `apps/server/src/modules/trains/services/train.service.ts` 相关 | 后端业务逻辑 |
+
+### US2.6 从火车移除
+
+| 层级 | 文件 | 说明 |
+|------|------|------|
+| 页面 | `apps/web/src/pages/trains/[id].tsx` 或相关 | 火车详情页移除需求 |
+| 路由 | `apps/server/src/modules/trains/` 相关 | 后端路由 |
+| 业务 | `apps/server/src/modules/trains/services/train.service.ts` 相关 | 后端业务逻辑 |
+
+### US2.7 确认投产
+
+| 层级 | 文件 | 说明 |
+|------|------|------|
+| 页面 | `apps/web/src/pages/trains/schedule-detail.tsx` | 班次详情页投产功能 |
+| 路由 | `apps/server/src/modules/trains/` 相关 | 后端路由 |
+| 业务 | `apps/server/src/modules/trains/services/train.service.ts` 相关 | 后端业务逻辑 |
+
+### US2.8 回滚
+
+| 层级 | 文件 | 说明 |
+|------|------|------|
+| 页面 | `apps/web/src/pages/trains/schedule-detail.tsx` | 班次详情页回滚功能 |
+| 路由 | `apps/server/src/modules/trains/` 相关 | 后端路由 |
+| 业务 | `apps/server/src/modules/trains/services/train.service.ts` 相关 | 后端业务逻辑 |
+
+### US2.9 完成版本火车
+
+| 层级 | 文件 | 说明 |
+|------|------|------|
+| 页面 | `apps/web/src/pages/trains/[id].tsx` | 火车详情页完成功能 |
+| 路由 | `apps/server/src/modules/trains/` 相关 | 后端路由 |
+| 业务 | `apps/server/src/modules/trains/services/train.service.ts` 相关 | 后端业务逻辑 |
+
 ---
 
 ## 通用模块映射
@@ -162,6 +246,8 @@ release-train/
 | 错误处理 | `apps/server/src/common/errors/index.ts` | 全部 |
 | 系统管理 | `apps/server/src/modules/systems/` + `apps/web/src/pages/systems/` | US1.1/US1.2 |
 | 系统 API | `apps/web/src/services/system.ts` | US1.1/US1.2 |
+| 火车管理 | `apps/server/src/modules/trains/` + `apps/web/src/pages/trains/` | US2.1~US2.9 |
+| 火车 API | `apps/web/src/services/train.ts` | US2.1~US2.9 |
 | 共享类型 | `packages/shared/src/types/` | 全部 |
 | 共享常量 | `packages/shared/src/constants/` | 全部 |
 | 数据库模型 | `apps/server/prisma/schema.prisma` | 全部 |
@@ -182,3 +268,9 @@ release-train/
 | 子状态不对 | US1.10 | `service.ts:changeSubStatus()` |
 | 系统下拉框无数据 | US1.1 | `services/system.ts` → `systems/service.ts:listSystems()` |
 | 登录/Token 问题 | T0 | `auth/index.ts` → `stores/auth.ts` |
+| 创建火车失败 | US2.1 | `TrainForm.tsx` → `train.service.ts:createTrain()` |
+| 创建班次失败 | US2.2 | `trains/index.tsx` 模态框 → `train.service.ts:createTrainSchedule()` |
+| 班次名称自动生成问题 | US2.2 | `train.service.ts:createTrainSchedule()` 第 769-770 行 |
+| 火车列表问题 | US2.3 | `trains/index.tsx` → `train.service.ts:listTrains()` |
+| 火车详情问题 | US2.4 | `trains/[id].tsx` → `train.service.ts:getTrainById()` |
+| 班次详情问题 | US2.4/US2.2 | `trains/schedule-detail.tsx` → `train.service.ts:getTrainScheduleById()` |

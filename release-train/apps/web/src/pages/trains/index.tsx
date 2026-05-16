@@ -228,7 +228,7 @@ const TrainsPage: React.FC = () => {
     setModalLoading(true);
     try {
       const res = await api.post(`/trains/${selectedTrainId}/schedules`, {
-        name: values.name,
+        ...(values.name && values.name.trim() ? { name: values.name.trim() } : {}),
         startDate: values.startDate.format('YYYY-MM-DD'),
         endDate: values.endDate.format('YYYY-MM-DD'),
         boardingDate: values.boardingDate?.format('YYYY-MM-DD'),
@@ -557,9 +557,9 @@ const TrainsPage: React.FC = () => {
           <Form.Item
             name="name"
             label="班次名称"
-            rules={[{ required: true, message: '请输入班次名称' }]}
+            extra={`可选，不填将自动生成：${selectedTrain?.name || '[火车名称]'} - 第${scheduleList.length + 1}班`}
           >
-            <Input placeholder="请输入班次名称" />
+            <Input placeholder="请输入班次名称（可选）" />
           </Form.Item>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -699,9 +699,9 @@ const TrainsPage: React.FC = () => {
           <Form.Item
             name="name"
             label="班次名称"
-            rules={[{ required: true, message: '请输入班次名称' }]}
+            extra="可选，不填将自动生成"
           >
-            <Input placeholder="请输入班次名称" />
+            <Input placeholder="请输入班次名称（可选）" />
           </Form.Item>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
