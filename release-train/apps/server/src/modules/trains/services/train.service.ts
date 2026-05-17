@@ -1325,18 +1325,19 @@ export async function precheckOnboard(
 }
 
 export async function getReadyRequirements(
-  trainId: string,
+  scheduleId: string,
 ): Promise<any> {
-  const train = await prisma.train.findUnique({
-    where: { id: trainId },
-    include: { trainSystems: { select: { systemId: true } } },
+  // 获取班次信息和关联的火车
+  const schedule = await prisma.trainSchedule.findUnique({
+    where: { id: scheduleId },
+    include: { train: { include: { trainSystems: { select: { systemId: true } } } } },
   });
 
-  if (!train) {
+  if (!schedule) {
     throw errors.trainNotFound();
   }
 
-  const systemIds = train.trainSystems.map(ts => ts.systemId);
+  const systemIds = schedule.train.trainSystems.map(ts => ts.systemId);
 
   const requirements = await prisma.requirement.findMany({
     where: {
@@ -1365,18 +1366,19 @@ export async function getReadyRequirements(
 }
 
 export async function getOnboardedRequirements(
-  trainId: string,
+  scheduleId: string,
 ): Promise<any> {
-  const train = await prisma.train.findUnique({
-    where: { id: trainId },
-    include: { trainSystems: { select: { systemId: true } } },
+  // 获取班次信息和关联的火车
+  const schedule = await prisma.trainSchedule.findUnique({
+    where: { id: scheduleId },
+    include: { train: { include: { trainSystems: { select: { systemId: true } } } } },
   });
 
-  if (!train) {
+  if (!schedule) {
     throw errors.trainNotFound();
   }
 
-  const systemIds = train.trainSystems.map(ts => ts.systemId);
+  const systemIds = schedule.train.trainSystems.map(ts => ts.systemId);
 
   const requirements = await prisma.requirement.findMany({
     where: {

@@ -155,7 +155,8 @@ export async function operationsRoutes(fastify: FastifyInstance): Promise<void> 
       schema: { params: trainParamsSchema },
     },
     async (request, reply) => {
-      const result = await getReadyRequirements(request.params.trainId);
+      const scheduleId = await getFirstScheduleId(request.params.trainId);
+      const result = await getReadyRequirements(scheduleId);
       return reply.status(200).send({ success: true, data: result });
     },
   );
@@ -171,7 +172,8 @@ export async function operationsRoutes(fastify: FastifyInstance): Promise<void> 
       schema: { params: trainParamsSchema },
     },
     async (request, reply) => {
-      const result = await getOnboardedRequirements(request.params.trainId);
+      const scheduleId = await getFirstScheduleId(request.params.trainId);
+      const result = await getOnboardedRequirements(scheduleId);
       return reply.status(200).send({ success: true, data: result });
     },
   );
