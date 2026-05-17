@@ -1,22 +1,56 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Typography, Button, Table, Space, Card, Select, Spin, message, Empty, Modal, Form, Input, DatePicker, Checkbox, Divider } from 'antd';
-import { PlusOutlined, SyncOutlined, CalendarOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import {
+  Typography,
+  Button,
+  Table,
+  Space,
+  Card,
+  Select,
+  Spin,
+  message,
+  Empty,
+  Tag,
+  Pagination,
+  Form,
+  Input,
+  DatePicker,
+  Checkbox,
+  Divider,
+  Modal,
+} from 'antd';
+import {
+  PlusOutlined,
+  SyncOutlined,
+  CalendarOutlined,
+  EyeOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  CheckCircleOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { trainService } from '../../services/train';
 import api from '../../services/api';
 import { useAuthStore } from '../../stores/auth';
-import { Role } from '@release-train/shared';
+import { Role, TrainStatus } from '@release-train/shared';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
+const { Option } = Select;
 
-interface TrainItem {
+// 火车列表项类型定义
+interface TrainListItem {
   id: string;
   name: string;
+  status: TrainStatus;
   description?: string;
+  startDate?: string;
+  endDate?: string;
+  boardingDate?: string;
+  lockdownDate?: string;
+  releaseDate?: string;
   systemCount: number;
-  scheduleCount: number;
+  requirementCount: number;
   createdAt: string;
 }
 
@@ -32,18 +66,6 @@ interface ScheduleItem {
   requirementCount: number;
   createdAt: string;
   version: number;
-}
-
-interface ScheduleListResponse {
-  success: boolean;
-  data?: {
-    list: ScheduleItem[];
-    pagination?: {
-      total: number;
-      page: number;
-      pageSize: number;
-    };
-  };
 }
 
 interface CustomKeyDate {
@@ -68,16 +90,20 @@ interface ScheduleDetail {
 const TrainsPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  
+
   const canCreateTrain = user?.role === Role.TRAIN_ADMIN || user?.role === Role.SUPER_ADMIN;
-  
+
+  // 火车列表相关状态
   const [loading, setLoading] = useState(false);
-  const [trainLoading, setTrainLoading] = useState(false);
-  const [trainList, setTrainList] = useState<TrainItem[]>([]);
-  const [selectedTrainId, setSelectedTrainId] = useState<string | undefined>(undefined);
+  const [trainList, setTrainList] = useState<TrainListItem[]>([]);
+  const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
+  const [statusFilter, setStatusFilter] = useState<TrainStatus | undefined>();
+
+  // 班次管理相关状态
+  const [selectedTrainId, setSelectedTrainId] = useState<string | undefined>();
   const [scheduleList, setScheduleList] = useState<ScheduleItem[]>([]);
-  const [scheduleTotal, setScheduleTotal] = useState(0);
-  
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+
   // 模态框状态
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -93,55 +119,50 @@ const TrainsPage: React.FC = () => {
   const [editCustomDates, setEditCustomDates] = useState<CustomKeyDate[]>([]);
 
   // 加载火车列表
-  const loadTrainList = useCallback(async () => {
-    setTrainLoading(true);
+  const loadTrainList = useCallback(async (page = 1, pageSize = 20) => {
+    setLoading(true);
     try {
-      const res = await trainService.list({ pageSize: 100 });
+      const res = await trainService.list({
+        status: statusFilter,
+        page,
+        pageSize,
+      });
       if (res.success && res.data) {
         setTrainList(res.data.list);
+        setPagination(res.data.pagination);
       }
     } catch (error) {
       console.error('加载火车列表失败:', error);
       message.error('加载火车列表失败');
     } finally {
-      setTrainLoading(false);
+      setLoading(false);
     }
-  }, []);
+  }, [statusFilter]);
 
   // 加载班次列表
   const loadScheduleList = useCallback(async (trainId: string) => {
-    setLoading(true);
+    setScheduleLoading(true);
     try {
-      const response = await api.get<ScheduleListResponse>(`/trains/${trainId}/schedules`);
+      const response = await api.get(`/trains/${trainId}/schedules`);
       const res = response.data;
       if (res.success && res.data) {
         setScheduleList(res.data.list || []);
-        setScheduleTotal(res.data.pagination?.total || res.data.list?.length || 0);
       } else {
         setScheduleList([]);
-        setScheduleTotal(0);
       }
     } catch (error) {
       console.error('加载班次列表失败:', error);
       message.error('加载班次列表失败');
       setScheduleList([]);
-      setScheduleTotal(0);
     } finally {
-      setLoading(false);
+      setScheduleLoading(false);
     }
   }, []);
 
-  // 初始化
+  // 初始化和刷新
   useEffect(() => {
-    loadTrainList();
-  }, [loadTrainList]);
-
-  // 当火车列表加载完成后，选中第一个
-  useEffect(() => {
-    if (trainList.length > 0 && !selectedTrainId) {
-      setSelectedTrainId(trainList[0].id);
-    }
-  }, [trainList, selectedTrainId]);
+    loadTrainList(pagination.page, pagination.pageSize);
+  }, [loadTrainList, pagination.page, pagination.pageSize]);
 
   // 火车切换时加载班次列表
   useEffect(() => {
@@ -150,17 +171,53 @@ const TrainsPage: React.FC = () => {
     }
   }, [selectedTrainId, loadScheduleList]);
 
-  const handleTrainChange = (trainId: string) => {
-    setSelectedTrainId(trainId);
-  };
-
   const handleRefresh = () => {
-    loadTrainList();
+    loadTrainList(pagination.page, pagination.pageSize);
     if (selectedTrainId) {
       loadScheduleList(selectedTrainId);
     }
   };
-  
+
+  const handleStatusChange = (status: TrainStatus | undefined) => {
+    setStatusFilter(status);
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  const handlePageChange = (page: number, pageSize: number) => {
+    setPagination(prev => ({ ...prev, page, pageSize }));
+  };
+
+  // 状态标签颜色映射
+  const getStatusColor = (status: TrainStatus) => {
+    switch (status) {
+      case TrainStatus.PLANNING:
+        return 'blue';
+      case TrainStatus.IN_PROGRESS:
+        return 'green';
+      case TrainStatus.COMPLETED:
+        return 'default';
+      case TrainStatus.CANCELLED:
+        return 'red';
+      default:
+        return 'default';
+    }
+  };
+
+  const getStatusText = (status: TrainStatus) => {
+    switch (status) {
+      case TrainStatus.PLANNING:
+        return '计划中';
+      case TrainStatus.IN_PROGRESS:
+        return '进行中';
+      case TrainStatus.COMPLETED:
+        return '已完成';
+      case TrainStatus.CANCELLED:
+        return '已取消';
+      default:
+        return status;
+    }
+  };
+
   // 打开创建班次模态框
   const handleCreateSchedule = () => {
     setCreateModalVisible(true);
@@ -169,7 +226,7 @@ const TrainsPage: React.FC = () => {
     setCreateCustomDates([]);
     createForm.resetFields();
   };
-  
+
   // 添加自定义关键日期
   const handleAddCustomDate = (type: 'create' | 'edit') => {
     if (type === 'create') {
@@ -178,7 +235,7 @@ const TrainsPage: React.FC = () => {
       setEditCustomDates([...editCustomDates, { name: '', date: null }]);
     }
   };
-  
+
   // 更新自定义关键日期
   const handleUpdateCustomDate = (type: 'create' | 'edit', index: number, field: keyof CustomKeyDate, value: any) => {
     const dates = type === 'create' ? [...createCustomDates] : [...editCustomDates];
@@ -189,7 +246,7 @@ const TrainsPage: React.FC = () => {
       setEditCustomDates(dates);
     }
   };
-  
+
   // 删除自定义关键日期
   const handleRemoveCustomDate = (type: 'create' | 'edit', index: number) => {
     const dates = type === 'create' ? [...createCustomDates] : [...editCustomDates];
@@ -200,7 +257,7 @@ const TrainsPage: React.FC = () => {
       setEditCustomDates(dates);
     }
   };
-  
+
   // 预览创建班次的关键日期
   const handleCreatePreviewDates = async () => {
     try {
@@ -221,7 +278,7 @@ const TrainsPage: React.FC = () => {
       message.error(err?.response?.data?.message || '获取关键日期失败');
     }
   };
-  
+
   // 提交创建班次
   const handleCreateSubmit = async (values: any) => {
     if (!selectedTrainId) return;
@@ -239,14 +296,14 @@ const TrainsPage: React.FC = () => {
           date: d.date ? dayjs(d.date).format('YYYY-MM-DD') : null,
         })),
       });
-      
+
       if (res.data.success) {
         message.success('创建成功');
         setCreateModalVisible(false);
         setCreateCustomDates([]);
         createForm.resetFields();
         // 刷新列表
-        loadTrainList();
+        loadTrainList(pagination.page, pagination.pageSize);
         loadScheduleList(selectedTrainId);
       } else {
         message.error(res.data.message || '创建失败');
@@ -257,7 +314,7 @@ const TrainsPage: React.FC = () => {
       setModalLoading(false);
     }
   };
-  
+
   // 打开编辑班次模态框
   const handleEditSchedule = async (record: ScheduleItem) => {
     if (!selectedTrainId) return;
@@ -284,7 +341,7 @@ const TrainsPage: React.FC = () => {
       message.error(err?.response?.data?.message || err?.message || '加载班次详情失败');
     }
   };
-  
+
   // 预览编辑班次的关键日期
   const handleEditPreviewDates = async () => {
     try {
@@ -305,7 +362,7 @@ const TrainsPage: React.FC = () => {
       message.error(err?.response?.data?.message || '获取关键日期失败');
     }
   };
-  
+
   // 提交编辑班次
   const handleEditSubmit = async (values: any) => {
     if (!selectedTrainId || !editingSchedule) return;
@@ -325,13 +382,13 @@ const TrainsPage: React.FC = () => {
         })),
         version: editingSchedule.version,
       });
-      
+
       if (res.data.success) {
         message.success('更新成功');
         setEditModalVisible(false);
         setEditCustomDates([]);
         // 刷新列表
-        loadTrainList();
+        loadTrainList(pagination.page, pagination.pageSize);
         loadScheduleList(selectedTrainId);
       } else {
         message.error(res.data.message || '更新失败');
@@ -343,7 +400,149 @@ const TrainsPage: React.FC = () => {
     }
   };
 
-  const selectedTrain = trainList.find(t => t.id === selectedTrainId);
+  // 火车列表列定义
+  const trainColumns: ColumnsType<TrainListItem> = [
+    {
+      title: '火车名称',
+      dataIndex: 'name',
+      key: 'name',
+      width: 200,
+      render: (name: string, record) => (
+        <a onClick={() => navigate(`/trains/${record.id}`)}>{name}</a>
+      ),
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      width: 100,
+      render: (status: TrainStatus) => (
+        <Tag color={getStatusColor(status)}>{getStatusText(status)}</Tag>
+      ),
+    },
+    {
+      title: '开始时间',
+      dataIndex: 'startDate',
+      key: 'startDate',
+      width: 120,
+      render: (date: string) => (date ? dayjs(date).format('YYYY-MM-DD') : '-'),
+    },
+    {
+      title: '结束时间',
+      dataIndex: 'endDate',
+      key: 'endDate',
+      width: 120,
+      render: (date: string) => (date ? dayjs(date).format('YYYY-MM-DD') : '-'),
+    },
+    {
+      title: '统一投产日',
+      dataIndex: 'releaseDate',
+      key: 'releaseDate',
+      width: 120,
+      render: (date: string) => (date ? dayjs(date).format('YYYY-MM-DD') : '-'),
+    },
+    {
+      title: '搭载系统',
+      dataIndex: 'systemCount',
+      key: 'systemCount',
+      width: 80,
+      align: 'center',
+      render: (count: number) => count || 0,
+    },
+    {
+      title: '已纳版需求',
+      dataIndex: 'requirementCount',
+      key: 'requirementCount',
+      width: 100,
+      align: 'center',
+      render: (count: number) => count || 0,
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 200,
+      fixed: 'right' as const,
+      render: (_, record) => (
+        <Space>
+          <Button
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => navigate(`/trains/${record.id}`)}
+          >
+            查看
+          </Button>
+          {canCreateTrain && record.status === TrainStatus.PLANNING && (
+            <>
+              <Button
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => navigate(`/trains/${record.id}/edit`)}
+              >
+                编辑
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={async () => {
+                  try {
+                    await trainService.cancel(record.id);
+                    message.success('火车已取消');
+                    loadTrainList(pagination.page, pagination.pageSize);
+                  } catch (err: any) {
+                    message.error(err?.response?.data?.message || '取消失败');
+                  }
+                }}
+              >
+                取消
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                icon={<CalendarOutlined />}
+                onClick={() => {
+                  setSelectedTrainId(record.id);
+                  handleCreateSchedule();
+                }}
+              >
+                创建班次
+              </Button>
+            </>
+          )}
+          {canCreateTrain && record.status === TrainStatus.IN_PROGRESS && (
+            <Button
+              type="link"
+              size="small"
+              icon={<CheckCircleOutlined />}
+              onClick={async () => {
+                try {
+                  await trainService.completeTrain(record.id);
+                  message.success('火车已完成');
+                  loadTrainList(pagination.page, pagination.pageSize);
+                } catch (err: any) {
+                  message.error(err?.response?.data?.message || '完成失败');
+                }
+              }}
+            >
+              完成
+            </Button>
+          )}
+          {canCreateTrain && (
+            <Button
+              type="link"
+              size="small"
+              onClick={() => setSelectedTrainId(record.id)}
+            >
+              管理班次
+            </Button>
+          )}
+        </Space>
+      ),
+    },
+  ];
 
   // 班次列表列定义
   const scheduleColumns: ColumnsType<ScheduleItem> = [
@@ -352,7 +551,9 @@ const TrainsPage: React.FC = () => {
       dataIndex: 'name',
       key: 'name',
       render: (name: string, record) => (
-        <a onClick={() => navigate(`/trains/${selectedTrainId}/schedules/${record.id}`)}>{name}</a>
+        <a onClick={() => navigate(`/trains/${selectedTrainId}/schedules/${record.id}`)}>
+          {name}
+        </a>
       ),
     },
     {
@@ -360,27 +561,27 @@ const TrainsPage: React.FC = () => {
       dataIndex: 'startDate',
       key: 'startDate',
       width: 110,
-      render: (date: string) => date ? dayjs(date).format('YYYY-MM-DD') : '-',
+      render: (date: string) => (date ? dayjs(date).format('YYYY-MM-DD') : '-'),
     },
     {
       title: '结束日期',
       dataIndex: 'endDate',
       key: 'endDate',
       width: 110,
-      render: (date: string) => date ? dayjs(date).format('YYYY-MM-DD') : '-',
+      render: (date: string) => (date ? dayjs(date).format('YYYY-MM-DD') : '-'),
     },
     {
       title: '统一投产日',
       dataIndex: 'releaseDate',
       key: 'releaseDate',
       width: 110,
-      render: (date: string) => date ? dayjs(date).format('YYYY-MM-DD') : '-',
+      render: (date: string) => (date ? dayjs(date).format('YYYY-MM-DD') : '-'),
     },
     {
       title: '搭载系统',
       dataIndex: 'systemCount',
       key: 'systemCount',
-      width: 90,
+      width: 80,
       align: 'center',
       render: (count: number) => count || 0,
     },
@@ -411,13 +612,15 @@ const TrainsPage: React.FC = () => {
     },
   ];
 
+  const selectedTrain = trainList.find(t => t.id === selectedTrainId);
+
   return (
     <div>
       {/* 顶部操作栏 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Title level={4} style={{ margin: 0 }}>版本火车</Title>
         <Space>
-          <Button icon={<SyncOutlined spin={loading || trainLoading} />} onClick={handleRefresh}>
+          <Button icon={<SyncOutlined spin={loading} />} onClick={handleRefresh}>
             刷新
           </Button>
           {canCreateTrain && (
@@ -428,118 +631,117 @@ const TrainsPage: React.FC = () => {
         </Space>
       </div>
 
-      {/* 火车选择器 */}
+      {/* 筛选区域 */}
       <Card style={{ marginBottom: 16 }}>
-        <Space size="large" wrap>
+        <Space size="large">
           <Space>
-            <Text type="secondary">选择火车：</Text>
+            <Text type="secondary">状态：</Text>
             <Select
-              value={selectedTrainId}
-              onChange={handleTrainChange}
-              style={{ width: 280 }}
-              placeholder="请选择火车"
-              showSearch
-              optionFilterProp="children"
-              filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-              loading={trainLoading}
-              options={trainList.map(train => ({
-                value: train.id,
-                label: train.name,
-              }))}
-            />
+              value={statusFilter}
+              onChange={handleStatusChange}
+              style={{ width: 150 }}
+              placeholder="全部"
+              allowClear
+            >
+              <Option value={TrainStatus.PLANNING}>计划中</Option>
+              <Option value={TrainStatus.IN_PROGRESS}>进行中</Option>
+              <Option value={TrainStatus.COMPLETED}>已完成</Option>
+              <Option value={TrainStatus.CANCELLED}>已取消</Option>
+            </Select>
           </Space>
-          {selectedTrain && (
-            <Space>
-              <Button 
-                size="small" 
-                icon={<EyeOutlined />}
-                onClick={() => navigate(`/trains/${selectedTrainId}`)}
-              >
-                查看火车
-              </Button>
-              {canCreateTrain && (
-                <Button 
-                  size="small" 
-                  icon={<EditOutlined />}
-                  onClick={() => navigate(`/trains/${selectedTrainId}/edit`)}
-                >
-                  编辑火车
-                </Button>
-              )}
-            </Space>
-          )}
-          {selectedTrain && (
-            <>
-              <Text type="secondary">|</Text>
-              <Text type="secondary">
-                搭载系统: {selectedTrain.systemCount}
-              </Text>
-              <Text type="secondary">|</Text>
-              <Text type="secondary">
-                班次: {selectedTrain.scheduleCount}
-              </Text>
-            </>
-          )}
         </Space>
       </Card>
 
-      {/* 班次列表 */}
-      <Card bodyStyle={{ padding: 0 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #f0f0f0', background: '#fafafa' }}>
-          <Text strong>
-            {selectedTrain ? `「${selectedTrain.name}」班次列表` : '请选择火车'}
-          </Text>
-          {canCreateTrain && selectedTrain && (
-            <Button 
-              type="primary" 
-              size="small" 
-              icon={<CalendarOutlined />}
-              onClick={handleCreateSchedule}
-            >
-              创建班次
-            </Button>
-          )}
-        </div>
-
+      {/* 火车列表 */}
+      <Card bodyStyle={{ padding: 0 }} style={{ marginBottom: 24 }}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60 }}>
             <Spin size="large" />
           </div>
-        ) : scheduleList.length === 0 ? (
-          <Empty 
-            image={Empty.PRESENTED_IMAGE_SIMPLE} 
-            description={
-              selectedTrain 
-                ? '暂无班次，请先创建班次' 
-                : '请先选择火车'
-            }
+        ) : trainList.length === 0 ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="暂无版本火车"
             style={{ padding: 60 }}
           >
-            {canCreateTrain && selectedTrain && (
-              <Button type="primary" onClick={handleCreateSchedule}>
-                创建班次
+            {canCreateTrain && (
+              <Button type="primary" onClick={() => navigate('/trains/new')}>
+                创建火车
               </Button>
             )}
           </Empty>
         ) : (
-          <Table
-            columns={scheduleColumns}
-            dataSource={scheduleList}
-            rowKey="id"
-            loading={loading}
-            pagination={{
-              pageSize: 20,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (total) => `共 ${total} 条`,
-            }}
-            locale={{ emptyText: '暂无班次数据' }}
-          />
+          <>
+            <Table
+              columns={trainColumns}
+              dataSource={trainList}
+              rowKey="id"
+              pagination={false}
+              scroll={{ x: 1200 }}
+            />
+            <div style={{ padding: '16px', textAlign: 'right' }}>
+              <Pagination
+                current={pagination.page}
+                pageSize={pagination.pageSize}
+                total={pagination.total}
+                onChange={handlePageChange}
+                showSizeChanger
+                showQuickJumper
+                showTotal={(total) => `共 ${total} 条`}
+              />
+            </div>
+          </>
         )}
       </Card>
-      
+
+      {/* 班次管理区域 */}
+      {selectedTrainId && (
+        <Card
+          title={
+            <Space>
+              <CalendarOutlined />
+              <span>{selectedTrain?.name} - 班次管理</span>
+            </Space>
+          }
+          extra={
+            <Space>
+              <Button onClick={() => setSelectedTrainId(undefined)}>关闭</Button>
+              {canCreateTrain && (
+                <Button type="primary" icon={<PlusOutlined />} onClick={handleCreateSchedule}>
+                  创建班次
+                </Button>
+              )}
+            </Space>
+          }
+          bodyStyle={{ padding: 0 }}
+        >
+          {scheduleLoading ? (
+            <div style={{ textAlign: 'center', padding: 60 }}>
+              <Spin size="large" />
+            </div>
+          ) : scheduleList.length === 0 ? (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="暂无班次"
+              style={{ padding: 60 }}
+            >
+              {canCreateTrain && (
+                <Button type="primary" onClick={handleCreateSchedule}>
+                  创建班次
+                </Button>
+              )}
+            </Empty>
+          ) : (
+            <Table
+              columns={scheduleColumns}
+              dataSource={scheduleList}
+              rowKey="id"
+              pagination={false}
+            />
+          )}
+        </Card>
+      )}
+
       {/* 创建班次模态框 */}
       <Modal
         title="创建班次"
@@ -580,8 +782,8 @@ const TrainsPage: React.FC = () => {
           </div>
 
           <Form.Item name="isManual" valuePropName="checked">
-            <Checkbox 
-              checked={createIsManual} 
+            <Checkbox
+              checked={createIsManual}
               onChange={(e) => setCreateIsManual(e.target.checked)}
             >
               手动设置关键日期
@@ -634,7 +836,7 @@ const TrainsPage: React.FC = () => {
           )}
 
           <Divider>自定义关键节点</Divider>
-          
+
           {createCustomDates.map((customDate, index) => (
             <div key={index} style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
               <div style={{ flex: 1 }}>
@@ -659,7 +861,7 @@ const TrainsPage: React.FC = () => {
               />
             </div>
           ))}
-          
+
           <Form.Item style={{ marginBottom: 16 }}>
             <Button
               type="dashed"
@@ -681,7 +883,7 @@ const TrainsPage: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
-      
+
       {/* 编辑班次模态框 */}
       <Modal
         title="编辑班次"
@@ -722,8 +924,8 @@ const TrainsPage: React.FC = () => {
           </div>
 
           <Form.Item name="isManual" valuePropName="checked">
-            <Checkbox 
-              checked={editIsManual} 
+            <Checkbox
+              checked={editIsManual}
               onChange={(e) => setEditIsManual(e.target.checked)}
             >
               手动设置关键日期
@@ -776,7 +978,7 @@ const TrainsPage: React.FC = () => {
           )}
 
           <Divider>自定义关键节点</Divider>
-          
+
           {editCustomDates.map((customDate, index) => (
             <div key={index} style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-start' }}>
               <div style={{ flex: 1 }}>
@@ -801,7 +1003,7 @@ const TrainsPage: React.FC = () => {
               />
             </div>
           ))}
-          
+
           <Form.Item style={{ marginBottom: 16 }}>
             <Button
               type="dashed"

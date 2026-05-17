@@ -153,7 +153,7 @@ export async function scheduleRoutes(fastify: FastifyInstance): Promise<void> {
   // 取消班次
   fastify.delete<{
     Params: { trainId: string; scheduleId: string };
-    Reply: ApiResponse<TrainScheduleDetailResponse>;
+    Reply: ApiResponse<void>;
   }>(
     '/api/trains/:trainId/schedules/:scheduleId',
     {
@@ -166,8 +166,8 @@ export async function scheduleRoutes(fastify: FastifyInstance): Promise<void> {
       },
     },
     async (request, reply) => {
-      const result = await cancelTrainSchedule(request.params.scheduleId);
-      return reply.status(200).send({ success: true, data: result });
+      await cancelTrainSchedule(request.params.scheduleId);
+      return reply.status(200).send({ success: true });
     },
   );
 

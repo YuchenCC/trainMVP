@@ -24,6 +24,7 @@ import { loginRoute, meRoute, seedRoute } from './modules/auth/index.js';
 import { requirementRoutes } from './modules/requirements/index.js';
 import { systemRoutes } from './modules/systems/index.js';
 import { trainRoutes } from './modules/trains/index.js';
+// import { userRoutes } from './modules/users/index.js';
 import { Operation } from '@release-train/shared';
 
 // 兜底加载当前目录的 .env（兼容 apps/server/.env 符号链接）
@@ -148,6 +149,7 @@ export async function createApp() {
   await app.register(systemRoutes);
   await app.register(requirementRoutes);
   await app.register(trainRoutes);
+  // await app.register(userRoutes);
 
   // ========== 健康检查 ==========
   app.get('/api/health', async () => ({

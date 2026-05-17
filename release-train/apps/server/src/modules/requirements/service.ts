@@ -268,9 +268,9 @@ async function buildRequirementDetail(
     },
     status: requirement.status,                            // 主状态
     subStatus: requirement.subStatus ?? undefined,          // 子状态（null → undefined）
-    train: requirement.train
-      ? { id: requirement.train.id, name: requirement.train.name } // 所属火车摘要（已纳版时有值）
-      : undefined,                                                   // null → undefined
+    train: requirement.trainSchedule?.train
+      ? { id: requirement.trainSchedule.train.id, name: requirement.trainSchedule.train.name } // 所属火车摘要（已纳版时有值）
+      : undefined,                                                           // null → undefined
     reqType: requirement.reqType ?? undefined,             // 需求类型（null → undefined）
     sourceChannel: requirement.sourceChannel ?? undefined,  // 来源渠道（null → undefined）
     version: requirement.version,                           // 乐观锁版本号
@@ -385,7 +385,7 @@ export async function createRequirement(
         ba: true,                            // 业务归属人
         pm: true,                            // 产品经理
         creator: true,                       // 创建人
-        train: true,                         // 所属火车（初始为 null）
+        trainSchedule: { include: { train: true } },                         // 所属火车（初始为 null）
       },
     });
 
@@ -439,7 +439,7 @@ export async function getRequirementById(id: string): Promise<RequirementDetail>
       ba: true,       // 业务归属人
       pm: true,       // 产品经理
       creator: true,  // 创建人
-      train: true,    // 所属火车（初始为 null，已纳版时有值）
+      trainSchedule: { include: { train: true } },    // 所属火车（初始为 null，已纳版时有值）
     },
   });
 
@@ -479,7 +479,7 @@ export async function updateRequirement(
   // 1. 查询现有需求（含关联数据，用于后续校验和返回）
   const existing = await prisma.requirement.findUnique({
     where: { id },
-    include: { system: true, ba: true, pm: true, creator: true, train: true },
+    include: { system: true, ba: true, pm: true, creator: true, trainSchedule: { include: { train: true } } },
   });
 
   // 需求不存在
@@ -634,7 +634,7 @@ export async function updateRequirement(
         ba: true,
         pm: true,
         creator: true,
-        train: true,
+        trainSchedule: { include: { train: true } },
       },
     });
 
@@ -729,7 +729,7 @@ export async function emergencyChange(
         ba: true,
         pm: true,
         creator: true,
-        train: true,
+        trainSchedule: { include: { train: true } },
       },
     });
 
@@ -777,14 +777,8 @@ export async function cancelRequirement(
   // 1. 查询需求存在性（含权限校验所需字段）
   const existing = await prisma.requirement.findUnique({
     where: { id },
-    select: {
-      id: true,
-      status: true,
-      baId: true,
-      trainId: true,
-      storyPoints: true,
-      systemId: true,
-      version: true,
+    include: {
+      trainSchedule: { select: { trainId: true } },
     },
   });
 
@@ -838,9 +832,9 @@ export async function cancelRequirement(
       version: { increment: 1 },
     };
 
-    // 如果已纳版（trainId 不为空），清除火车关联
-    if (existing.trainId) {
-      updateData.trainId = null;
+    // 如果已纳版（scheduleId 不为空），清除火车关联
+    if (existing.scheduleId) {
+      updateData.scheduleId = null;
     }
 
     // 6c. 更新需求状态
@@ -850,10 +844,10 @@ export async function cancelRequirement(
     });
 
     // 6d. 如果已纳版，返还容量到 TrainSystem
-    if (existing.trainId) {
+    if (existing.trainSchedule?.trainId) {
       const trainSystem = await tx.trainSystem.findFirst({
         where: {
-          trainId: existing.trainId,
+          trainId: existing.trainSchedule.trainId,
           systemId: existing.systemId,
         },
       });
@@ -887,7 +881,7 @@ export async function cancelRequirement(
         ba: true,
         pm: true,
         creator: true,
-        train: true,
+        trainSchedule: { include: { train: true } },
       },
     });
 
@@ -1013,7 +1007,7 @@ export async function submitReview(
         ba: true,
         pm: true,
         creator: true,
-        train: true,
+        trainSchedule: { include: { train: true } },
       },
     });
 
@@ -1114,7 +1108,7 @@ export async function reviewPass(
         ba: true,
         pm: true,
         creator: true,
-        train: true,
+        trainSchedule: { include: { train: true } },
       },
     });
 
@@ -1224,7 +1218,7 @@ export async function reviewReject(
         ba: true,
         pm: true,
         creator: true,
-        train: true,
+        trainSchedule: { include: { train: true } },
       },
     });
 
@@ -1258,14 +1252,8 @@ export async function changeRequirement(
   // 1. 查询需求存在性（含版本号用于乐观锁）
   const existing = await prisma.requirement.findUnique({
     where: { id },
-    select: {
-      id: true,
-      status: true,
-      subStatus: true,
-      trainId: true,
-      systemId: true,
-      storyPoints: true,
-      version: true,
+    include: {
+      trainSchedule: { select: { trainId: true } },
     },
   });
 
@@ -1313,16 +1301,16 @@ export async function changeRequirement(
     };
 
     // 6b. 如果是已纳版状态，清除火车关联
-    if (existing.status === 'ONBOARDED' && existing.trainId) {
+    if (existing.status === 'ONBOARDED' && existing.scheduleId) {
       // 清除火车关联
-      updateData.trainId = null;
+      updateData.scheduleId = null;
 
       // 6c. 释放火车容量（如果需求有 storyPoints）
       // 容量在 TrainSystem.usedPoints 上管理
-      if (existing.storyPoints && existing.storyPoints > 0 && existing.trainId && existing.systemId) {
+      if (existing.storyPoints && existing.storyPoints > 0 && existing.trainSchedule?.trainId && existing.systemId) {
         await tx.trainSystem.updateMany({
           where: {
-            trainId: existing.trainId,
+            trainId: existing.trainSchedule.trainId,
             systemId: existing.systemId,
           },
           data: {
@@ -1366,7 +1354,7 @@ export async function changeRequirement(
         ba: true,
         pm: true,
         creator: true,
-        train: true,
+        trainSchedule: { include: { train: true } },
       },
     });
 
@@ -1453,7 +1441,7 @@ export async function reEdit(
         ba: true,
         pm: true,
         creator: true,
-        train: true,
+        trainSchedule: { include: { train: true } },
       },
     });
 
@@ -1710,7 +1698,7 @@ export async function changeSubStatus(
         ba: true,
         pm: true,
         creator: true,
-        train: true,
+        trainSchedule: { include: { train: true } },
       },
     });
 

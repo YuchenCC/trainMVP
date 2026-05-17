@@ -9,6 +9,7 @@ import {
   CreateTrainScheduleRequest,
   UpdateTrainScheduleRequest,
   PreviewKeyDatesRequest,
+  AvailableSystem,
 } from '@release-train/shared';
 import { errors } from '../../../common/errors/index.js';
 import { prisma } from '../../../prisma/index.js';
@@ -124,12 +125,12 @@ async function getUserDisplayName(userId: string | null): Promise<{ id: string; 
 async function checkSystemConflict(
   systemId: string,
   excludeTrainId?: string,
-): Promise<{ conflict: boolean; train?: { id: string; name: string } }> {
+): Promise<{ conflict: boolean; train?: { id: string; name: string; status: string } }> {
   const trainSystems = await prisma.trainSystem.findMany({
     where: { systemId },
     include: {
       train: {
-        select: { id: true, name: true },
+        select: { id: true, name: true, status: true },
       },
     },
   });
@@ -144,7 +145,7 @@ async function checkSystemConflict(
   if (conflictTrain) {
     return {
       conflict: true,
-      train: conflictTrain.train as { id: string; name: string },
+      train: conflictTrain.train as { id: string; name: string; status: string },
     };
   }
 
@@ -689,21 +690,12 @@ export async function updateTrainSystem(
   };
 }
 
-interface AvailableSystemResponse {
-  id: string;
-  name: string;
-  conflictTrain?: {
-    id: string;
-    name: string;
-  };
-}
-
-export async function getAvailableSystems(trainId?: string): Promise<AvailableSystemResponse[]> {
+export async function getAvailableSystems(trainId?: string): Promise<AvailableSystem[]> {
   const systems = await prisma.system.findMany({
     orderBy: { name: 'asc' },
     include: {
       trainSystems: {
-        include: { train: { select: { id: true, name: true } } },
+        include: { train: { select: { id: true, name: true, status: true } } },
       },
     },
   });
@@ -718,9 +710,9 @@ export async function getAvailableSystems(trainId?: string): Promise<AvailableSy
       id: system.id,
       name: system.name,
       conflictTrain: conflictTrain
-        ? { id: conflictTrain.train.id, name: conflictTrain.train.name }
+        ? { id: conflictTrain.train.id, name: conflictTrain.train.name, status: conflictTrain.train.status as any }
         : undefined,
-    };
+    } as AvailableSystem;
   });
 }
 
@@ -1076,6 +1068,651 @@ export async function previewKeyDates(
     lockdownDate: keyDates.lockdownDate.toISOString().split('T')[0],
     releaseDate: keyDates.releaseDate.toISOString().split('T')[0],
   };
+}
+
+// ========== US2.5 - 纳版搭载相关函数 ==========
+
+function getRiskLevel(
+  status: string,
+  dependencyScheduleId: string | null,
+  targetScheduleId: string,
+): 'none' | 'warning' | 'high' | 'critical' {
+  if (status === 'RELEASED') return 'none';
+  if (status === 'ONBOARDED' && dependencyScheduleId === targetScheduleId) return 'none';
+  
+  if (status === 'CANCELLED') return 'critical';
+  
+  if (status === 'DRAFT' || status === 'PENDING_REVIEW' || status === 'REJECTED') return 'high';
+  
+  if (status === 'READY') return 'warning';
+  
+  return 'warning';
+}
+
+function getRiskMessage(riskLevel: string, reqCode: string, status: string): string {
+  switch (riskLevel) {
+    case 'none':
+      return `依赖 ${reqCode} 已满足`;
+    case 'warning':
+      return `依赖 ${reqCode} 已就绪但未纳入本车，纳版后可能影响开发进度`;
+    case 'high':
+      return `依赖 ${reqCode} 状态为[${status}]，纳版后可能阻塞开发`;
+    case 'critical':
+      return `依赖 ${reqCode} 已取消，请重新评估需求依赖`;
+    default:
+      return `依赖 ${reqCode} 状态异常`;
+  }
+}
+
+async function checkDependencyRisk(
+  requirementId: string,
+  scheduleId: string,
+): Promise<{ hasRisk: boolean; risks: any[] }> {
+  const dependencies = await prisma.requirementDependency.findMany({
+    where: { dependantId: requirementId },
+    include: {
+      dependency: {
+        select: {
+          id: true,
+          reqCode: true,
+          title: true,
+          status: true,
+          scheduleId: true,
+        },
+      },
+    },
+  });
+
+  if (dependencies.length === 0) {
+    return { hasRisk: false, risks: [] };
+  }
+
+  const risks: any[] = [];
+
+  for (const dep of dependencies) {
+    const { dependency } = dep;
+    const riskLevel = getRiskLevel(dependency.status, dependency.scheduleId, scheduleId);
+    
+    risks.push({
+      dependencyId: dependency.id,
+      reqCode: dependency.reqCode,
+      title: dependency.title,
+      dependencyStatus: dependency.status,
+      riskLevel,
+      message: getRiskMessage(riskLevel, dependency.reqCode, dependency.status),
+    });
+  }
+
+  const hasRisk = risks.some((r) => r.riskLevel !== 'none');
+
+  return { hasRisk, risks };
+}
+
+async function checkCapacityImpact(
+  scheduleId: string,
+  requirementSystemId: string,
+  storyPoints: number,
+): Promise<any> {
+  const snapshot = await prisma.trainSystemSnapshot.findUnique({
+    where: {
+      trainScheduleId_systemId: { trainScheduleId: scheduleId, systemId: requirementSystemId },
+    },
+    include: {
+      system: { select: { name: true } },
+    },
+  });
+
+  if (!snapshot) {
+    return {
+      valid: false,
+      error: 'SYSTEM_NOT_CONFIGURED',
+      message: '需求归属系统未配置到本车次',
+    };
+  }
+
+  const remainingPoints = snapshot.capacityPoints - snapshot.usedPoints;
+  const afterOnboard = remainingPoints - storyPoints;
+  const hasCapacity = afterOnboard >= 0;
+
+  return {
+    valid: true,
+    hasCapacity,
+    systemName: snapshot.system.name,
+    capacityPoints: snapshot.capacityPoints,
+    usedPoints: snapshot.usedPoints,
+    remainingPoints,
+    afterOnboard,
+    storyPoints,
+  };
+}
+
+export async function precheckOnboard(
+  scheduleId: string,
+  requirementIds: string[],
+): Promise<any> {
+  const schedule = await prisma.trainSchedule.findUnique({
+    where: { id: scheduleId },
+    include: {
+      snapshots: true,
+    },
+  });
+
+  if (!schedule) {
+    throw errors.trainNotFound();
+  }
+
+  const results: any[] = [];
+  let canOnboardCount = 0;
+  let hasDependencyRiskCount = 0;
+  let hasCapacityWarningCount = 0;
+
+  for (const reqId of requirementIds) {
+    const req = await prisma.requirement.findUnique({
+      where: { id: reqId },
+      include: {
+        system: { select: { id: true, name: true } },
+      },
+    });
+
+    if (!req) {
+      continue;
+    }
+
+    const systemConfigured = schedule.snapshots.some(s => s.systemId === req.systemId);
+    const dependencyCheck = await checkDependencyRisk(reqId, scheduleId);
+    const capacityCheck = await checkCapacityImpact(scheduleId, req.systemId, req.storyPoints);
+
+    const result = {
+      requirementId: req.id,
+      reqCode: req.reqCode,
+      title: req.title,
+      system: req.system,
+      storyPoints: req.storyPoints,
+      systemConfigured,
+      dependencyCheck,
+      capacityCheck,
+    };
+
+    results.push(result);
+
+    if (systemConfigured && req.status === 'READY') {
+      canOnboardCount++;
+    }
+    if (dependencyCheck.hasRisk) {
+      hasDependencyRiskCount++;
+    }
+    if (!capacityCheck.hasCapacity) {
+      hasCapacityWarningCount++;
+    }
+  }
+
+  return {
+    valid: true,
+    results,
+    summary: {
+      totalCount: results.length,
+      canOnboardCount,
+      hasDependencyRiskCount,
+      hasCapacityWarningCount,
+    },
+  };
+}
+
+export async function getReadyRequirements(
+  trainId: string,
+): Promise<any> {
+  const train = await prisma.train.findUnique({
+    where: { id: trainId },
+    include: { trainSystems: { select: { systemId: true } } },
+  });
+
+  if (!train) {
+    throw errors.trainNotFound();
+  }
+
+  const systemIds = train.trainSystems.map(ts => ts.systemId);
+
+  const requirements = await prisma.requirement.findMany({
+    where: {
+      status: 'READY',
+      systemId: { in: systemIds },
+    },
+    include: {
+      system: { select: { id: true, name: true } },
+      ba: { select: { id: true, displayName: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return {
+    list: requirements.map(req => ({
+      id: req.id,
+      reqCode: req.reqCode,
+      title: req.title,
+      system: req.system,
+      priority: req.priority,
+      storyPoints: req.storyPoints,
+      ba: req.ba,
+      createdAt: req.createdAt.toISOString(),
+    })),
+  };
+}
+
+export async function onboardRequirements(
+  scheduleId: string,
+  data: any,
+  userId: string,
+): Promise<any> {
+  const schedule = await prisma.trainSchedule.findUnique({
+    where: { id: scheduleId },
+  });
+
+  if (!schedule) {
+    throw errors.trainNotFound();
+  }
+
+  let onboardedCount = 0;
+
+  await prisma.$transaction(async (tx) => {
+    for (const reqId of data.requirementIds) {
+      const req = await tx.requirement.findUnique({
+        where: { id: reqId },
+      });
+
+      if (!req) {
+        continue;
+      }
+      if (req.status !== 'READY') {
+        continue;
+      }
+
+      const snapshot = await tx.trainSystemSnapshot.findUnique({
+        where: {
+          trainScheduleId_systemId: { trainScheduleId: scheduleId, systemId: req.systemId },
+        },
+      });
+
+      if (!snapshot) {
+        continue;
+      }
+
+      await tx.requirement.update({
+        where: { id: reqId },
+        data: {
+          status: 'ONBOARDED',
+          subStatus: 'DEV_IN_PROGRESS',
+          scheduleId: scheduleId,
+        },
+      });
+
+      await tx.trainSystemSnapshot.update({
+        where: { id: snapshot.id },
+        data: {
+          usedPoints: { increment: req.storyPoints },
+        },
+      });
+
+      await tx.statusLog.create({
+        data: {
+          requirementId: reqId,
+          operationType: 'ONBOARD',
+          fromStatus: req.status,
+          toStatus: 'ONBOARDED',
+          operatorId: userId,
+        },
+      });
+
+      onboardedCount++;
+    }
+  });
+
+  return {
+    success: true,
+    onboardedCount,
+  };
+}
+
+// ========== US2.6 - 从火车移除相关函数 ==========
+export async function removeFromTrain(
+  scheduleId: string,
+  requirementId: string,
+  reason: string,
+  userId: string,
+): Promise<any> {
+  const schedule = await prisma.trainSchedule.findUnique({
+    where: { id: scheduleId },
+  });
+
+  if (!schedule) {
+    throw errors.trainNotFound();
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const req = await tx.requirement.findUnique({
+      where: { id: requirementId },
+    });
+
+    if (!req) {
+      throw errors.requirementNotFound();
+    }
+    if (req.status !== 'ONBOARDED') {
+      throw errors.badRequest('只有已纳版的需求可移除');
+    }
+    if (req.scheduleId !== scheduleId) {
+      throw errors.badRequest('该需求不属于本车次');
+    }
+
+    const snapshot = await tx.trainSystemSnapshot.findUnique({
+      where: {
+        trainScheduleId_systemId: { trainScheduleId: scheduleId, systemId: req.systemId },
+      },
+    });
+
+    await tx.requirement.update({
+      where: { id: requirementId },
+      data: {
+        status: 'READY',
+        subStatus: null,
+        scheduleId: null,
+      },
+    });
+
+    if (snapshot) {
+      await tx.trainSystemSnapshot.update({
+        where: { id: snapshot.id },
+        data: {
+          usedPoints: { decrement: req.storyPoints },
+        },
+      });
+    }
+
+    await tx.statusLog.create({
+      data: {
+        requirementId,
+        operationType: 'REMOVE',
+        fromStatus: req.status,
+        toStatus: 'READY',
+        reason,
+        operatorId: userId,
+      },
+    });
+  });
+
+  return { success: true };
+}
+
+export async function batchRemoveFromTrain(
+  scheduleId: string,
+  requirementIds: string[],
+  reason: string,
+  userId: string,
+): Promise<any> {
+  let count = 0;
+
+  await prisma.$transaction(async (tx) => {
+    for (const reqId of requirementIds) {
+      const req = await tx.requirement.findUnique({
+        where: { id: reqId },
+      });
+
+      if (!req || req.status !== 'ONBOARDED' || req.scheduleId !== scheduleId) {
+        continue;
+      }
+
+      const snapshot = await tx.trainSystemSnapshot.findUnique({
+        where: {
+          trainScheduleId_systemId: { trainScheduleId: scheduleId, systemId: req.systemId },
+        },
+      });
+
+      await tx.requirement.update({
+        where: { id: reqId },
+        data: {
+          status: 'READY',
+          subStatus: null,
+          scheduleId: null,
+        },
+      });
+
+      if (snapshot) {
+        await tx.trainSystemSnapshot.update({
+          where: { id: snapshot.id },
+          data: {
+            usedPoints: { decrement: req.storyPoints },
+          },
+        });
+      }
+
+      await tx.statusLog.create({
+        data: {
+          requirementId: reqId,
+          operationType: 'REMOVE',
+          fromStatus: req.status,
+          toStatus: 'READY',
+          reason,
+          operatorId: userId,
+        },
+      });
+
+      count++;
+    }
+  });
+
+  return { success: true, count };
+}
+
+// ========== US2.7 - 确认投产相关函数 ==========
+export async function releaseRequirement(
+  scheduleId: string,
+  requirementId: string,
+  userId: string,
+): Promise<any> {
+  const schedule = await prisma.trainSchedule.findUnique({
+    where: { id: scheduleId },
+  });
+
+  if (!schedule) {
+    throw errors.trainNotFound();
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const req = await tx.requirement.findUnique({
+      where: { id: requirementId },
+    });
+
+    if (!req) {
+      throw errors.requirementNotFound();
+    }
+    if (req.status !== 'ONBOARDED') {
+      throw errors.badRequest('只有已纳版的需求可投产');
+    }
+    if (req.scheduleId !== scheduleId) {
+      throw errors.badRequest('该需求不属于本车次');
+    }
+
+    await tx.requirement.update({
+      where: { id: requirementId },
+      data: {
+        status: 'RELEASED',
+        subStatus: null,
+      },
+    });
+
+    await tx.statusLog.create({
+      data: {
+        requirementId,
+        operationType: 'RELEASE',
+        fromStatus: req.status,
+        toStatus: 'RELEASED',
+        operatorId: userId,
+      },
+    });
+  });
+
+  return { success: true };
+}
+
+export async function batchReleaseRequirements(
+  scheduleId: string,
+  requirementIds: string[],
+  userId: string,
+): Promise<any> {
+  let count = 0;
+
+  await prisma.$transaction(async (tx) => {
+    for (const reqId of requirementIds) {
+      const req = await tx.requirement.findUnique({
+        where: { id: reqId },
+      });
+
+      if (!req || req.status !== 'ONBOARDED' || req.scheduleId !== scheduleId) {
+        continue;
+      }
+
+      await tx.requirement.update({
+        where: { id: reqId },
+        data: {
+          status: 'RELEASED',
+          subStatus: null,
+        },
+      });
+
+      await tx.statusLog.create({
+        data: {
+          requirementId: reqId,
+          operationType: 'RELEASE',
+          fromStatus: req.status,
+          toStatus: 'RELEASED',
+          operatorId: userId,
+        },
+      });
+
+      count++;
+    }
+  });
+
+  return { success: true, count };
+}
+
+// ========== US2.8 - 回滚相关函数 ==========
+export async function rollbackRequirement(
+  scheduleId: string,
+  requirementId: string,
+  reason: string,
+  userId: string,
+): Promise<any> {
+  const schedule = await prisma.trainSchedule.findUnique({
+    where: { id: scheduleId },
+  });
+
+  if (!schedule) {
+    throw errors.trainNotFound();
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const req = await tx.requirement.findUnique({
+      where: { id: requirementId },
+    });
+
+    if (!req) {
+      throw errors.requirementNotFound();
+    }
+    if (req.status !== 'RELEASED') {
+      throw errors.badRequest('只有已投产的需求可回滚');
+    }
+    if (req.scheduleId !== scheduleId) {
+      throw errors.badRequest('该需求不属于本车次');
+    }
+
+    await tx.requirement.update({
+      where: { id: requirementId },
+      data: {
+        status: 'READY',
+        subStatus: null,
+        // 保留 scheduleId，不清除
+      },
+    });
+
+    await tx.statusLog.create({
+      data: {
+        requirementId,
+        operationType: 'ROLLBACK',
+        fromStatus: req.status,
+        toStatus: 'READY',
+        reason,
+        operatorId: userId,
+      },
+    });
+  });
+
+  return { success: true };
+}
+
+// ========== US2.9 - 完成火车相关函数 ==========
+export async function checkComplete(
+  trainId: string,
+): Promise<any> {
+  const train = await prisma.train.findUnique({
+    where: { id: trainId },
+    include: {
+      schedules: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        include: {
+          requirements: {
+            where: { status: 'ONBOARDED' },
+            select: { id: true, reqCode: true, title: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!train) {
+    throw errors.trainNotFound();
+  }
+
+  const latestSchedule = train.schedules[0];
+  const currentDate = new Date().toISOString().split('T')[0];
+  let releaseDatePassed = false;
+  let releaseDate = '';
+  let onboardedRequirementsCount = 0;
+  let onboardedRequirements: any[] = [];
+
+  if (latestSchedule) {
+    releaseDate = latestSchedule.releaseDate ? latestSchedule.releaseDate.toISOString().split('T')[0] : '';
+    releaseDatePassed = latestSchedule.releaseDate ? new Date() >= latestSchedule.releaseDate : false;
+    onboardedRequirementsCount = latestSchedule.requirements.length;
+    onboardedRequirements = latestSchedule.requirements;
+  }
+
+  const canComplete = releaseDatePassed && onboardedRequirementsCount === 0;
+
+  return {
+    canComplete,
+    releaseDatePassed,
+    currentDate,
+    releaseDate,
+    onboardedRequirementsCount,
+    onboardedRequirements,
+  };
+}
+
+export async function completeTrain(
+  trainId: string,
+): Promise<any> {
+  const checkResult = await checkComplete(trainId);
+
+  if (!checkResult.canComplete) {
+    throw errors.badRequest('不满足完成条件');
+  }
+
+  await prisma.train.update({
+    where: { id: trainId },
+    data: { status: 'COMPLETED' },
+  });
+
+  return { success: true };
 }
 
 export type {

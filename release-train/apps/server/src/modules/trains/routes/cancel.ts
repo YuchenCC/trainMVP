@@ -2,7 +2,7 @@
 // POST /api/trains/:id/cancel - 取消版本火车
 import { FastifyInstance } from 'fastify';
 import { ApiResponse } from '@release-train/shared';
-import { cancelTrain, TrainDetailResponse } from '../services/train.service.js';
+import { cancelTrain } from '../services/train.service.js';
 
 // 路径参数校验 Schema
 const cancelTrainParamsSchema = {
@@ -18,7 +18,7 @@ const cancelTrainParamsSchema = {
  * @param fastify - Fastify 实例
  */
 export async function cancelTrainRoute(fastify: FastifyInstance): Promise<void> {
-  fastify.post<{ Params: { id: string }; Reply: ApiResponse<TrainDetailResponse> }>(
+  fastify.post<{ Params: { id: string }; Reply: ApiResponse<void> }>(
     '/api/trains/:id/cancel',
     {
       onRequest: [fastify.authenticate],
@@ -27,8 +27,8 @@ export async function cancelTrainRoute(fastify: FastifyInstance): Promise<void> 
       },
     },
     async (request, reply) => {
-      const result = await cancelTrain(request.params.id);
-      return reply.send({ success: true, data: result });
+      await cancelTrain(request.params.id);
+      return reply.send({ success: true });
     },
   );
 }

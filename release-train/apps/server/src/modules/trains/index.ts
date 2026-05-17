@@ -9,6 +9,7 @@ import { cancelTrainRoute } from './routes/cancel.js';
 import { systemsRoutes } from './routes/systems.js';
 import { availableSystemsRoute } from './routes/available-systems.js';
 import { scheduleRoutes } from './routes/schedule.js';
+import { operationsRoutes } from './routes/operations.js';
 
 /**
  * 注册火车模块所有路由到 Fastify 实例
@@ -32,6 +33,9 @@ export async function trainRoutes(fastify: FastifyInstance): Promise<void> {
 
   // 班次管理路由
   await scheduleRoutes(fastify);
+
+  // 操作路由（US2.5-2.9）
+  await operationsRoutes(fastify);
 }
 
 // 单独导出可选系统路由（在 systems 模块中注册）

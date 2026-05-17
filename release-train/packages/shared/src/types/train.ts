@@ -275,9 +275,136 @@ export interface PreviewKeyDatesRequest {
   endDate: string;
 }
 
-// ========== 预览关键日期响应（US2.2 新增）
+// ========== 预览关键日期响应（US2.2 新增） ==========
 export interface PreviewKeyDatesResponse {
   boardingDate: string;
   lockdownDate: string;
   releaseDate: string;
+}
+
+// ========== US2.5 - 纳版搭载相关类型 ==========
+export interface PrecheckOnboardRequest {
+  requirementIds: string[];
+}
+
+export interface DependencyRisk {
+  dependencyId: string;
+  reqCode: string;
+  title: string;
+  dependencyStatus: string;
+  riskLevel: 'none' | 'warning' | 'high' | 'critical';
+  message: string;
+}
+
+export interface PrecheckOnboardResultItem {
+  requirementId: string;
+  reqCode: string;
+  title: string;
+  system: { id: string; name: string };
+  storyPoints: number;
+  systemConfigured: boolean;
+  dependencyCheck: {
+    hasRisk: boolean;
+    risks: DependencyRisk[];
+  };
+  capacityCheck: {
+    hasCapacity: boolean;
+    systemName: string;
+    remainingPoints: number;
+    afterOnboard: number;
+  };
+}
+
+export interface PrecheckOnboardResponse {
+  valid: boolean;
+  results: PrecheckOnboardResultItem[];
+  summary: {
+    totalCount: number;
+    canOnboardCount: number;
+    hasDependencyRiskCount: number;
+    hasCapacityWarningCount: number;
+  };
+}
+
+export interface OnboardRequest {
+  requirementIds: string[];
+  confirmedRisks?: {
+    requirementId: string;
+    riskLevel: 'warning' | 'high' | 'critical';
+    confirmedNote?: string;
+  }[];
+}
+
+export interface OnboardResponse {
+  success: boolean;
+  onboardedCount: number;
+}
+
+export interface ReadyRequirementItem {
+  id: string;
+  reqCode: string;
+  title: string;
+  system: { id: string; name: string };
+  priority: string;
+  storyPoints: number;
+  ba: { id: string; displayName: string };
+  createdAt: string;
+}
+
+export interface ReadyRequirementsResponse {
+  list: ReadyRequirementItem[];
+}
+
+// ========== US2.6 - 从火车移除相关类型 ==========
+export interface RemoveFromTrainRequest {
+  reason: string;
+}
+
+export interface BatchRemoveFromTrainRequest {
+  requirementIds: string[];
+  reason: string;
+}
+
+export interface BatchOperationResult {
+  success: boolean;
+  count: number;
+}
+
+// ========== US2.7 - 确认投产相关类型 ==========
+export interface BatchReleaseRequest {
+  requirementIds: string[];
+}
+
+// ========== US2.8 - 回滚相关类型 ==========
+export interface RollbackRequest {
+  reason: string;
+}
+
+// ========== US2.9 - 完成火车相关类型 ==========
+export interface CompleteCheckResponse {
+  canComplete: boolean;
+  releaseDatePassed: boolean;
+  currentDate: string;
+  releaseDate: string;
+  onboardedRequirementsCount: number;
+  onboardedRequirements: {
+    id: string;
+    reqCode: string;
+    title: string;
+  }[];
+}
+
+// ========== US2.10 - BA 默认系统相关类型 ==========
+export interface DefaultSystemResponse {
+  systemId: string | null;
+  systemName: string | null;
+  allSystemsAvailable: boolean;
+}
+
+export interface BASystemsResponse {
+  systems: {
+    id: string;
+    name: string;
+  }[];
+  hasSystem: boolean;
 }

@@ -17,6 +17,10 @@ import {
   UpdateTrainScheduleRequest,   // 更新班次请求体
   KeyDatesResponse,            // 关键日期响应
   ApiResponse,                 // 通用 API 响应包装
+  PrecheckOnboardRequest,
+  PrecheckOnboardResponse,
+  OnboardRequest,
+  OnboardResponse,
 } from '@release-train/shared';
 
 /**
@@ -201,6 +205,73 @@ export const trainService = {
     const response = await api.get(`/trains/${trainId}/key-dates`, {
       params: { startDate, endDate }, // GET /api/trains/:id/key-dates?startDate=&endDate=
     });
+    return response.data;
+  },
+
+  // 纳版预检
+  precheckOnboard: async (
+    trainId: string,
+    data: PrecheckOnboardRequest,
+  ): Promise<ApiResponse<PrecheckOnboardResponse>> => {
+    const response = await api.post(`/trains/${trainId}/onboard/precheck`, data);
+    return response.data;
+  },
+
+  // 纳版搭载
+  onboardRequirements: async (
+    trainId: string,
+    data: OnboardRequest,
+  ): Promise<ApiResponse<OnboardResponse>> => {
+    const response = await api.post(`/trains/${trainId}/onboard`, data);
+    return response.data;
+  },
+
+  // 从火车移除需求
+  removeRequirement: async (
+    trainId: string,
+    requirementId: string,
+    data: { reason: string },
+  ): Promise<ApiResponse<any>> => {
+    const response = await api.post(
+      `/trains/${trainId}/requirements/${requirementId}/remove`,
+      data
+    );
+    return response.data;
+  },
+
+  // 确认投产
+  releaseRequirement: async (
+    trainId: string,
+    requirementId: string,
+  ): Promise<ApiResponse<any>> => {
+    const response = await api.post(
+      `/trains/${trainId}/requirements/${requirementId}/release`
+    );
+    return response.data;
+  },
+
+  // 回滚需求
+  rollbackRequirement: async (
+    trainId: string,
+    requirementId: string,
+    data: { reason: string },
+  ): Promise<ApiResponse<any>> => {
+    const response = await api.post(
+      `/trains/${trainId}/requirements/${requirementId}/rollback`,
+      data
+    );
+    return response.data;
+  },
+
+  // 检查完成火车
+  checkComplete: async (trainId: string): Promise<ApiResponse<any>> => {
+    const response = await api.get(`/trains/${trainId}/complete-check`);
+    return response.data;
+  },
+
+  // 完成火车
+  completeTrain: async (trainId: string): Promise<ApiResponse<any>> => {
+    const response = await api.post(`/trains/${trainId}/complete`);
     return response.data;
   },
 };

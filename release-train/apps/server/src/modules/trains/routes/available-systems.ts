@@ -1,8 +1,8 @@
 // ========== 可选系统列表路由 ==========
 // GET /api/systems/available - 获取可选系统列表
 import { FastifyInstance } from 'fastify';
-import { ApiResponse } from '@release-train/shared';
-import { getAvailableSystems, AvailableSystemResponse } from '../services/train.service.js';
+import { ApiResponse, AvailableSystem } from '@release-train/shared';
+import { getAvailableSystems } from '../services/train.service.js';
 
 // 查询参数校验 Schema
 const availableSystemsQuerystringSchema = {
@@ -17,7 +17,7 @@ const availableSystemsQuerystringSchema = {
  * @param fastify - Fastify 实例
  */
 export async function availableSystemsRoute(fastify: FastifyInstance): Promise<void> {
-  fastify.get<{ Querystring: { trainId?: string }; Reply: ApiResponse<AvailableSystemResponse[]> }>(
+  fastify.get<{ Querystring: { trainId?: string }; Reply: ApiResponse<AvailableSystem[]> }>(
     '/api/systems/available',
     {
       onRequest: [fastify.authenticate],
