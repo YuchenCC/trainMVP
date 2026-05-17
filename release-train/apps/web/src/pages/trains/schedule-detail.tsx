@@ -64,31 +64,35 @@ const ScheduleDetailPage: React.FC = () => {
   const [previewDates, setPreviewDates] = useState<any>(null);
   const [editCustomDates, setEditCustomDates] = useState<CustomKeyDate[]>([]);
 
-  useEffect(() => {
-    const fetchSchedule = async () => {
-      if (!trainId || !scheduleId) {
-        setError('参数错误');
-        setLoading(false);
-        return;
-      }
+  const fetchSchedule = useCallback(async () => {
+    if (!trainId || !scheduleId) {
+      setError('参数错误');
+      setLoading(false);
+      return;
+    }
 
-      setLoading(true);
-      try {
-        const res = await api.get(`/trains/${trainId}/schedules/${scheduleId}`);
-        if (res.data.success) {
-          setSchedule(res.data.data);
-        } else {
-          setError(res.data.message || '加载失败');
-        }
-      } catch (err: any) {
-        setError(err?.response?.data?.message || err?.message || '加载失败');
-      } finally {
-        setLoading(false);
+    setLoading(true);
+    try {
+      const res = await api.get(`/trains/${trainId}/schedules/${scheduleId}`);
+      if (res.data.success) {
+        setSchedule(res.data.data);
+      } else {
+        setError(res.data.message || '加载失败');
       }
-    };
-
-    fetchSchedule();
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || '加载失败');
+    } finally {
+      setLoading(false);
+    }
   }, [trainId, scheduleId]);
+
+  const handleRefresh = () => {
+    fetchSchedule();
+  };
+
+  useEffect(() => {
+    fetchSchedule();
+  }, [fetchSchedule]);
 
   if (loading) {
     return (
