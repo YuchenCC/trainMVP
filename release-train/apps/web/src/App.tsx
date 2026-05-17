@@ -52,9 +52,9 @@ const App: React.FC = () => {
             <Route path="/requirements/:id/edit" element={<RequirementEditPage />} />
 
             {/* 版本火车模块 */}
-            <Route path="/trains" element={<TrainsPage />} />
+            <Route path="/trains" element={<SchedulesPage />} />
+            <Route path="/trains/list" element={<TrainsPage />} />
             <Route path="/trains/new" element={<TrainCreatePage />} />
-            <Route path="/trains/schedules" element={<SchedulesPage />} />
             <Route path="/trains/:trainId/schedules/:scheduleId" element={<ScheduleDetailPage />} />
             <Route path="/trains/:id" element={<TrainDetailPage />} />
             <Route path="/trains/:id/edit" element={<TrainEditPage />} />

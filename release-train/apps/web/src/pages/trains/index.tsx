@@ -255,7 +255,7 @@ const TrainsPage: React.FC = () => {
           <Button icon={<SyncOutlined spin={loading} />} onClick={handleRefresh}>
             刷新
           </Button>
-          <Button icon={<CalendarOutlined />} onClick={() => navigate('/trains/schedules')}>
+          <Button icon={<CalendarOutlined />} onClick={() => navigate('/trains')}>
             班次列表
           </Button>
           {canCreateTrain && (
