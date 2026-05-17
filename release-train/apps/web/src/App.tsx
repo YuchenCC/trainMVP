@@ -42,8 +42,8 @@ const App: React.FC = () => {
               </AuthGuard>
             }
           >
-            {/* 默认重定向到需求列表 */}
-            <Route index element={<Navigate to="/requirements" replace />} />
+            {/* 默认重定向到班次列表 */}
+            <Route index element={<Navigate to="/trains/schedules" replace />} />
 
             {/* 需求池模块 */}
             <Route path="/requirements" element={<RequirementsPage />} />
