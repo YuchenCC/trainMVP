@@ -151,9 +151,39 @@ const SchedulesPage: React.FC = () => {
     setPagination(prev => ({ ...prev, page, pageSize }));
   };
 
-  const handleTrainChange = (trainId: string | undefined) => {
+  const handleTrainChange = async (trainId: string | undefined) => {
     setSelectedTrainId(trainId);
     setPagination(prev => ({ ...prev, page: 1 }));
+    
+    // 直接调用 API
+    setLoading(true);
+    try {
+      let response;
+      if (trainId) {
+        response = await api.get(`/trains/${trainId}/schedules`);
+      } else {
+        response = await api.get('/schedules', { params: { page: 1, pageSize: 20 } });
+      }
+      const res = response.data;
+      if (res.success) {
+        setScheduleList(res.data.list || []);
+        if (trainId) {
+          setPagination({ page: 1, pageSize: 20, total: res.data.list?.length || 0 });
+        } else {
+          setPagination(res.data.pagination);
+        }
+      } else {
+        setScheduleList([]);
+        setPagination({ page: 1, pageSize: 20, total: 0 });
+      }
+    } catch (error) {
+      console.error('加载班次列表失败:', error);
+      message.error('加载班次列表失败');
+      setScheduleList([]);
+      setPagination({ page: 1, pageSize: 20, total: 0 });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusColor = (status: TrainStatus) => {
