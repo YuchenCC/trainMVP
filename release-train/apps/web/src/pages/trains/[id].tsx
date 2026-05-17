@@ -134,7 +134,35 @@ const OnboardTab = ({ train, onRefresh }: { train: TrainDetail; onRefresh: () =>
   const [precheckResult, setPrecheckResult] = useState<PrecheckOnboardResponse | null>(null);
   const [showPrecheckModal, setShowPrecheckModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
   const [readyRequirements, setReadyRequirements] = useState<RequirementListItem[]>([]);
+  const [onboardedRequirements, setOnboardedRequirements] = useState<RequirementListItem[]>([]);
+
+  // 加载数据
+  const loadData = useCallback(async () => {
+    setDataLoading(true);
+    try {
+      // 先获取待纳版需求
+      const readyRes = await api.get(`/trains/${train.id}/ready-requirements`);
+      if (readyRes.data.success && readyRes.data.data) {
+        setReadyRequirements(readyRes.data.data.list);
+      }
+      // 再获取已纳版需求
+      const onboardedRes = await api.get(`/trains/${train.id}/onboarded-requirements`);
+      if (onboardedRes.data.success && onboardedRes.data.data) {
+        setOnboardedRequirements(onboardedRes.data.data.list);
+      }
+    } catch (err) {
+      console.error('加载纳版数据失败:', err);
+      message.error('加载纳版数据失败');
+    } finally {
+      setDataLoading(false);
+    }
+  }, [train.id]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // 团队容量概览表格列
   const capacityColumns = [
@@ -172,6 +200,7 @@ const OnboardTab = ({ train, onRefresh }: { train: TrainDetail; onRefresh: () =>
               try {
                 await trainService.removeRequirement(train.id, record.id, { reason: '从火车移除' });
                 message.success('需求已移除');
+                loadData();
                 onRefresh();
               } catch (err: any) {
                 message.error(err?.response?.data?.message || '移除失败');
@@ -187,6 +216,7 @@ const OnboardTab = ({ train, onRefresh }: { train: TrainDetail; onRefresh: () =>
               try {
                 await trainService.releaseRequirement(train.id, record.id);
                 message.success('需求已投产');
+                loadData();
                 onRefresh();
               } catch (err: any) {
                 message.error(err?.response?.data?.message || '投产失败');
@@ -262,6 +292,7 @@ const OnboardTab = ({ train, onRefresh }: { train: TrainDetail; onRefresh: () =>
       message.success('纳版成功');
       setShowPrecheckModal(false);
       setSelectedRequirements([]);
+      loadData();
       onRefresh();
     } catch (err: any) {
       message.error(err?.response?.data?.message || '纳版失败');
@@ -282,21 +313,22 @@ const OnboardTab = ({ train, onRefresh }: { train: TrainDetail; onRefresh: () =>
 
       {/* 已纳版需求 */}
       <Card
-        title={`已纳版需求（共 ${(train as any).onboardedRequirements?.length || 0} 条）`}
+        title={`已纳版需求（共 ${onboardedRequirements.length} 条）`}
         style={{ marginBottom: 16 }}
       >
         <Table
           columns={onboardedColumns}
-          dataSource={(train as any).onboardedRequirements || []}
+          dataSource={onboardedRequirements}
           pagination={false}
           size="small"
           rowKey="id"
+          loading={dataLoading}
         />
       </Card>
 
       {/* 待纳版需求 */}
       <Card
-        title={`待纳版需求（已就绪，共 ${(train as any).readyRequirements?.length || 0} 条）`}
+        title={`待纳版需求（已就绪，共 ${readyRequirements.length} 条）`}
         extra={
           <Space>
             <Button type="primary" onClick={handlePrecheck} loading={loading}>
@@ -307,10 +339,11 @@ const OnboardTab = ({ train, onRefresh }: { train: TrainDetail; onRefresh: () =>
       >
         <Table
           columns={readyColumns}
-          dataSource={(train as any).readyRequirements || []}
+          dataSource={readyRequirements}
           pagination={false}
           size="small"
           rowKey="id"
+          loading={dataLoading}
           rowSelection={{
             selectedRowKeys: selectedRequirements,
             onChange: (keys) => setSelectedRequirements(keys as string[]),

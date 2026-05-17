@@ -21,6 +21,7 @@ import {
 import {
   precheckOnboard,
   getReadyRequirements,
+  getOnboardedRequirements,
   onboardRequirements,
   removeFromTrain,
   batchRemoveFromTrain,
@@ -95,6 +96,20 @@ const rollbackBodySchema = {
   properties: { reason: { type: 'string', minLength: 1, maxLength: 500 } },
 };
 
+// ========== 内部辅助函数：获取火车的第一个班次 ==========
+async function getFirstScheduleId(trainId: string): Promise<string> {
+  const { prisma } = await import('../../../prisma/index.js');
+  const schedule = await prisma.trainSchedule.findFirst({
+    where: { trainId },
+    select: { id: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  if (!schedule) {
+    throw new Error('该火车还没有创建班次');
+  }
+  return schedule.id;
+}
+
 // ========== 路由注册 ==========
 export async function operationsRoutes(fastify: FastifyInstance): Promise<void> {
   // Get ready requirements for train (US2.5)
@@ -109,6 +124,40 @@ export async function operationsRoutes(fastify: FastifyInstance): Promise<void> 
     },
     async (request, reply) => {
       const result = await getReadyRequirements(request.params.trainId);
+      return reply.status(200).send({ success: true, data: result });
+    },
+  );
+
+  // Get onboarded requirements for train
+  fastify.get<{
+    Params: { trainId: string };
+    Reply: ApiResponse<any>;
+  }>(
+    '/api/trains/:trainId/onboarded-requirements',
+    {
+      onRequest: [fastify.authenticate],
+      schema: { params: trainParamsSchema },
+    },
+    async (request, reply) => {
+      const result = await getOnboardedRequirements(request.params.trainId);
+      return reply.status(200).send({ success: true, data: result });
+    },
+  );
+
+  // Precheck onboard (trainId 版本，自动找第一个班次)
+  fastify.post<{
+    Params: { trainId: string };
+    Body: PrecheckOnboardRequest;
+    Reply: ApiResponse<PrecheckOnboardResponse>;
+  }>(
+    '/api/trains/:trainId/onboard/precheck',
+    {
+      onRequest: [fastify.authenticate, rbacMiddleware(Operation.MANAGE_TRAIN)],
+      schema: { params: trainParamsSchema, body: precheckBodySchema },
+    },
+    async (request, reply) => {
+      const scheduleId = await getFirstScheduleId(request.params.trainId);
+      const result = await precheckOnboard(scheduleId, request.body.requirementIds);
       return reply.status(200).send({ success: true, data: result });
     },
   );
@@ -130,6 +179,25 @@ export async function operationsRoutes(fastify: FastifyInstance): Promise<void> 
     },
   );
 
+  // Onboard requirements (trainId 版本)
+  fastify.post<{
+    Params: { trainId: string };
+    Body: OnboardRequest;
+    Reply: ApiResponse<OnboardResponse>;
+  }>(
+    '/api/trains/:trainId/onboard',
+    {
+      onRequest: [fastify.authenticate, rbacMiddleware(Operation.MANAGE_TRAIN)],
+      schema: { params: trainParamsSchema, body: onboardBodySchema },
+    },
+    async (request, reply) => {
+      const scheduleId = await getFirstScheduleId(request.params.trainId);
+      const userId = (request.user as JwtPayload).sub;
+      const result = await onboardRequirements(scheduleId, request.body, userId);
+      return reply.status(200).send({ success: true, data: result });
+    },
+  );
+
   // Onboard requirements (US2.5)
   fastify.post<{
     Params: { scheduleId: string };
@@ -145,6 +213,35 @@ export async function operationsRoutes(fastify: FastifyInstance): Promise<void> 
       const userId = (request.user as JwtPayload).sub;
       const result = await onboardRequirements(request.params.scheduleId, request.body, userId);
       return reply.status(200).send({ success: true, data: result });
+    },
+  );
+
+  // Remove requirement from train (trainId 版本)
+  fastify.post<{
+    Params: { trainId: string; requirementId: string };
+    Body: RemoveFromTrainRequest;
+    Reply: ApiResponse<void>;
+  }>(
+    '/api/trains/:trainId/requirements/:requirementId/remove',
+    {
+      onRequest: [fastify.authenticate, rbacMiddleware(Operation.MANAGE_TRAIN)],
+      schema: {
+        params: {
+          type: 'object',
+          required: ['trainId', 'requirementId'],
+          properties: {
+            trainId: { type: 'string' },
+            requirementId: { type: 'string' },
+          },
+        },
+        body: removeBodySchema,
+      },
+    },
+    async (request, reply) => {
+      const scheduleId = await getFirstScheduleId(request.params.trainId);
+      const userId = (request.user as JwtPayload).sub;
+      await removeFromTrain(scheduleId, request.params.requirementId, request.body.reason, userId);
+      return reply.status(200).send({ success: true });
     },
   );
 
@@ -184,6 +281,33 @@ export async function operationsRoutes(fastify: FastifyInstance): Promise<void> 
     },
   );
 
+  // Release requirement (trainId 版本)
+  fastify.post<{
+    Params: { trainId: string; requirementId: string };
+    Reply: ApiResponse<void>;
+  }>(
+    '/api/trains/:trainId/requirements/:requirementId/release',
+    {
+      onRequest: [fastify.authenticate, rbacMiddleware(Operation.MANAGE_TRAIN)],
+      schema: {
+        params: {
+          type: 'object',
+          required: ['trainId', 'requirementId'],
+          properties: {
+            trainId: { type: 'string' },
+            requirementId: { type: 'string' },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const scheduleId = await getFirstScheduleId(request.params.trainId);
+      const userId = (request.user as JwtPayload).sub;
+      await releaseRequirement(scheduleId, request.params.requirementId, userId);
+      return reply.status(200).send({ success: true });
+    },
+  );
+
   // Release requirement (US2.7)
   fastify.post<{
     Params: { scheduleId: string; requirementId: string };
@@ -216,6 +340,35 @@ export async function operationsRoutes(fastify: FastifyInstance): Promise<void> 
       const userId = (request.user as JwtPayload).sub;
       const result = await batchReleaseRequirements(request.params.scheduleId, request.body.requirementIds, userId);
       return reply.status(200).send({ success: true, data: result });
+    },
+  );
+
+  // Rollback requirement (trainId 版本)
+  fastify.post<{
+    Params: { trainId: string; requirementId: string };
+    Body: RollbackRequest;
+    Reply: ApiResponse<void>;
+  }>(
+    '/api/trains/:trainId/requirements/:requirementId/rollback',
+    {
+      onRequest: [fastify.authenticate, rbacMiddleware(Operation.MANAGE_TRAIN)],
+      schema: {
+        params: {
+          type: 'object',
+          required: ['trainId', 'requirementId'],
+          properties: {
+            trainId: { type: 'string' },
+            requirementId: { type: 'string' },
+          },
+        },
+        body: rollbackBodySchema,
+      },
+    },
+    async (request, reply) => {
+      const scheduleId = await getFirstScheduleId(request.params.trainId);
+      const userId = (request.user as JwtPayload).sub;
+      await rollbackRequirement(scheduleId, request.params.requirementId, request.body.reason, userId);
+      return reply.status(200).send({ success: true });
     },
   );
 

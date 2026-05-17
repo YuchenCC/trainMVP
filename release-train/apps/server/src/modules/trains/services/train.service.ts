@@ -1298,6 +1298,46 @@ export async function getReadyRequirements(
   };
 }
 
+export async function getOnboardedRequirements(
+  trainId: string,
+): Promise<any> {
+  const train = await prisma.train.findUnique({
+    where: { id: trainId },
+    include: { trainSystems: { select: { systemId: true } } },
+  });
+
+  if (!train) {
+    throw errors.trainNotFound();
+  }
+
+  const systemIds = train.trainSystems.map(ts => ts.systemId);
+
+  const requirements = await prisma.requirement.findMany({
+    where: {
+      status: 'ONBOARDED',
+      systemId: { in: systemIds },
+    },
+    include: {
+      system: { select: { id: true, name: true } },
+      ba: { select: { id: true, displayName: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return {
+    list: requirements.map(req => ({
+      id: req.id,
+      reqCode: req.reqCode,
+      title: req.title,
+      system: req.system,
+      priority: req.priority,
+      storyPoints: req.storyPoints,
+      ba: req.ba,
+      createdAt: req.createdAt.toISOString(),
+    })),
+  };
+}
+
 export async function onboardRequirements(
   scheduleId: string,
   data: any,
