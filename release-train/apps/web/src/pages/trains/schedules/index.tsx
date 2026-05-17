@@ -313,24 +313,11 @@ const SchedulesPage: React.FC = () => {
 
   const scheduleColumns: ColumnsType<ScheduleItem> = [
     {
-      title: '所属火车',
-      dataIndex: 'trainName',
-      key: 'trainName',
-      width: 180,
-      render: (name: string, record) => (
-        <a onClick={() => navigate(`/trains/${record.trainId}`)}>{name}</a>
-      ),
-    },
-    {
       title: '班次名称',
       dataIndex: 'name',
       key: 'name',
       width: 180,
-      render: (name: string, record) => (
-        <a onClick={() => navigate(`/trains/${record.trainId}/schedules/${record.id}`)}>
-          {name}
-        </a>
-      ),
+      render: (name: string) => name || '-',
     },
     {
       title: '状态',
