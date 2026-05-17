@@ -443,6 +443,10 @@ const SchedulesPage: React.FC = () => {
               rowKey="id"
               pagination={false}
               scroll={{ x: 1400 }}
+              onRow={(record) => ({
+                onClick: () => navigate(`/trains/${record.trainId}/schedules/${record.id}`),
+                style: { cursor: 'pointer' },
+              })}
             />
             <div style={{ padding: '16px', textAlign: 'right' }}>
               <Pagination
