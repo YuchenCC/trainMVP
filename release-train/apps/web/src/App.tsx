@@ -13,6 +13,7 @@ import TrainsPage from './pages/trains';
 import TrainCreatePage from './pages/trains/create';
 import TrainDetailPage from './pages/trains/[id]';
 import TrainEditPage from './pages/trains/edit';
+import SchedulesPage from './pages/trains/schedules';
 import ScheduleDetailPage from './pages/trains/schedule-detail';
 import SystemsPage from './pages/systems';
 import { AuthGuard, GuestGuard } from './components/AuthGuard';
@@ -53,6 +54,7 @@ const App: React.FC = () => {
             {/* 版本火车模块 */}
             <Route path="/trains" element={<TrainsPage />} />
             <Route path="/trains/new" element={<TrainCreatePage />} />
+            <Route path="/trains/schedules" element={<SchedulesPage />} />
             <Route path="/trains/:trainId/schedules/:scheduleId" element={<ScheduleDetailPage />} />
             <Route path="/trains/:id" element={<TrainDetailPage />} />
             <Route path="/trains/:id/edit" element={<TrainEditPage />} />
