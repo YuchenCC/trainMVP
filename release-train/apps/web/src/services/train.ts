@@ -274,6 +274,63 @@ export const trainService = {
     const response = await api.post(`/trains/${trainId}/complete`);
     return response.data;
   },
+
+  // ========== 班次级别纳版操作 ==========
+
+  // 班次级别纳版预检
+  precheckOnboardFromSchedule: async (
+    scheduleId: string,
+    data: PrecheckOnboardRequest,
+  ): Promise<ApiResponse<PrecheckOnboardResponse>> => {
+    const response = await api.post(`/trains/schedules/${scheduleId}/onboard/precheck`, data);
+    return response.data;
+  },
+
+  // 班次级别纳版搭载
+  onboardRequirementsToSchedule: async (
+    scheduleId: string,
+    data: OnboardRequest,
+  ): Promise<ApiResponse<OnboardResponse>> => {
+    const response = await api.post(`/trains/schedules/${scheduleId}/onboard`, data);
+    return response.data;
+  },
+
+  // 班次级别从班次移除需求
+  removeRequirementFromSchedule: async (
+    scheduleId: string,
+    requirementId: string,
+    data: { reason: string },
+  ): Promise<ApiResponse<any>> => {
+    const response = await api.post(
+      `/trains/schedules/${scheduleId}/requirements/${requirementId}/remove`,
+      data
+    );
+    return response.data;
+  },
+
+  // 班次级别确认投产
+  releaseRequirementFromSchedule: async (
+    scheduleId: string,
+    requirementId: string,
+  ): Promise<ApiResponse<any>> => {
+    const response = await api.post(
+      `/trains/schedules/${scheduleId}/requirements/${requirementId}/release`
+    );
+    return response.data;
+  },
+
+  // 班次级别回滚需求
+  rollbackRequirementFromSchedule: async (
+    scheduleId: string,
+    requirementId: string,
+    data: { reason: string },
+  ): Promise<ApiResponse<any>> => {
+    const response = await api.post(
+      `/trains/schedules/${scheduleId}/requirements/${requirementId}/rollback`,
+      data
+    );
+    return response.data;
+  },
 };
 
 export default trainService;

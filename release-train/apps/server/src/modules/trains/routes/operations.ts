@@ -112,6 +112,38 @@ async function getFirstScheduleId(trainId: string): Promise<string> {
 
 // ========== 路由注册 ==========
 export async function operationsRoutes(fastify: FastifyInstance): Promise<void> {
+  // Get ready requirements for schedule (US2.5)
+  fastify.get<{
+    Params: { scheduleId: string };
+    Reply: ApiResponse<ReadyRequirementsResponse>;
+  }>(
+    '/api/trains/schedules/:scheduleId/ready-requirements',
+    {
+      onRequest: [fastify.authenticate],
+      schema: { params: scheduleParamsSchema },
+    },
+    async (request, reply) => {
+      const result = await getReadyRequirements(request.params.scheduleId);
+      return reply.status(200).send({ success: true, data: result });
+    },
+  );
+
+  // Get onboarded requirements for schedule
+  fastify.get<{
+    Params: { scheduleId: string };
+    Reply: ApiResponse<any>;
+  }>(
+    '/api/trains/schedules/:scheduleId/onboarded-requirements',
+    {
+      onRequest: [fastify.authenticate],
+      schema: { params: scheduleParamsSchema },
+    },
+    async (request, reply) => {
+      const result = await getOnboardedRequirements(request.params.scheduleId);
+      return reply.status(200).send({ success: true, data: result });
+    },
+  );
+
   // Get ready requirements for train (US2.5)
   fastify.get<{
     Params: { trainId: string };
