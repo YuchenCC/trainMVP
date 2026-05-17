@@ -26,7 +26,7 @@ import {
   ArrowLeftOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import api from '../../services/api';
+import api from '../../../services/api';
 import { TrainStatus } from '@release-train/shared';
 import dayjs from 'dayjs';
 
@@ -105,34 +105,31 @@ const SchedulesPage: React.FC = () => {
   const loadScheduleList = useCallback(async (page = 1, pageSize = 20) => {
     setLoading(true);
     try {
-      let url = '/schedules';
-      let params: any = { page, pageSize };
+      let response;
       
       if (selectedTrainId) {
-        const response = await api.get(`/trains/${selectedTrainId}/schedules`);
-        const res = response.data;
-        if (res.success) {
-          setScheduleList(res.data.list || []);
+        response = await api.get(`/trains/${selectedTrainId}/schedules`);
+      } else {
+        response = await api.get('/schedules', { params: { page, pageSize } });
+      }
+      
+      const res = response.data;
+      if (res.success) {
+        setScheduleList(res.data.list || []);
+        if (selectedTrainId) {
           setPagination({ page: 1, pageSize: 20, total: res.data.list?.length || 0 });
         } else {
-          setScheduleList([]);
-          setPagination({ page: 1, pageSize: 20, total: 0 });
+          setPagination(res.data.pagination);
         }
       } else {
-        const response = await api.get(url, { params });
-        const res = response.data;
-        if (res.success) {
-          setScheduleList(res.data.list || []);
-          setPagination(res.data.pagination);
-        } else {
-          setScheduleList([]);
-          setPagination({ page: 1, pageSize: 20, total: 0 });
-        }
+        setScheduleList([]);
+        setPagination({ page: 1, pageSize: 20, total: 0 });
       }
     } catch (error) {
       console.error('加载班次列表失败:', error);
       message.error('加载班次列表失败');
       setScheduleList([]);
+      setPagination({ page: 1, pageSize: 20, total: 0 });
     } finally {
       setLoading(false);
     }

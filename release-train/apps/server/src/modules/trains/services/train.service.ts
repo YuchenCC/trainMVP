@@ -833,12 +833,15 @@ export async function listTrainSchedules(
     },
   });
 
-  const list: TrainScheduleListItemResponse[] = schedules.map((s) => {
+  const list = schedules.map((s) => {
     const totalCapacity = s.snapshots.reduce((sum, snap) => sum + snap.capacityPoints, 0);
     const usedCapacity = s.snapshots.reduce((sum, snap) => sum + snap.usedPoints, 0);
 
     return {
       id: s.id,
+      trainId: s.trainId,
+      trainName: train.name,
+      status: train.status,
       name: s.name,
       startDate: s.startDate?.toISOString().split('T')[0],
       endDate: s.endDate?.toISOString().split('T')[0],
@@ -850,6 +853,7 @@ export async function listTrainSchedules(
       usedCapacity,
       requirementCount: s.requirements.length,
       createdAt: s.createdAt.toISOString(),
+      version: s.version,
     };
   });
 
