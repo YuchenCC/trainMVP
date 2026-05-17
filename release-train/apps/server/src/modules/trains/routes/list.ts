@@ -10,7 +10,7 @@ const listTrainsQuerystringSchema = {
   properties: {
     status: { type: 'string', enum: ['PLANNING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] },
     page: { type: 'integer', minimum: 1, default: 1 },
-    pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+    pageSize: { type: 'integer', minimum: 1, maximum: 1000, default: 20 },
   },
 };
 
