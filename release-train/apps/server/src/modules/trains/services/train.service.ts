@@ -856,6 +856,68 @@ export async function listTrainSchedules(
   return { list };
 }
 
+export async function listAllSchedules(
+  query: { page?: number; pageSize?: number }
+): Promise<{ list: any[]; pagination: any }> {
+  const page = query.page || 1;
+  const pageSize = query.pageSize || 20;
+  const skip = (page - 1) * pageSize;
+
+  const [total, schedules] = await Promise.all([
+    prisma.trainSchedule.count(),
+    prisma.trainSchedule.findMany({
+      skip,
+      take: pageSize,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        train: {
+          select: { id: true, name: true, status: true },
+        },
+        snapshots: {
+          select: { id: true, capacityPoints: true, usedPoints: true },
+        },
+        requirements: {
+          select: { id: true },
+        },
+      },
+    }),
+  ]);
+
+  const list = schedules.map((s) => {
+    const totalCapacity = s.snapshots.reduce((sum, snap) => sum + snap.capacityPoints, 0);
+    const usedCapacity = s.snapshots.reduce((sum, snap) => sum + snap.usedPoints, 0);
+
+    return {
+      id: s.id,
+      trainId: s.trainId,
+      trainName: s.train.name,
+      status: s.train.status,
+      name: s.name,
+      startDate: s.startDate?.toISOString().split('T')[0],
+      endDate: s.endDate?.toISOString().split('T')[0],
+      boardingDate: s.boardingDate?.toISOString().split('T')[0],
+      lockdownDate: s.lockdownDate?.toISOString().split('T')[0],
+      releaseDate: s.releaseDate?.toISOString().split('T')[0],
+      systemCount: s.snapshots.length,
+      totalCapacity,
+      usedCapacity,
+      requirementCount: s.requirements.length,
+      createdAt: s.createdAt.toISOString(),
+      version: s.version,
+    };
+  });
+
+  return {
+    list,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
+}
+
 export async function getTrainScheduleById(
   scheduleId: string,
 ): Promise<any> {

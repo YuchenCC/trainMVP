@@ -20,6 +20,7 @@ import {
   updateTrainSchedule,
   cancelTrainSchedule,
   listTrainSchedules,
+  listAllSchedules,
   getTrainScheduleById,
   previewKeyDates,
   TrainScheduleDetailResponse,
@@ -79,7 +80,33 @@ const scheduleIdParamsSchema = {
 
 // ========== 路由注册 ==========
 
+const allSchedulesQuerystringSchema = {
+  type: 'object',
+  properties: {
+    page: { type: 'integer', minimum: 1, default: 1 },
+    pageSize: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+  },
+};
+
 export async function scheduleRoutes(fastify: FastifyInstance): Promise<void> {
+  // 全局班次列表
+  fastify.get<{
+    Querystring: { page?: number; pageSize?: number };
+    Reply: ApiResponse<any>;
+  }>(
+    '/api/schedules',
+    {
+      onRequest: [fastify.authenticate],
+      schema: {
+        querystring: allSchedulesQuerystringSchema,
+      },
+    },
+    async (request, reply) => {
+      const result = await listAllSchedules(request.query);
+      return reply.status(200).send({ success: true, data: result });
+    },
+  );
+
   // 创建班次
   fastify.post<{
     Params: { trainId: string };
