@@ -5,12 +5,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Button, Spin, Result, Typography, Row, Col, message, Table, Calendar, Badge, Modal, Form, Input, DatePicker, Checkbox, Space, Divider, Avatar, List, Progress,
+  Card, Descriptions, Button, Spin, Result, Typography, Row, Col, message, Table, Calendar, Badge, Modal, Form, Input, DatePicker, Checkbox, Space, Divider, Avatar, List, Progress, Tag,
 } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import {
   PrecheckOnboardResponse,
   RequirementListItem,
+  REQ_STATUS_LABELS,
+  REQ_SUB_STATUS_LABELS,
+  REQ_STATUS_COLORS,
+  ReqStatus,
 } from '@release-train/shared';
 import api from '../../services/api';
 import { trainService } from '../../services/train';
@@ -80,7 +84,7 @@ const ScheduleDetailPage: React.FC = () => {
         setError(res.data.message || '加载失败');
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || '加载失败');
+      setError(err?.message || '加载失败');
     } finally {
       setLoading(false);
     }
@@ -123,7 +127,7 @@ const ScheduleDetailPage: React.FC = () => {
   // 打开编辑模态框
   const handleEdit = () => {
     setEditModalVisible(true);
-    setIsManual(false);
+    setIsManualMode(false);
     setEditCustomDates(schedule.customKeyDates || []);
     form.setFieldsValue({
       name: schedule.name,
@@ -171,7 +175,7 @@ const ScheduleDetailPage: React.FC = () => {
         });
       }
     } catch (err: any) {
-      message.error(err?.response?.data?.message || '获取关键日期失败');
+      message.error(err?.message || '获取关键日期失败');
     }
   };
 
@@ -232,7 +236,7 @@ const ScheduleDetailPage: React.FC = () => {
         message.error(res.data.message || '更新失败');
       }
     } catch (err: any) {
-      message.error(err?.response?.data?.message || err?.message || '更新失败');
+      message.error(err?.message || '更新失败');
     } finally {
       setEditModalLoading(false);
     }
@@ -625,6 +629,7 @@ const ScheduleDetailPage: React.FC = () => {
 // ========== 纳版管理标签页组件 ==========
 const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; systems: any[]; onRefresh?: () => void }) => {
   const [selectedRequirements, setSelectedRequirements] = useState<string[]>([]);
+  const [selectedOnboardedIds, setSelectedOnboardedIds] = useState<string[]>([]);
   const [precheckResult, setPrecheckResult] = useState<PrecheckOnboardResponse | null>(null);
   const [showPrecheckModal, setShowPrecheckModal] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -654,9 +659,9 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
       if (onboardedRes.data.success && onboardedRes.data.data) {
         setOnboardedRequirements(onboardedRes.data.data.list);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('加载纳版数据失败:', err);
-      message.error('加载纳版数据失败');
+      message.error(err?.message || '加载纳版数据失败');
     } finally {
       setDataLoading(false);
     }
@@ -690,6 +695,18 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
     { title: '系统', dataIndex: ['system', 'name'], key: 'system' },
     { title: '优先级', dataIndex: 'priority', key: 'priority' },
     { title: '故事点', dataIndex: 'storyPoints', key: 'storyPoints', align: 'center' as const },
+    {
+      title: '需求状态',
+      key: 'status',
+      width: 130,
+      render: (_: any, record: any) => {
+        const statusLabel = REQ_STATUS_LABELS[record.status as ReqStatus] || record.status;
+        const displayText = record.status === 'ONBOARDED' && record.subStatus
+          ? `${statusLabel}-${REQ_SUB_STATUS_LABELS[record.subStatus] || record.subStatus}`
+          : statusLabel;
+        return <Tag color={REQ_STATUS_COLORS[record.status as ReqStatus]}>{displayText}</Tag>;
+      },
+    },
     { 
       title: '操作', 
       key: 'action',
@@ -705,7 +722,7 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
                 loadData();
                 onRefresh?.();
               } catch (err: any) {
-                message.error(err?.response?.data?.message || '移除失败');
+                message.error(err?.message || '移除失败');
               }
             }}
           >
@@ -721,7 +738,7 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
                 loadData();
                 onRefresh?.();
               } catch (err: any) {
-                message.error(err?.response?.data?.message || '投产失败');
+                message.error(err?.message || '投产失败');
               }
             }}
           >
@@ -734,23 +751,6 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
 
   // 待纳版需求表格列
   const readyColumns = [
-    {
-      title: '',
-      key: 'select',
-      width: 50,
-      render: (_: any, record: RequirementListItem) => (
-        <Checkbox
-          checked={selectedRequirements.includes(record.id)}
-          onChange={(e) => {
-            if (e.target.checked) {
-              setSelectedRequirements([...selectedRequirements, record.id]);
-            } else {
-              setSelectedRequirements(selectedRequirements.filter(id => id !== record.id));
-            }
-          }}
-        />
-      ),
-    },
     { title: '需求编号', dataIndex: 'reqCode', key: 'reqCode' },
     { title: '需求标题', dataIndex: 'title', key: 'title' },
     { title: '系统', dataIndex: ['system', 'name'], key: 'system' },
@@ -780,7 +780,7 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
       setPrecheckResult(res.data!);
       setShowPrecheckModal(true);
     } catch (err: any) {
-      message.error(err?.response?.data?.message || '预检失败');
+      message.error(err?.message || '预检失败');
     } finally {
       setLoading(false);
     }
@@ -797,7 +797,7 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
       loadData();
       onRefresh?.();
     } catch (err: any) {
-      message.error(err?.response?.data?.message || '纳版失败');
+      message.error(err?.message || '纳版失败');
     }
   };
 
@@ -816,6 +816,53 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
       {/* 已纳版需求 */}
       <Card
         title={`已纳版需求（共 ${onboardedRequirements.length} 条）`}
+        extra={
+          selectedOnboardedIds.length > 0 && (
+            <Space>
+              <Button
+                size="small"
+                onClick={async () => {
+                  Modal.confirm({
+                    title: '确认批量移除',
+                    content: `确定要从班次移除 ${selectedOnboardedIds.length} 条已纳版需求吗？`,
+                    onOk: async () => {
+                      for (const id of selectedOnboardedIds) {
+                        await trainService.removeRequirementFromSchedule(scheduleId, id, { reason: '从班次移除' }).catch(() => {});
+                      }
+                      message.success('批量移除完成');
+                      setSelectedOnboardedIds([]);
+                      loadData();
+                      onRefresh?.();
+                    },
+                  });
+                }}
+              >
+                批量移除
+              </Button>
+              <Button
+                size="small"
+                type="primary"
+                onClick={async () => {
+                  Modal.confirm({
+                    title: '确认批量投产',
+                    content: `确定要将 ${selectedOnboardedIds.length} 条需求投产吗？`,
+                    onOk: async () => {
+                      for (const id of selectedOnboardedIds) {
+                        await trainService.releaseRequirementFromSchedule(scheduleId, id).catch(() => {});
+                      }
+                      message.success('批量投产完成');
+                      setSelectedOnboardedIds([]);
+                      loadData();
+                      onRefresh?.();
+                    },
+                  });
+                }}
+              >
+                批量投产
+              </Button>
+            </Space>
+          )
+        }
         style={{ marginBottom: 16 }}
       >
         <Table
@@ -825,6 +872,10 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
           size="small"
           rowKey="id"
           loading={dataLoading}
+          rowSelection={{
+            selectedRowKeys: selectedOnboardedIds,
+            onChange: (keys) => setSelectedOnboardedIds(keys as string[]),
+          }}
         />
       </Card>
 
@@ -865,7 +916,7 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
       >
         {precheckResult && (
           <div>
-            {precheckResult.risks.length === 0 ? (
+            {precheckResult.results.every((r) => !r.dependencyCheck.hasRisk) ? (
               <Result
                 status="success"
                 title="预检通过"
@@ -875,20 +926,16 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
               <div>
                 <Typography.Title level={5}>风险提示</Typography.Title>
                 <List
-                  dataSource={precheckResult.risks}
-                  renderItem={(risk) => (
-                    <List.Item>
+                  dataSource={precheckResult.results.filter((r) => r.dependencyCheck.hasRisk)}
+                  renderItem={(result) => (
+                    <List.Item key={result.requirementId}>
                       <List.Item.Meta
-                        avatar={
-                          risk.level === 'critical' ? (
-                            <Avatar style={{ background: '#ff4d4f' }}>!</Avatar>
-                          ) : risk.level === 'warning' ? (
-                            <Avatar style={{ background: '#faad14' }}>!</Avatar>
-                          ) : (
-                            <Avatar style={{ background: '#52c41a' }}>!</Avatar>
-                          )
-                        }
-                        title={`需求 ${risk.requirementId}: ${risk.message}`}
+                        title={`${result.reqCode} ${result.title}`}
+                        description={result.dependencyCheck.risks.map((risk) => (
+                          <div key={risk.dependencyId}>
+                            {risk.dependencyId} ({risk.dependencyStatus}): {risk.riskLevel}
+                          </div>
+                        ))}
                       />
                     </List.Item>
                   )}
@@ -898,16 +945,16 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
               </div>
             )}
 
-            {precheckResult.capacityImpact.length > 0 && (
+            {precheckResult.results.some((r) => r.capacityCheck && !r.capacityCheck.hasCapacity) && (
               <div style={{ marginTop: 16 }}>
                 <Typography.Title level={5}>容量影响</Typography.Title>
                 <List
-                  dataSource={precheckResult.capacityImpact}
-                  renderItem={(impact) => (
-                    <List.Item>
+                  dataSource={precheckResult.results.filter((r) => r.capacityCheck && !r.capacityCheck.hasCapacity)}
+                  renderItem={(result) => (
+                    <List.Item key={result.requirementId}>
                       <List.Item.Meta
-                        title={impact.systemName}
-                        description={`新增 ${impact.addedPoints} 点，剩余 ${impact.remainingPoints} 点`}
+                        title={`${result.reqCode} ${result.title}`}
+                        description={`${result.capacityCheck.systemName}: 已用 ${result.capacityCheck.afterOnboard} 点，剩余 ${result.capacityCheck.remainingPoints} 点`}
                       />
                     </List.Item>
                   )}

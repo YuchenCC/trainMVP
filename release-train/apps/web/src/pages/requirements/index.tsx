@@ -88,6 +88,7 @@ function getActionButtons(
   onOnboard: (id: string) => void,
   onResubmit: (id: string) => void,
   onChangeSubStatus: (id: string) => void,
+  onChangeRequirement: (id: string) => void,
 ) {
   const buttons: React.ReactNode[] = [];
   const isOwner = record.ba?.id === currentUserId || record.creator?.id === currentUserId;
@@ -132,6 +133,14 @@ function getActionButtons(
           </Button>,
         );
       }
+      // 需求变更：BA(归属人)/TRAIN_ADMIN/SUPER_ADMIN
+      if (isOwner || currentUser?.role === Role.TRAIN_ADMIN || currentUser?.role === Role.SUPER_ADMIN) {
+        buttons.push(
+          <Button key="changeReq" type="link" size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); onChangeRequirement(record.id); }}>
+            需求变更
+          </Button>,
+        );
+      }
       break;
     case ReqStatus.REJECTED:
       if (checkPermission(Operation.EDIT_REQ) && isOwner) {
@@ -147,6 +156,14 @@ function getActionButtons(
         buttons.push(
           <Button key="changeSubStatus" type="link" size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); onChangeSubStatus(record.id); }}>
             子状态变更
+          </Button>,
+        );
+      }
+      // 需求变更：BA(归属人)/TRAIN_ADMIN/SUPER_ADMIN（非封板状态）
+      if (record.subStatus !== ReqSubStatus.FROZEN && (isOwner || currentUser?.role === Role.TRAIN_ADMIN || currentUser?.role === Role.SUPER_ADMIN)) {
+        buttons.push(
+          <Button key="changeReq" type="link" size="small" icon={<EditOutlined />} onClick={(e) => { e.stopPropagation(); onChangeRequirement(record.id); }}>
+            需求变更
           </Button>,
         );
       }
@@ -413,6 +430,40 @@ const RequirementsPage: React.FC = () => {
     }
   };
 
+  // 需求变更：打开弹窗输入变更原因
+  const [changeReqModalVisible, setChangeReqModalVisible] = useState(false);
+  const [changeReqTargetId, setChangeReqTargetId] = useState('');
+  const [changeReqReason, setChangeReqReason] = useState('');
+  const [changeReqLoading, setChangeReqLoading] = useState(false);
+
+  const handleOpenChangeRequirement = (id: string) => {
+    setChangeReqTargetId(id);
+    setChangeReqReason('');
+    setChangeReqModalVisible(true);
+  };
+
+  const handleChangeRequirement = async () => {
+    if (!changeReqReason.trim()) {
+      message.warning('请填写变更原因');
+      return;
+    }
+    if (changeReqReason.length > 500) {
+      message.warning('变更原因最多500字');
+      return;
+    }
+    setChangeReqLoading(true);
+    try {
+      await requirementService.changeRequirement(changeReqTargetId, changeReqReason);
+      message.success('需求已变更，请重新编辑');
+      setChangeReqModalVisible(false);
+      refreshList();
+    } catch (error: any) {
+      message.error(error?.message || '需求变更失败');
+    } finally {
+      setChangeReqLoading(false);
+    }
+  };
+
   // ========== 表格列定义 ==========
   const columns: ColumnsType<RequirementListItem> = [
     {
@@ -506,6 +557,7 @@ const RequirementsPage: React.FC = () => {
           handleOnboard,
           handleResubmit,
           handleOpenChangeSubStatus,
+          handleOpenChangeRequirement,
         );
       },
     },
@@ -659,6 +711,27 @@ const RequirementsPage: React.FC = () => {
             showCount
           />
         </div>
+      </Modal>
+
+      {/* ========== 需求变更弹窗 ========== */}
+      <Modal
+        title="需求变更"
+        open={changeReqModalVisible}
+        onCancel={() => setChangeReqModalVisible(false)}
+        confirmLoading={changeReqLoading}
+        onOk={handleChangeRequirement}
+        okText="确认变更"
+        cancelText="取消"
+      >
+        <div style={{ marginBottom: 8, color: '#64748b' }}>变更原因（必填，最多500字）</div>
+        <Input.TextArea
+          value={changeReqReason}
+          onChange={(e) => setChangeReqReason(e.target.value)}
+          placeholder="请输入需求变更的原因..."
+          maxLength={500}
+          rows={4}
+          showCount
+        />
       </Modal>
     </div>
   );

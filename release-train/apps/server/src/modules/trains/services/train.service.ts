@@ -784,7 +784,7 @@ export async function createTrainSchedule(
           trainScheduleId: newSchedule.id,
           systemId: trainSystem.systemId,
           capacityPoints: trainSystem.capacityPoints,
-          usedPoints: trainSystem.usedPoints,
+          usedPoints: 0,                   // 新班次从零开始
           baUserId: trainSystem.baUserId,
           pmUserId: trainSystem.pmUserId,
           techMgrUserId: trainSystem.techMgrUserId,
@@ -1359,6 +1359,8 @@ export async function getReadyRequirements(
       system: req.system,
       priority: req.priority,
       storyPoints: req.storyPoints,
+      status: req.status,
+      subStatus: req.subStatus,
       ba: req.ba,
       createdAt: req.createdAt.toISOString(),
     })),
@@ -1382,7 +1384,8 @@ export async function getOnboardedRequirements(
 
   const requirements = await prisma.requirement.findMany({
     where: {
-      status: 'ONBOARDED',
+      status: { in: ['ONBOARDED', 'RELEASED'] }, // 已纳版 + 已投产
+      scheduleId: scheduleId,                 // 只查本班次的需求
       systemId: { in: systemIds },
     },
     include: {
@@ -1400,6 +1403,8 @@ export async function getOnboardedRequirements(
       system: req.system,
       priority: req.priority,
       storyPoints: req.storyPoints,
+      status: req.status,
+      subStatus: req.subStatus,
       ba: req.ba,
       createdAt: req.createdAt.toISOString(),
     })),

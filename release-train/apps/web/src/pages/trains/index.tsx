@@ -94,36 +94,6 @@ const TrainsPage: React.FC = () => {
     setPagination(prev => ({ ...prev, page, pageSize }));
   };
 
-  const getStatusColor = (status: TrainStatus) => {
-    switch (status) {
-      case TrainStatus.PLANNING:
-        return 'blue';
-      case TrainStatus.IN_PROGRESS:
-        return 'green';
-      case TrainStatus.COMPLETED:
-        return 'default';
-      case TrainStatus.CANCELLED:
-        return 'red';
-      default:
-        return 'default';
-    }
-  };
-
-  const getStatusText = (status: TrainStatus) => {
-    switch (status) {
-      case TrainStatus.PLANNING:
-        return '计划中';
-      case TrainStatus.IN_PROGRESS:
-        return '进行中';
-      case TrainStatus.COMPLETED:
-        return '已完成';
-      case TrainStatus.CANCELLED:
-        return '已取消';
-      default:
-        return status;
-    }
-  };
-
   const trainColumns: ColumnsType<TrainListItem> = [
     {
       title: '火车名称',
@@ -132,15 +102,6 @@ const TrainsPage: React.FC = () => {
       width: 200,
       render: (name: string, record) => (
         <a onClick={() => navigate(`/trains/${record.id}`)}>{name}</a>
-      ),
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 100,
-      render: (status: TrainStatus) => (
-        <Tag color={getStatusColor(status)}>{getStatusText(status)}</Tag>
       ),
     },
     {

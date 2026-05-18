@@ -72,6 +72,16 @@ export interface RequirementDetail {
   version: number;                     // 乐观锁版本号
   dependencies: DependencyItem[];      // 前置依赖列表
   statusLogs: StatusLogItem[];         // 操作审计日志（按时间倒序）
+  emergencyChange?: {                 // 紧急变更（含审批状态）
+    id: string;
+    status: string;                   // PENDING/APPROVED/REJECTED
+    urgency: string;                  // P0/P1
+    reason: string;
+    approvalStep: number;             // 当前审批步骤
+    approverId?: string;
+    approvedAt?: string;              // ISO 8601
+    rejectReason?: string;
+  };
   createdAt: string;                   // 创建时间（ISO 8601）
   updatedAt: string;                   // 更新时间（ISO 8601）
 }

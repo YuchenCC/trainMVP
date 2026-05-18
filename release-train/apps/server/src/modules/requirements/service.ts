@@ -249,6 +249,12 @@ async function buildRequirementDetail(
     createdAt: log.createdAt.toISOString(),
   }));
 
+  // 3.5 查询该需求最新的紧急变更（如果有）
+  const latestEmergencyChange = await txOrPrisma.emergencyChange.findFirst({
+    where: { requirementId: requirement.id, status: 'PENDING' },
+    orderBy: { createdAt: 'desc' },
+  });
+
   // 4. 返回完整的 RequirementDetail（含关联数据展开和时间格式化）
   return {
     id: requirement.id,                                    // 需求 ID
@@ -276,6 +282,16 @@ async function buildRequirementDetail(
     version: requirement.version,                           // 乐观锁版本号
     dependencies,                                           // 前置依赖列表（步骤 2 已组装）
     statusLogs: statusLogItems,                             // 操作审计日志（步骤 3 已组装）
+    emergencyChange: latestEmergencyChange ? {              // 紧急变更（如有待审批的）
+      id: latestEmergencyChange.id,
+      status: latestEmergencyChange.status,
+      urgency: latestEmergencyChange.urgency,
+      reason: latestEmergencyChange.reason,
+      approvalStep: (latestEmergencyChange as any).approvalStep ?? 1,
+      approverId: latestEmergencyChange.approverId ?? undefined,
+      approvedAt: latestEmergencyChange.approvedAt?.toISOString(),
+      rejectReason: latestEmergencyChange.rejectReason ?? undefined,
+    } : undefined,
     createdAt: requirement.createdAt.toISOString(),         // 创建时间 → ISO 8601 字符串
     updatedAt: requirement.updatedAt.toISOString(),         // 更新时间 → ISO 8601 字符串
   };
@@ -669,7 +685,6 @@ export async function emergencyChange(
   urgency: string,
   reason: string,
 ): Promise<RequirementDetail> {
-  // 1. 查询需求存在性（含版本号用于乐观锁）
   const existing = await prisma.requirement.findUnique({
     where: { id },
     select: {
@@ -677,6 +692,7 @@ export async function emergencyChange(
       status: true,
       subStatus: true,
       systemId: true,
+      scheduleId: true,
       version: true,
     },
   });
@@ -685,43 +701,67 @@ export async function emergencyChange(
     throw errors.requirementNotFound();
   }
 
-  // 2. 状态校验：必须是已纳版 + 封板子状态
   if (existing.status !== 'ONBOARDED' || existing.subStatus !== 'FROZEN') {
     throw errors.requirementSealedCannotChange('仅封板状态的需求可发起紧急变更');
   }
 
-  // 3. 紧急程度校验：仅 P0/P1
   if (!['P0', 'P1'].includes(urgency)) {
     throw errors.badRequest('紧急程度无效，仅支持 P0/P1');
   }
 
-  // 4. 事务内：创建 EmergencyChange 记录 + 审计日志
+  // 查找测试经理作为第一审批人
+  let firstApproverId: string | null = null;
+  if (existing.scheduleId) {
+    const snapshot = await prisma.trainSystemSnapshot.findUnique({
+      where: {
+        trainScheduleId_systemId: { trainScheduleId: existing.scheduleId, systemId: existing.systemId },
+      },
+      select: { testMgrUserId: true },
+    });
+    if (snapshot?.testMgrUserId) {
+      firstApproverId = snapshot.testMgrUserId;
+    }
+  }
+  if (!firstApproverId) {
+    const testMgr = await prisma.systemMember.findFirst({
+      where: { systemId: existing.systemId, role: 'TEST_MGR' },
+      select: { userId: true },
+    });
+    if (testMgr) firstApproverId = testMgr.userId;
+  }
+  if (!firstApproverId) {
+    const testMgrUser = await prisma.user.findFirst({
+      where: { role: 'TEST_MGR' },
+      select: { id: true },
+    });
+    if (testMgrUser) firstApproverId = testMgrUser.id;
+  }
+
   return prisma.$transaction(async (tx) => {
-    // 4a. 创建紧急变更记录（状态 PENDING，审批在 Task 2 实现）
     await tx.emergencyChange.create({
       data: {
         requirementId: id,
         urgency: urgency as any,
         reason,
         status: 'PENDING',
+        approvalStep: 1,
+        approverId: firstApproverId,
       },
     });
 
-    // 4b. 创建审计日志
     await tx.statusLog.create({
       data: {
         requirementId: id,
         operationType: 'EMERGENCY_CHANGE' as any,
         fromStatus: existing.status,
-        toStatus: existing.status, // 主状态不变
+        toStatus: existing.status,
         fromSubStatus: existing.subStatus,
-        toSubStatus: existing.subStatus, // 子状态不变
+        toSubStatus: existing.subStatus,
         operatorId,
         reason: `紧急程度: ${urgency}, 原因: ${reason}`,
       },
     });
 
-    // 4c. 重新查询更新后的需求（含关联数据）
     const updated = await tx.requirement.findUnique({
       where: { id },
       include: {
@@ -734,6 +774,142 @@ export async function emergencyChange(
     });
 
     return buildRequirementDetail(updated!, tx);
+  });
+}
+
+// 找到下一个审批人 (step: 1→PROJECT_MGR, 2→null 表示终审)
+async function findApproverForStep(systemId: string, scheduleId: string | null, step: number): Promise<string | null> {
+  if (step === 2) {
+    if (scheduleId) {
+      const snapshot = await prisma.trainSystemSnapshot.findUnique({
+        where: { trainScheduleId_systemId: { trainScheduleId: scheduleId, systemId } },
+        select: { pmUserId: true },
+      });
+      if (snapshot?.pmUserId) return snapshot.pmUserId;
+    }
+    const pmMgr = await prisma.systemMember.findFirst({
+      where: { systemId, role: 'PROJECT_MGR' },
+      select: { userId: true },
+    });
+    if (pmMgr) return pmMgr.userId;
+    const pmMgrUser = await prisma.user.findFirst({
+      where: { role: 'PROJECT_MGR' },
+      select: { id: true },
+    });
+    if (pmMgrUser) return pmMgrUser.id;
+  }
+  return null;
+}
+
+// 紧急变更审批通过
+export async function approveEmergencyChange(
+  requirementId: string,
+  approverId: string,
+): Promise<RequirementDetail> {
+  const change = await prisma.emergencyChange.findFirst({
+    where: { requirementId, status: 'PENDING' },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (!change) {
+    throw errors.badRequest('未找到待审批的紧急变更');
+  }
+  if (change.approverId !== approverId) {
+    throw errors.badRequest('您不是当前审批人');
+  }
+
+  const nextStep = change.approvalStep + 1;
+  const req = await prisma.requirement.findUnique({
+    where: { id: requirementId },
+    select: { systemId: true, scheduleId: true, status: true, subStatus: true },
+  });
+  if (!req) throw errors.requirementNotFound();
+
+  const nextApproverId = await findApproverForStep(req.systemId, req.scheduleId, nextStep);
+
+  return prisma.$transaction(async (tx) => {
+    if (nextApproverId) {
+      await tx.emergencyChange.update({
+        where: { id: change.id },
+        data: { approvalStep: nextStep, approverId: nextApproverId },
+      });
+    } else {
+      await tx.emergencyChange.update({
+        where: { id: change.id },
+        data: { status: 'APPROVED', approvedAt: new Date(), approvalStep: nextStep },
+      });
+      await tx.requirement.update({
+        where: { id: requirementId },
+        data: { status: 'DRAFT', subStatus: null, version: { increment: 1 } },
+      });
+    }
+
+    await tx.statusLog.create({
+      data: {
+        requirementId,
+        operationType: 'REVIEW_PASS' as any,
+        fromStatus: req.status,
+        toStatus: 'DRAFT',
+        fromSubStatus: req.subStatus,
+        toSubStatus: null,
+        operatorId: approverId,
+        reason: nextApproverId ? '测试经理审批通过，转项目经理审批' : '紧急变更审批通过，需求退回草稿',
+      },
+    });
+
+    const updated = await tx.requirement.findUnique({
+      where: { id: requirementId },
+      include: {
+        system: true, ba: true, pm: true, creator: true,
+        trainSchedule: { include: { train: true } },
+      },
+    });
+    return buildRequirementDetail(updated!, tx);
+  });
+}
+
+// 紧急变更审批驳回
+export async function rejectEmergencyChange(
+  requirementId: string,
+  approverId: string,
+  rejectReason: string,
+): Promise<void> {
+  const change = await prisma.emergencyChange.findFirst({
+    where: { requirementId, status: 'PENDING' },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (!change) {
+    throw errors.badRequest('未找到待审批的紧急变更');
+  }
+  if (change.approverId !== approverId) {
+    throw errors.badRequest('您不是当前审批人');
+  }
+
+  const req = await prisma.requirement.findUnique({
+    where: { id: requirementId },
+    select: { status: true, subStatus: true },
+  });
+  if (!req) throw errors.requirementNotFound();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.emergencyChange.update({
+      where: { id: change.id },
+      data: { status: 'REJECTED', rejectReason },
+    });
+
+    await tx.statusLog.create({
+      data: {
+        requirementId,
+        operationType: 'REVIEW_REJECT' as any,
+        fromStatus: req.status,
+        toStatus: req.status,
+        fromSubStatus: req.subStatus,
+        toSubStatus: req.subStatus,
+        operatorId: approverId,
+        reason: `紧急变更审批驳回: ${rejectReason}`,
+      },
+    });
   });
 }
 

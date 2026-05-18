@@ -189,6 +189,16 @@ export const requirementService = {
     const response = await api.post(`/requirements/${id}/emergency-change`, { urgency, reason }); // POST /api/requirements/:id/emergency-change
     return response.data;
   },
+
+  approveEmergencyChange: async (id: string): Promise<ApiResponse<RequirementDetail>> => {
+    const response = await api.post(`/requirements/${id}/emergency-approve`); // POST /api/requirements/:id/emergency-approve
+    return response.data;
+  },
+
+  rejectEmergencyChange: async (id: string, reason: string): Promise<ApiResponse<void>> => {
+    const response = await api.post(`/requirements/${id}/emergency-reject`, { reason }); // POST /api/requirements/:id/emergency-reject
+    return response.data;
+  },
 };
 
 export default requirementService;

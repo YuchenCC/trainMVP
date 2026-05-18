@@ -270,9 +270,7 @@ const MainLayout: React.FC = () => {
               </span>
             )}
             <Breadcrumb
-              items={[
-                { title: '首页' },
-                ...breadcrumbs.map((item) => ({
+              items={breadcrumbs.map((item) => ({
                   title: item.path ? (
                     <a
                       onClick={() => navigate(item.path!)}
@@ -283,8 +281,8 @@ const MainLayout: React.FC = () => {
                   ) : (
                     <Text strong>{item.title}</Text>
                   ),
-                })),
-              ]}
+                }))
+              }
             />
           </Space>
 

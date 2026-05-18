@@ -91,6 +91,11 @@ const SchedulesPage: React.FC = () => {
   const [editPreviewDates, setEditPreviewDates] = useState<any>(null);
   const [editCustomDates, setEditCustomDates] = useState<CustomKeyDate[]>([]);
 
+  // 新增班次弹窗
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createForm] = Form.useForm();
+
   const loadTrainList = useCallback(async () => {
     try {
       const res = await api.get('/trains', { params: { page: 1, pageSize: 1000 } });
@@ -382,14 +387,63 @@ const SchedulesPage: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 80,
+      width: 140,
       render: (_, record) => (
-        <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEditSchedule(record)}>
-          编辑
-        </Button>
+        <Space size={0}>
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEditSchedule(record)}>
+            编辑
+          </Button>
+          <Button type="link" size="small" onClick={() => handleLockdown(record)}>
+            封板
+          </Button>
+        </Space>
       ),
     },
   ];
+
+  const handleLockdown = async (record: ScheduleItem) => {
+    Modal.confirm({
+      title: '确认封板',
+      content: '封板后将设置为当前日期，确定继续？',
+      onOk: async () => {
+        try {
+          await api.put(`/trains/${record.trainId}/schedules/${record.id}`, {
+            lockdownDate: dayjs().format('YYYY-MM-DD'),
+            version: record.version,
+          });
+          message.success('封板成功');
+          loadTrainList();
+          loadScheduleList();
+        } catch (err: any) {
+          message.error(err?.message || '封板失败');
+        }
+      },
+    });
+  };
+
+  const handleCreateSchedule = () => {
+    createForm.resetFields();
+    setCreateModalVisible(true);
+  };
+
+  const handleCreateSubmit = async (values: any) => {
+    setCreateLoading(true);
+    try {
+      await api.post(`/trains/${selectedTrainId}/schedules`, {
+        name: values.name || undefined,
+        startDate: values.startDate.format('YYYY-MM-DD'),
+        endDate: values.endDate.format('YYYY-MM-DD'),
+      });
+      message.success('班次创建成功');
+      setCreateModalVisible(false);
+      loadScheduleList();
+      loadTrainList();
+    } catch (err: any) {
+      message.error(err?.message || '创建失败');
+    } finally {
+      setCreateLoading(false);
+    }
+  };
 
   return (
     <div>
@@ -420,6 +474,12 @@ const SchedulesPage: React.FC = () => {
                 <Option key={train.id} value={train.id}>{train.name}</Option>
               ))}
             </Select>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => {
+              if (!selectedTrainId) { message.warning('请先选择所属火车'); return; }
+              handleCreateSchedule();
+            }}>
+              新增班次
+            </Button>
           </Space>
         </Space>
       </Card>
@@ -563,6 +623,37 @@ const SchedulesPage: React.FC = () => {
                 保存
               </Button>
             </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 新增班次弹窗 */}
+      <Modal
+        title="新增班次"
+        open={createModalVisible}
+        onCancel={() => setCreateModalVisible(false)}
+        confirmLoading={createLoading}
+        onOk={() => createForm.submit()}
+        okText="创建"
+        cancelText="取消"
+      >
+        <Form form={createForm} layout="vertical" onFinish={handleCreateSubmit}>
+          <Form.Item name="name" label="班次名称">
+            <Input placeholder="可选，如 铁胆火车侠-第3班" />
+          </Form.Item>
+          <Form.Item
+            name="startDate"
+            label="开始日期"
+            rules={[{ required: true, message: '请选择开始日期' }]}
+          >
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="endDate"
+            label="结束日期"
+            rules={[{ required: true, message: '请选择结束日期' }]}
+          >
+            <DatePicker style={{ width: '100%' }} />
           </Form.Item>
         </Form>
       </Modal>

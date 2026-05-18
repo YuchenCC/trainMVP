@@ -29,6 +29,8 @@ import {
   changeRequirement,                // 需求变更 service
   changeSubStatus,                  // 子状态变更 service
   emergencyChange,                  // 紧急变更 service
+  approveEmergencyChange,           // 紧急变更审批通过 service
+  rejectEmergencyChange,            // 紧急变更审批驳回 service
   RequirementSearchItem,            // 搜索单项类型
 } from './service.js';
 
@@ -360,6 +362,54 @@ export async function requirementRoutes(fastify: FastifyInstance): Promise<void>
       const reason = request.body.reason;                            // 变更原因
       const result = await emergencyChange(request.params.id, userId, operatorRole, urgency, reason); // 调用 service 紧急变更
       return reply.send({ success: true, data: result });
+    },
+  );
+
+  // ======================== 紧急变更审批通过 ========================
+  fastify.post<{
+    Params: { id: string };
+    Reply: ApiResponse<RequirementDetail>;
+  }>(
+    '/api/requirements/:id/emergency-approve',            // POST /api/requirements/:id/emergency-approve
+    {
+      onRequest: [
+        fastify.authenticate,                              // 需要登录
+        rbacMiddleware(Operation.APPROVE_EMERGENCY),        // 需要 APPROVE_EMERGENCY 权限
+      ],
+    },
+    async (request, reply) => {
+      const user = request.user as JwtPayload;
+      const result = await approveEmergencyChange(request.params.id, user.sub);
+      return reply.send({ success: true, data: result });
+    },
+  );
+
+  // ======================== 紧急变更审批驳回 ========================
+  fastify.post<{
+    Params: { id: string };
+    Body: { reason: string };
+    Reply: ApiResponse<void>;
+  }>(
+    '/api/requirements/:id/emergency-reject',              // POST /api/requirements/:id/emergency-reject
+    {
+      onRequest: [
+        fastify.authenticate,                              // 需要登录
+        rbacMiddleware(Operation.APPROVE_EMERGENCY),        // 需要 APPROVE_EMERGENCY 权限
+      ],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['reason'],
+          properties: {
+            reason: { type: 'string', minLength: 1, maxLength: 500 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const user = request.user as JwtPayload;
+      await rejectEmergencyChange(request.params.id, user.sub, request.body.reason);
+      return reply.send({ success: true });
     },
   );
 }

@@ -399,6 +399,57 @@ const RequirementDetailPage: React.FC = () => {
     }
   };
 
+  // 处理紧急变更审批通过
+  const handleApproveEmergency = async () => {
+    Modal.confirm({
+      title: '确认审批通过',
+      content: requirement?.emergencyChange?.approvalStep === 1
+        ? '通过后转项目经理审批'
+        : '通过后需求将退回草稿状态',
+      onOk: async () => {
+        try {
+          await requirementService.approveEmergencyChange(id!);
+          message.success('审批通过');
+          fetchDetail();
+        } catch (error: any) {
+          message.error(error?.message || '审批失败');
+        }
+      },
+    });
+  };
+
+  // 处理紧急变更审批驳回
+  const handleRejectEmergency = () => {
+    let rejectReason = '';
+    Modal.confirm({
+      title: '驳回紧急变更',
+      icon: null,
+      content: (
+        <div style={{ marginTop: 12 }}>
+          <Input.TextArea
+            placeholder="请输入驳回原因（必填，最多500字）"
+            maxLength={500}
+            rows={3}
+            onChange={(e) => { rejectReason = e.target.value; }}
+          />
+        </div>
+      ),
+      onOk: async () => {
+        if (!rejectReason.trim()) {
+          message.warning('请填写驳回原因');
+          return Promise.reject();
+        }
+        try {
+          await requirementService.rejectEmergencyChange(id!, rejectReason);
+          message.success('已驳回');
+          fetchDetail();
+        } catch (error: any) {
+          message.error(error?.message || '驳回失败');
+        }
+      },
+    });
+  };
+
   // 依赖列表表格列定义（新增风险等级列）
   const dependencyColumns = [
     {
@@ -519,6 +570,27 @@ const RequirementDetailPage: React.FC = () => {
                       setEmergencyModalVisible(true);
                     }}>紧急变更</Button>
                   )}
+                  {requirement.emergencyChange && (
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '2px 12px',
+                      borderRadius: 4,
+                      background: requirement.emergencyChange.approvalStep === 1 ? '#fff7e6' : '#f0f5ff',
+                      border: requirement.emergencyChange.approvalStep === 1 ? '1px solid #ffd591' : '1px solid #adc6ff',
+                      fontSize: 13,
+                      color: '#d46b08',
+                    }}>
+                      ⏳ 待审批 · 当前：
+                      {requirement.emergencyChange.approvalStep === 1 ? '测试经理' : '项目经理'}
+                      ({requirement.emergencyChange.urgency})
+                    </span>
+                  )}
+                  {checkPermission(Operation.APPROVE_EMERGENCY) && requirement.emergencyChange && (
+                    <>
+                      <Button type="primary" onClick={handleApproveEmergency}>审批通过</Button>
+                      <Button danger onClick={handleRejectEmergency}>审批驳回</Button>
+                    </>
+                  )}
                   {canCancel && (
                     <Button danger onClick={handleCancel}>取消</Button>
                   )}
@@ -623,7 +695,15 @@ const RequirementDetailPage: React.FC = () => {
                       </div>
                       {log.fromStatus && (
                         <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 4 }}>
-                          {REQ_STATUS_LABELS[log.fromStatus]} → {REQ_STATUS_LABELS[log.toStatus]}
+                          {log.fromSubStatus || log.toSubStatus ? (
+                            <>
+                              {REQ_STATUS_LABELS[log.fromStatus]}{log.fromSubStatus ? `-${REQ_SUB_STATUS_LABELS[log.fromSubStatus] || log.fromSubStatus}` : ''}
+                              {' → '}
+                              {REQ_STATUS_LABELS[log.toStatus]}{log.toSubStatus ? `-${REQ_SUB_STATUS_LABELS[log.toSubStatus] || log.toSubStatus}` : ''}
+                            </>
+                          ) : (
+                            <>{REQ_STATUS_LABELS[log.fromStatus]} → {REQ_STATUS_LABELS[log.toStatus]}</>
+                          )}
                         </div>
                       )}
                     </div>

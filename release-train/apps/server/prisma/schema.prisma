@@ -339,9 +339,10 @@ model EmergencyChange {
   urgency        UrgencyLevel                               // 紧急程度
   reason         String          @db.Text                   // 变更原因
   status         ApprovalStatus  @default(PENDING)          // 审批状态
-  approverId     String?                                    // 审批人ID
+  approvalStep   Int             @default(1)                // 审批步骤：1=测试经理, 2=项目经理
+  approverId     String?                                    // 当前审批人ID
   approver       User?            @relation("Approver", fields: [approverId], references: [id]) // 审批人
-  approvedAt     DateTime?                                  // 审批时间
+  approvedAt     DateTime?                                  // 审批通过时间
   rejectReason   String?         @db.Text                   // 驳回原因
   createdAt      DateTime        @default(now())            // 创建时间
 

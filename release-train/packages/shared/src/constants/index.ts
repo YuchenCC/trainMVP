@@ -159,7 +159,7 @@ export const PERMISSION_MATRIX: Record<Operation, Role[]> = {
   [Operation.CANCEL_REQ]:       [Role.BA, Role.TRAIN_ADMIN, Role.SUPER_ADMIN],
   [Operation.CHANGE_REQ]:       [Role.BA, Role.TRAIN_ADMIN, Role.SUPER_ADMIN],
   [Operation.EMERGENCY_CHANGE]: [Role.BA, Role.TRAIN_ADMIN],
-  [Operation.APPROVE_EMERGENCY]:[Role.PROJECT_MGR, Role.TRAIN_ADMIN],
+  [Operation.APPROVE_EMERGENCY]:[Role.TEST_MGR, Role.PROJECT_MGR, Role.TRAIN_ADMIN],
   [Operation.COMPLETE_DEV]:     [Role.TECH_MGR],
   [Operation.PASS_SIT]:         [Role.TEST_MGR],
   [Operation.PASS_UAT]:         [Role.BA],
