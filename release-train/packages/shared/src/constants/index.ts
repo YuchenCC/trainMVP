@@ -75,12 +75,12 @@ export enum ReqSubStatus {
   FROZEN = 'FROZEN',                   // 封板
 }
 
-// ========== 火车状态枚举 ==========
-export enum TrainStatus {
+// ========== 班次状态枚举 ==========
+export enum TrainScheduleStatus {
   PLANNING = 'PLANNING',              // 规划中
   IN_PROGRESS = 'IN_PROGRESS',        // 进行中
-  COMPLETED = 'COMPLETED',            // 已完成
-  CANCELLED = 'CANCELLED',            // 已取消
+  LOCKED_DOWN = 'LOCKED_DOWN',        // 已封板
+  RELEASED = 'RELEASED',              // 已投产
 }
 
 // ========== 紧急程度枚举 ==========
@@ -273,20 +273,20 @@ export const REQ_SUB_STATUS_COLORS: Record<ReqSubStatus, string> = {
   [ReqSubStatus.FROZEN]: 'green',
 };
 
-// ========== 火车状态显示名称映射 ==========
-export const TRAIN_STATUS_LABELS: Record<TrainStatus, string> = {
-  [TrainStatus.PLANNING]: '规划中',
-  [TrainStatus.IN_PROGRESS]: '进行中',
-  [TrainStatus.COMPLETED]: '已完成',
-  [TrainStatus.CANCELLED]: '已取消',
+// ========== 班次状态显示名称映射 ==========
+export const TRAIN_SCHEDULE_STATUS_LABELS: Record<TrainScheduleStatus, string> = {
+  [TrainScheduleStatus.PLANNING]: '规划中',
+  [TrainScheduleStatus.IN_PROGRESS]: '进行中',
+  [TrainScheduleStatus.LOCKED_DOWN]: '已封板',
+  [TrainScheduleStatus.RELEASED]: '已投产',
 };
 
-// ========== 火车状态选项（用于筛选和选择） ==========
-export const TRAIN_STATUS_OPTIONS = [
-  { value: TrainStatus.PLANNING, label: '规划中', color: 'blue' },
-  { value: TrainStatus.IN_PROGRESS, label: '进行中', color: 'processing' },
-  { value: TrainStatus.COMPLETED, label: '已完成', color: 'success' },
-  { value: TrainStatus.CANCELLED, label: '已取消', color: 'default' },
+// ========== 班次状态选项（用于筛选和选择） ==========
+export const TRAIN_SCHEDULE_STATUS_OPTIONS = [
+  { value: TrainScheduleStatus.PLANNING, label: '规划中', color: 'blue' },
+  { value: TrainScheduleStatus.IN_PROGRESS, label: '进行中', color: 'processing' },
+  { value: TrainScheduleStatus.LOCKED_DOWN, label: '已封板', color: 'orange' },
+  { value: TrainScheduleStatus.RELEASED, label: '已投产', color: 'green' },
 ];
 
 // ========== 需求状态 Tag 颜色映射 ==========

@@ -14,7 +14,6 @@ import {
 } from '@ant-design/icons';
 import {
   TrainDetail,                // 火车详情类型
-  TrainStatus,             // 火车状态枚举
   Role,                   // 角色枚举
   Operation,             // 操作枚举
   KeyDatesResponse,       // 关键日期响应
@@ -32,27 +31,6 @@ const { Text } = Typography;
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 
-// ========== 状态标签颜色映射 ==========
-const getStatusColor = (status: TrainStatus) => {
-  switch (status) {
-    case TrainStatus.PLANNING: return 'blue';
-    case TrainStatus.IN_PROGRESS: return 'green';
-    case TrainStatus.COMPLETED: return 'default';
-    case TrainStatus.CANCELLED: return 'red';
-    default: return 'default';
-  }
-};
-
-const getStatusText = (status: TrainStatus) => {
-  switch (status) {
-    case TrainStatus.PLANNING: return '计划中';
-    case TrainStatus.IN_PROGRESS: return '进行中';
-    case TrainStatus.COMPLETED: return '已完成';
-    case TrainStatus.CANCELLED: return '已取消';
-    default: return status;
-  }
-};
-
 // ========== 容量颜色映射 ==========
 const getCapacityColor = (used: number, total: number): string => {
   const rate = total > 0 ? (used / total) * 100 : 0;
@@ -69,9 +47,6 @@ const BasicInfoTab = ({ train }: { train: TrainDetail }) => {
         <Descriptions column={2} size="small" labelStyle={{ color: '#64748b', width: 100 }}>
           <Descriptions.Item label="火车名称">
             <Text strong>{train.name}</Text>
-          </Descriptions.Item>
-          <Descriptions.Item label="火车状态">
-            <Tag color={getStatusColor(train.status)}>{getStatusText(train.status)}</Tag>
           </Descriptions.Item>
           <Descriptions.Item label="开始时间">
             {train.startDate ? dayjs(train.startDate).format('YYYY-MM-DD') : '-'}
@@ -171,29 +146,25 @@ const TrainDetailPage: React.FC = () => {
   const canEdit = () => {
     if (!user?.role || !train) return false;
     if (user.role === Role.SUPER_ADMIN) return true;
-    if (!checkPermission(Operation.CREATE_TRAIN)) return false;
-    return train.status === TrainStatus.PLANNING;
+    return checkPermission(Operation.CREATE_TRAIN);
   };
 
   const canCancel = () => {
     if (!user?.role || !train) return false;
     if (user.role === Role.SUPER_ADMIN) return true;
-    if (!checkPermission(Operation.CREATE_TRAIN)) return false;
-    return train.status === TrainStatus.PLANNING;
+    return checkPermission(Operation.CREATE_TRAIN);
   };
 
   const canManageSchedule = () => {
     if (!user?.role || !train) return false;
     if (user.role === Role.SUPER_ADMIN) return true;
-    if (!checkPermission(Operation.CREATE_TRAIN)) return false;
-    return train.status === TrainStatus.PLANNING;
+    return checkPermission(Operation.CREATE_TRAIN);
   };
 
   const canCompleteTrain = () => {
     if (!user?.role || !train) return false;
     if (user.role === Role.SUPER_ADMIN) return true;
-    if (!checkPermission(Operation.CREATE_TRAIN)) return false;
-    return train.status === TrainStatus.IN_PROGRESS;
+    return checkPermission(Operation.CREATE_TRAIN);
   };
 
   // ========== 班次操作处理 ==========
@@ -382,7 +353,6 @@ const TrainDetailPage: React.FC = () => {
             返回火车列表
           </Button>
           <Text strong style={{ fontSize: 18 }}>{train.name}</Text>
-          <Tag color={getStatusColor(train.status)}>{getStatusText(train.status)}</Tag>
         </Space>
         <Space>
           <Button icon={<SyncOutlined />} onClick={fetchDetail}>

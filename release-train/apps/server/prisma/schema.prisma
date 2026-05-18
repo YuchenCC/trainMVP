@@ -220,7 +220,6 @@ enum OperationType {
 model Train {
   id            String       @id @default(cuid())         // 火车ID
   name          String                                     // 火车名称
-  status        TrainStatus  @default(PLANNING)          // 火车状态
   description   String?      @db.Text                     // 火车描述
   version       Int          @default(1)                  // 乐观锁版本号
 
@@ -231,24 +230,22 @@ model Train {
 
   trainSystems  TrainSystem[]                            // 火车-系统关联
   schedules     TrainSchedule[]                         // 火车下的班次（1火车→多班次）
-
-  @@index([status])                                      // 按火车状态筛选
 }
 
 // ========== 火车班次 ==========
 model TrainSchedule {
-  id            String       @id @default(cuid())         // 班次ID
-  trainId       String                                     // 火车ID
-  name          String                                     // 班次名称（如：第1班、Q2A1等）
-  status        TrainStatus  @default(PLANNING)          // 班次状态
-  startDate     DateTime?                               // 开始日期
-  endDate       DateTime?                               // 结束日期
-  boardingDate  DateTime?                               // 统一纳版日
-  lockdownDate  DateTime?                               // 统一封板日
-  releaseDate   DateTime?                               // 统一投产日
-  version       Int          @default(1)                  // 乐观锁版本号
+  id            String                @id @default(cuid())         // 班次ID
+  trainId       String                                              // 火车ID
+  name          String                                              // 班次名称（如：第1班、Q2A1等）
+  status        TrainScheduleStatus  @default(PLANNING)          // 班次状态
+  startDate     DateTime?                                        // 开始日期
+  endDate       DateTime?                                        // 结束日期
+  boardingDate  DateTime?                                        // 统一纳版日
+  lockdownDate  DateTime?                                        // 统一封板日
+  releaseDate   DateTime?                                        // 统一投产日
+  version       Int                   @default(1)                  // 乐观锁版本号
 
-  createdById   String                                     // 创建人ID
+  createdById   String                                              // 创建人ID
   createdBy     User         @relation("ScheduleCreator", fields: [createdById], references: [id]) // 创建人
   createdAt     DateTime     @default(now())              // 创建时间
   updatedAt     DateTime     @updatedAt                   // 更新时间
@@ -261,11 +258,11 @@ model TrainSchedule {
   @@index([trainId, createdAt(sort: Desc)])             // 按火车和创建时间查询班次
 }
 
-enum TrainStatus {
+enum TrainScheduleStatus {
   PLANNING      // 规划中
   IN_PROGRESS   // 进行中
-  COMPLETED     // 已完成
-  CANCELLED     // 已取消
+  LOCKED_DOWN   // 已封板
+  RELEASED      // 已投产
 }
 
 // ========== 火车-系统关联 ==========

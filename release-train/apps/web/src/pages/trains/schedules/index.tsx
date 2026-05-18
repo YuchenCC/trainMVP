@@ -27,7 +27,7 @@ import {
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import api from '../../../services/api';
-import { TrainStatus } from '@release-train/shared';
+import { TrainScheduleStatus, TRAIN_SCHEDULE_STATUS_LABELS } from '@release-train/shared';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -43,7 +43,7 @@ interface ScheduleItem {
   releaseDate: string | null;
   boardingDate: string | null;
   lockdownDate: string | null;
-  status: TrainStatus;
+  status: TrainScheduleStatus;
   systemCount: number;
   requirementCount: number;
   createdAt: string;
@@ -191,34 +191,18 @@ const SchedulesPage: React.FC = () => {
     }
   };
 
-  const getStatusColor = (status: TrainStatus) => {
-    switch (status) {
-      case TrainStatus.PLANNING:
-        return 'blue';
-      case TrainStatus.IN_PROGRESS:
-        return 'green';
-      case TrainStatus.COMPLETED:
-        return 'default';
-      case TrainStatus.CANCELLED:
-        return 'red';
-      default:
-        return 'default';
-    }
+  const getStatusColor = (status: TrainScheduleStatus) => {
+    const colorMap: Record<string, string> = {
+      PLANNING: 'blue',
+      IN_PROGRESS: 'processing',
+      LOCKED_DOWN: 'orange',
+      RELEASED: 'green',
+    };
+    return colorMap[status] || 'default';
   };
 
-  const getStatusText = (status: TrainStatus) => {
-    switch (status) {
-      case TrainStatus.PLANNING:
-        return '计划中';
-      case TrainStatus.IN_PROGRESS:
-        return '进行中';
-      case TrainStatus.COMPLETED:
-        return '已完成';
-      case TrainStatus.CANCELLED:
-        return '已取消';
-      default:
-        return status;
-    }
+  const getStatusText = (status: TrainScheduleStatus) => {
+    return TRAIN_SCHEDULE_STATUS_LABELS[status] || status;
   };
 
   const handleEditSchedule = async (record: ScheduleItem) => {
@@ -329,7 +313,7 @@ const SchedulesPage: React.FC = () => {
       dataIndex: 'status',
       key: 'status',
       width: 100,
-      render: (status: TrainStatus) => (
+      render: (status: TrainScheduleStatus) => (
         <Tag color={getStatusColor(status)}>{getStatusText(status)}</Tag>
       ),
     },
@@ -387,19 +371,53 @@ const SchedulesPage: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 140,
+      width: 260,
       render: (_, record) => (
         <Space size={0}>
+          {record.status === 'PLANNING' && (
+            <Button type="link" size="small" onClick={() => handleChangeStatus(record, 'IN_PROGRESS')}>
+              开始
+            </Button>
+          )}
+          {record.status === 'IN_PROGRESS' && (
+            <Button type="link" size="small" onClick={() => handleLockdown(record)}>
+              封板
+            </Button>
+          )}
+          {record.status === 'LOCKED_DOWN' && (
+            <Button type="link" size="small" onClick={() => handleChangeStatus(record, 'RELEASED')}>
+              投产
+            </Button>
+          )}
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEditSchedule(record)}>
             编辑
-          </Button>
-          <Button type="link" size="small" onClick={() => handleLockdown(record)}>
-            封板
           </Button>
         </Space>
       ),
     },
   ];
+
+  const handleChangeStatus = async (record: ScheduleItem, status: string) => {
+    const labelMap: Record<string, string> = {
+      IN_PROGRESS: '进行中',
+      LOCKED_DOWN: '封板',
+      RELEASED: '投产',
+    };
+    Modal.confirm({
+      title: '确认变更状态',
+      content: `确定将班次状态变更为「${labelMap[status]}」？`,
+      onOk: async () => {
+        try {
+          await api.post(`/trains/${record.trainId}/schedules/${record.id}/status`, { status });
+          message.success('状态变更成功');
+          loadScheduleList();
+          loadTrainList();
+        } catch (err: any) {
+          message.error(err?.message || '状态变更失败');
+        }
+      },
+    });
+  };
 
   const handleLockdown = async (record: ScheduleItem) => {
     Modal.confirm({

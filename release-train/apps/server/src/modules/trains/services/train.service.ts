@@ -232,9 +232,6 @@ export async function listTrains(
   const skip = (page - 1) * pageSize;
 
   const where: Prisma.TrainWhereInput = {};
-  if (query.status) {
-    where.status = query.status as Prisma.EnumTrainStatusFilter<'Train'>;
-  }
 
   const [total, trains] = await Promise.all([
     prisma.train.count({ where }),
@@ -710,7 +707,7 @@ export async function getAvailableSystems(trainId?: string): Promise<AvailableSy
       id: system.id,
       name: system.name,
       conflictTrain: conflictTrain
-        ? { id: conflictTrain.train.id, name: conflictTrain.train.name, status: conflictTrain.train.status as any }
+        ? { id: conflictTrain.train.id, name: conflictTrain.train.name }
         : undefined,
     } as AvailableSystem;
   });
@@ -841,7 +838,7 @@ export async function listTrainSchedules(
       id: s.id,
       trainId: s.trainId,
       trainName: train.name,
-      status: train.status,
+      status: s.status,
       name: s.name,
       startDate: s.startDate?.toISOString().split('T')[0],
       endDate: s.endDate?.toISOString().split('T')[0],
@@ -895,7 +892,7 @@ export async function listAllSchedules(
       id: s.id,
       trainId: s.trainId,
       trainName: s.train.name,
-      status: s.train.status,
+      status: s.status,
       name: s.name,
       startDate: s.startDate?.toISOString().split('T')[0],
       endDate: s.endDate?.toISOString().split('T')[0],
@@ -1079,6 +1076,41 @@ export async function updateTrainSchedule(
         }
       }
     }
+  });
+
+  return getTrainScheduleById(scheduleId) as Promise<TrainScheduleDetailResponse>;
+}
+
+export async function updateTrainScheduleStatus(
+  scheduleId: string,
+  status: string,
+): Promise<TrainScheduleDetailResponse> {
+  const schedule = await prisma.trainSchedule.findUnique({ where: { id: scheduleId } });
+  if (!schedule) throw errors.trainNotFound();
+
+  const validTransitions: Record<string, string[]> = {
+    PLANNING: ['IN_PROGRESS'],
+    IN_PROGRESS: ['LOCKED_DOWN'],
+    LOCKED_DOWN: ['RELEASED'],
+    RELEASED: [],
+  };
+
+  if (!validTransitions[schedule.status]?.includes(status)) {
+    throw errors.badRequest(`不能从 ${schedule.status} 变更为 ${status}`);
+  }
+
+  // 如果变更为已封板且没有封板日期，自动设置
+  const updateData: any = { status };
+  if (status === 'LOCKED_DOWN' && !schedule.lockdownDate) {
+    updateData.lockdownDate = new Date();
+  }
+  if (status === 'RELEASED' && !schedule.releaseDate) {
+    updateData.releaseDate = new Date();
+  }
+
+  await prisma.trainSchedule.update({
+    where: { id: scheduleId },
+    data: updateData,
   });
 
   return getTrainScheduleById(scheduleId) as Promise<TrainScheduleDetailResponse>;

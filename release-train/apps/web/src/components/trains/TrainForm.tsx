@@ -16,7 +16,6 @@ import {
   UpdateTrainRequest,             // 编辑火车请求类型
   TrainDetail,                   // 火车详情类型
   AvailableSystem,               // 可选系统类型
-  TrainStatus,                   // 火车状态枚举
 } from '@release-train/shared';
 import { trainService } from '../../services/train';
 import { systemService, SystemUserOption } from '../../services/system';
@@ -48,7 +47,6 @@ interface TrainSystemFormItem {
   conflictInfo?: {                     // 冲突信息（如果系统已在其他火车）
     trainId: string;
     trainName: string;
-    trainStatus: TrainStatus;
   };
 }
 
@@ -265,7 +263,7 @@ const TrainForm: React.FC<TrainFormProps> = ({ mode, initialData, onCancel, onSu
 
   // ========== 判断是否为规划中状态 ==========
   // 规划中状态才允许添加/移除搭载系统
-  const isPlanning = mode === 'create' || initialData?.status === TrainStatus.PLANNING;
+  const isPlanning = mode === 'create' || !initialData;
 
   return (
     <div style={{ display: 'flex', gap: 24 }}>

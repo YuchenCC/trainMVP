@@ -1,13 +1,12 @@
 // ========== 版本火车相关类型定义 ==========
 // 对应 Prisma Train 和 TrainSystem 模型，以及相关 API 请求/响应类型
-import { TrainStatus } from '../constants';
+import { TrainScheduleStatus } from '../constants';
 
 // ========== 版本火车实体类型（Prisma 模型） ==========
 // 注意：API 响应中使用 string（ISO 格式），此类型保留用于内部逻辑
 export interface Train {
   id: string;
   name: string;
-  status: TrainStatus;
   description?: string;
   createdById: string;
   createdAt: Date;
@@ -19,7 +18,7 @@ export interface TrainSchedule {
   id: string;
   trainId: string;
   name: string;
-  status: TrainStatus;
+  status: TrainScheduleStatus;
   startDate?: Date;
   endDate?: Date;
   boardingDate?: Date;
@@ -35,7 +34,6 @@ export interface TrainSchedule {
 export interface TrainItem {
   id: string;                     // 火车 ID
   name: string;                    // 火车名称
-  status: TrainStatus;             // 火车状态
   description?: string;           // 火车描述
   systemCount: number;             // 搭载系统数量
   scheduleCount: number;          // 班次数量
@@ -43,11 +41,10 @@ export interface TrainItem {
 }
 
 // ========== 火车班次列表项 ==========
-// 对应 GET /api/trains/:trainId/schedules 返回的单条记录
 export interface TrainScheduleItem {
   id: string;                     // 班次 ID
   name: string;                    // 班次名称
-  status: TrainStatus;             // 班次状态
+  status: TrainScheduleStatus;     // 班次状态
   startDate?: string;              // 开始日期
   endDate?: string;               // 结束日期
   boardingDate?: string;           // 纳版截止日期
@@ -75,7 +72,6 @@ export interface TrainListResponse {
 // ========== 版本火车列表查询参数 ==========
 // 对应 GET /api/trains 查询参数
 export interface TrainListParams {
-  status?: TrainStatus;            // 火车状态筛选（可选）
   page?: number;                   // 页码（默认 1）
   pageSize?: number;               // 每页条数（默认 20）
 }
@@ -101,7 +97,6 @@ export interface TrainSystemDetail {
 export interface TrainDetail {
   id: string;                     // 火车 ID
   name: string;                    // 火车名称
-  status: TrainStatus;             // 火车状态
   description?: string;            // 火车描述
   version: number;                 // 乐观锁版本号
   createdBy: { id: string; displayName: string }; // 创建人
@@ -116,7 +111,7 @@ export interface TrainScheduleDetail {
   id: string;                     // 班次 ID
   trainId: string;               // 火车 ID
   name: string;                    // 班次名称
-  status: TrainStatus;             // 班次状态
+  status: TrainScheduleStatus;     // 班次状态
   startDate?: string;              // 开始日期
   endDate?: string;               // 结束日期
   boardingDate?: string;           // 纳版截止日期
@@ -195,7 +190,6 @@ export interface AvailableSystem {
   conflictTrain?: {                // 冲突信息（如果有）
     id: string;                   // 冲突火车 ID
     name: string;                  // 冲突火车名称
-    status: TrainStatus;            // 冲突火车状态
   };
 }
 

@@ -25,7 +25,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { trainService } from '../../services/train';
 import { useAuthStore } from '../../stores/auth';
-import { Role, TrainStatus } from '@release-train/shared';
+import { Role } from '@release-train/shared';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -34,7 +34,6 @@ const { Option } = Select;
 interface TrainListItem {
   id: string;
   name: string;
-  status: TrainStatus;
   description?: string;
   startDate?: string;
   endDate?: string;
@@ -55,13 +54,11 @@ const TrainsPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [trainList, setTrainList] = useState<TrainListItem[]>([]);
   const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0 });
-  const [statusFilter, setStatusFilter] = useState<TrainStatus | undefined>();
 
   const loadTrainList = useCallback(async (page = 1, pageSize = 20) => {
     setLoading(true);
     try {
       const res = await trainService.list({
-        status: statusFilter,
         page,
         pageSize,
       });
@@ -75,7 +72,7 @@ const TrainsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, []);
 
   useEffect(() => {
     loadTrainList(pagination.page, pagination.pageSize);
@@ -83,11 +80,6 @@ const TrainsPage: React.FC = () => {
 
   const handleRefresh = () => {
     loadTrainList(pagination.page, pagination.pageSize);
-  };
-
-  const handleStatusChange = (status: TrainStatus | undefined) => {
-    setStatusFilter(status);
-    setPagination(prev => ({ ...prev, page: 1 }));
   };
 
   const handlePageChange = (page: number, pageSize: number) => {
@@ -156,7 +148,7 @@ const TrainsPage: React.FC = () => {
           >
             查看
           </Button>
-          {canCreateTrain && record.status === TrainStatus.PLANNING && (
+          {canCreateTrain && (
             <>
               <Button
                 type="link"
@@ -185,24 +177,6 @@ const TrainsPage: React.FC = () => {
               </Button>
             </>
           )}
-          {canCreateTrain && record.status === TrainStatus.IN_PROGRESS && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={async () => {
-                try {
-                  await trainService.completeTrain(record.id);
-                  message.success('火车已完成');
-                  loadTrainList(pagination.page, pagination.pageSize);
-                } catch (err: any) {
-                  message.error(err?.response?.data?.message || '完成失败');
-                }
-              }}
-            >
-              完成
-            </Button>
-          )}
         </Space>
       ),
     },
@@ -226,26 +200,6 @@ const TrainsPage: React.FC = () => {
           )}
         </Space>
       </div>
-
-      <Card style={{ marginBottom: 16 }}>
-        <Space size="large">
-          <Space>
-            <Text type="secondary">状态：</Text>
-            <Select
-              value={statusFilter}
-              onChange={handleStatusChange}
-              style={{ width: 150 }}
-              placeholder="全部"
-              allowClear
-            >
-              <Option value={TrainStatus.PLANNING}>计划中</Option>
-              <Option value={TrainStatus.IN_PROGRESS}>进行中</Option>
-              <Option value={TrainStatus.COMPLETED}>已完成</Option>
-              <Option value={TrainStatus.CANCELLED}>已取消</Option>
-            </Select>
-          </Space>
-        </Space>
-      </Card>
 
       <Card bodyStyle={{ padding: 0 }} style={{ marginBottom: 24 }}>
         {loading ? (

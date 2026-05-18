@@ -23,6 +23,7 @@ import {
   listAllSchedules,
   getTrainScheduleById,
   previewKeyDates,
+  updateTrainScheduleStatus,
   TrainScheduleDetailResponse,
   TrainScheduleListItemResponse,
 } from '../services/train.service.js';
@@ -255,6 +256,35 @@ export async function scheduleRoutes(fastify: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       const result = await previewKeyDates(request.body);
+      return reply.status(200).send({ success: true, data: result });
+    },
+  );
+
+  // 更新班次状态
+  fastify.post<{
+    Params: { trainId: string; scheduleId: string };
+    Body: { status: string };
+    Reply: ApiResponse<any>;
+  }>(
+    '/api/trains/:trainId/schedules/:scheduleId/status',
+    {
+      onRequest: [
+        fastify.authenticate,
+        rbacMiddleware(Operation.MANAGE_TRAIN),
+      ],
+      schema: {
+        params: scheduleIdParamsSchema,
+        body: {
+          type: 'object',
+          required: ['status'],
+          properties: {
+            status: { type: 'string', enum: ['PLANNING', 'IN_PROGRESS', 'LOCKED_DOWN', 'RELEASED'] },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const result = await updateTrainScheduleStatus(request.params.scheduleId, request.body.status);
       return reply.status(200).send({ success: true, data: result });
     },
   );
