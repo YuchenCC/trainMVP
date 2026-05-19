@@ -1,5 +1,6 @@
 import { FastifyError, FastifyReply } from 'fastify';
 import { getErrorCodeEntry, ErrorType } from '@release-train/shared';
+import { getGlobalLogger } from '../logger/index.js';
 
 // ========== 业务错误基类 ==========
 // 所有响应统一使用 HTTP 200，通过 success 字段区分成功/失败，code 字段标识具体错误
@@ -253,7 +254,12 @@ export function handleError(error: unknown, reply: FastifyReply): void {
 
   // 未知错误：开发环境返回详细错误信息，生产环境隐藏堆栈
   const isDev = process.env.NODE_ENV !== 'production';
-  console.error('[Unhandled Error]', error);
+  try {
+    const logger = getGlobalLogger();
+    logger.error('[Unhandled Error]', error instanceof Error ? error : undefined);
+  } catch {
+    console.error('[Unhandled Error]', error);
+  }
 
   reply.status(200).send({
     success: false,

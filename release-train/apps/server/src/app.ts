@@ -20,6 +20,7 @@ dotenv.config({ path: path.join(monorepoRoot, '.env') });
 
 import { authMiddleware, rbacMiddleware } from './common/middleware/index.js';
 import { handleError } from './common/errors/index.js';
+import { correlationMiddleware, initializeMetrics, setGlobalLogger, Logger } from './common/logger/index.js';
 import { loginRoute, meRoute, seedRoute } from './modules/auth/index.js';
 import { requirementRoutes } from './modules/requirements/index.js';
 import { systemRoutes } from './modules/systems/index.js';
@@ -127,8 +128,27 @@ export async function createApp() {
   // ========== 注册认证中间件装饰器 ==========
   app.decorate('authenticate', authMiddleware);
 
+  // ========== 初始化全局日志 ==========
+  const logger = new Logger(app.log);
+  setGlobalLogger(logger);
+
+  // ========== 注册请求追踪和指标收集 ==========
+  correlationMiddleware(app);
+  initializeMetrics(app);
+
   // ========== 全局错误处理 ==========
   app.setErrorHandler((error, request, reply) => {
+    const correlationId = request.correlationId || 'unknown';
+    app.log.error({
+      correlationId,
+      method: request.method,
+      url: request.url,
+      error: {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      },
+    }, 'Request error');
     handleError(error, reply);
   });
 
