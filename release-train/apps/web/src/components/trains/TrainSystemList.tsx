@@ -4,10 +4,11 @@
 // 文件名：TrainSystemList.tsx
 import React, { useState, useCallback } from 'react';
 import {
-  Table, Tag, Progress, Card, Space, Typography, Button, message, Modal, Select, InputNumber, Tooltip,
+  Table, Card, Typography, message, Modal, Select, InputNumber, Tooltip,
 } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import {
-  EditOutlined, DeleteOutlined, ExclamationCircleOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import {
   TrainSystemDetail,           // 搭载系统详情类型
@@ -226,7 +227,7 @@ const TrainSystemList: React.FC<TrainSystemListProps> = ({
   };
 
   // ========== 表格列定义 ==========
-  const columns = [
+  const columns: ColumnsType<TrainSystemDetail> = [
     {
       title: '系统名称',
       dataIndex: ['system', 'name'],
@@ -238,7 +239,7 @@ const TrainSystemList: React.FC<TrainSystemListProps> = ({
       dataIndex: 'capacityPoints',
       key: 'capacityPoints',
       width: 80,
-      align: 'center',
+      align: 'center' as const,
       render: (capacity: number) => capacity || 0,
     },
     {

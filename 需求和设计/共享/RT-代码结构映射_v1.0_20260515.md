@@ -1,7 +1,7 @@
 # 代码结构映射 — 用户故事 → 代码文件
 
-**版本号**: v1.1
-**日期**: 2026-05-17
+**版本号**: v1.2
+**日期**: 2026-05-19
 **用途**: Bug 修复时快速定位代码文件，先判断属于哪个 US，再查此表
 
 ---
@@ -161,7 +161,7 @@ release-train/
 | 路由 | `apps/server/src/modules/trains/index.ts` → `POST /api/trains` | 后端路由 |
 | 业务 | `apps/server/src/modules/trains/services/train.service.ts` → `createTrain()` | 后端业务逻辑 |
 | 类型 | `packages/shared/src/types/train.ts` | 火车类型定义 |
-| 测试 | `apps/server/src/__tests__/t2-us2.1-train-create.test.ts` | 后端测试 |
+| 测试 | `apps/server/src/__tests__/t2-us2.1-train-crud.test.ts` | 后端测试（22个用例：创建/列表/详情/更新/取消/系统管理） |
 
 ### US2.2 火车班次创建
 
@@ -173,7 +173,33 @@ release-train/
 | 业务 | `apps/server/src/modules/trains/services/train.service.ts` → `createTrainSchedule()` | 后端业务逻辑（含自动生成班次名称逻辑） |
 | 工具 | `apps/server/src/modules/trains/utils/key-dates.ts` | 关键日期计算工具 |
 | 类型 | `packages/shared/src/types/train.ts` | 班次类型定义 |
-| 测试 | `apps/server/src/__tests__/t2-us2.2-train-schedule-create.test.ts` | 后端测试 |
+| 测试 | `apps/server/src/__tests__/t2-us2.2-train-schedule-create.test.ts` | 后端测试（11个用例：创建/编辑/查询/名称/容量快照） |
+
+### US2.2.1 火车班次状态变更
+
+| 层级 | 文件 | 说明 |
+|------|------|------|
+| 页面 | `apps/web/src/pages/trains/schedule-detail.tsx` | 班次详情页状态操作按钮 |
+| 路由 | `apps/server/src/modules/trains/routes/schedule.ts` → `POST /api/trains/:trainId/schedules/:scheduleId/status` | 后端路由 |
+| 业务 | `apps/server/src/modules/trains/services/train.service.ts` → `updateTrainScheduleStatus()` | 状态变更业务逻辑 |
+| 状态机 | `PLANNING` → `IN_PROGRESS` → `LOCKED_DOWN` → `RELEASED` | 状态流转规则 |
+| 联动 | 封板时同步需求子状态为 `FROZEN`，投产时同步需求状态为 `RELEASED` | 需求状态联动 |
+
+### US2.2.2 火车班次取消
+
+| 层级 | 文件 | 说明 |
+|------|------|------|
+| 路由 | `apps/server/src/modules/trains/routes/schedule.ts` → `DELETE /api/trains/:trainId/schedules/:scheduleId` | 后端路由 |
+| 业务 | `apps/server/src/modules/trains/services/train.service.ts` → `cancelTrainSchedule()` | 取消业务逻辑 |
+| 联动 | 取消时将 `ONBOARDED` 状态的需求改回 `READY` | 需求状态回滚 |
+
+### US2.2.3 关键日期预览
+
+| 层级 | 文件 | 说明 |
+|------|------|------|
+| 路由 | `apps/server/src/modules/trains/routes/schedule.ts` → `POST /api/trains/schedules/preview` | 预览关键日期 |
+| 业务 | `apps/server/src/modules/trains/services/train.service.ts` → `previewKeyDates()` | 计算 boardingDate/lockdownDate/releaseDate |
+| 工具 | `apps/server/src/modules/trains/utils/key-dates.ts` → `calculateKeyDates()` | 关键日期计算算法 |
 
 ### US2.3 版本火车列表
 
@@ -270,7 +296,12 @@ release-train/
 | 登录/Token 问题 | T0 | `auth/index.ts` → `stores/auth.ts` |
 | 创建火车失败 | US2.1 | `TrainForm.tsx` → `train.service.ts:createTrain()` |
 | 创建班次失败 | US2.2 | `trains/index.tsx` 模态框 → `train.service.ts:createTrainSchedule()` |
-| 班次名称自动生成问题 | US2.2 | `train.service.ts:createTrainSchedule()` 第 769-770 行 |
+| 班次名称自动生成问题 | US2.2 | `train.service.ts` → `scheduleName` 变量赋值逻辑 |
 | 火车列表问题 | US2.3 | `trains/index.tsx` → `train.service.ts:listTrains()` |
 | 火车详情问题 | US2.4 | `trains/[id].tsx` → `train.service.ts:getTrainById()` |
 | 班次详情问题 | US2.4/US2.2 | `trains/schedule-detail.tsx` → `train.service.ts:getTrainScheduleById()` |
+| 班次状态变更失败 | US2.2.1 | `train.service.ts:updateTrainScheduleStatus()` → `validTransitions` 状态机校验 |
+| 状态联动异常 | US2.2.1 | `train.service.ts:updateTrainScheduleStatus()` 内 `ONBOARDED` → `FROZEN`/`RELEASED` 逻辑 |
+| 关键日期计算错误 | US2.2.3 | `key-dates.ts:calculateKeyDates()` |
+| 预览关键日期 API | US2.2.3 | `train.service.ts:previewKeyDates()` |
+| 取消班次需求回滚 | US2.2.2 | `train.service.ts:cancelTrainSchedule()` → `ONBOARDED` → `READY` |

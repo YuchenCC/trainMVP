@@ -652,15 +652,25 @@ const RequirementDetailPage: React.FC = () => {
               <Descriptions.Item label="所属班次">
                 {requirement.schedule && requirement.train ? (
                   <span>
-                    <a 
-                      onClick={() => navigate(`/trains/${requirement.train.id}/schedules/${requirement.schedule.id}`)} 
-                      style={{ color: '#1890ff', marginRight: 8 }}
-                    >
-                      {requirement.schedule.name}
-                    </a>
-                    <Tag color="blue">
-                      {TRAIN_SCHEDULE_STATUS_LABELS[requirement.schedule.status as keyof typeof TRAIN_SCHEDULE_STATUS_LABELS] || requirement.schedule.status}
-                    </Tag>
+                    {(() => {
+                      const trainId = requirement.train!.id;
+                      const scheduleId = requirement.schedule!.id;
+                      const scheduleName = requirement.schedule!.name;
+                      const scheduleStatus = requirement.schedule!.status;
+                      return (
+                        <>
+                          <a 
+                            onClick={() => navigate(`/trains/${trainId}/schedules/${scheduleId}`)} 
+                            style={{ color: '#1890ff', marginRight: 8 }}
+                          >
+                            {scheduleName}
+                          </a>
+                          <Tag color="blue">
+                            {TRAIN_SCHEDULE_STATUS_LABELS[scheduleStatus as keyof typeof TRAIN_SCHEDULE_STATUS_LABELS] || scheduleStatus}
+                          </Tag>
+                        </>
+                      );
+                    })()}
                   </span>
                 ) : (
                   '未纳版'

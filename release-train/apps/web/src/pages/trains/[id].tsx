@@ -5,12 +5,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Button, Space, Spin, Result, Typography, Tabs, message, Modal,
-  List, Avatar,
+  Card, Descriptions, Button, Space, Spin, Result, Typography, message, Modal,
 } from 'antd';
 import {
-  EditOutlined, ArrowLeftOutlined, CloseOutlined, CalendarOutlined,
-  CheckCircleOutlined, SyncOutlined,
+  EditOutlined, ArrowLeftOutlined, CloseOutlined, CalendarOutlined, SyncOutlined,
 } from '@ant-design/icons';
 import {
   TrainDetail,                // 火车详情类型
@@ -83,7 +81,6 @@ const TrainDetailPage: React.FC = () => {
   const [train, setTrain] = useState<TrainDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('info');
 
   // ========== 数据获取 ==========
   const fetchDetail = useCallback(async () => {
@@ -124,12 +121,6 @@ const TrainDetailPage: React.FC = () => {
     return checkPermission(Operation.CREATE_TRAIN);
   };
 
-  const canCompleteTrain = () => {
-    if (!user?.role || !train) return false;
-    if (user.role === Role.SUPER_ADMIN) return true;
-    return checkPermission(Operation.CREATE_TRAIN);
-  };
-
   // ========== 操作处理 ==========
   const handleCancel = () => {
     if (!train) return;
@@ -161,26 +152,6 @@ const TrainDetailPage: React.FC = () => {
           message.error(error?.message || '取消失败');
         } finally {
           setCancelLoading(false);
-        }
-      },
-    });
-  };
-
-  const handleCompleteTrain = async () => {
-    if (!train) return;
-    Modal.confirm({
-      title: '确认完成火车',
-      content: '完成后火车将变为「已完成」状态，无法再进行纳版等操作。',
-      okText: '确认完成',
-      okButtonProps: { type: 'primary' },
-      cancelText: '返回',
-      onOk: async () => {
-        try {
-          await trainService.completeTrain(train.id);
-          message.success('火车已完成');
-          fetchDetail();
-        } catch (err: any) {
-          message.error(err?.response?.data?.message || '完成失败');
         }
       },
     });

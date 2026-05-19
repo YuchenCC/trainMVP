@@ -87,7 +87,6 @@ const TrainsPage: React.FC = () => {
       title: '火车名称',
       dataIndex: 'name',
       key: 'name',
-      flex: 1,
       ellipsis: true,
       render: (name: string, record) => (
         <a 
