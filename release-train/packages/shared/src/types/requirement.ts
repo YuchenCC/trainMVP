@@ -67,6 +67,7 @@ export interface RequirementDetail {
   status: ReqStatus;                   // 主状态
   subStatus?: ReqSubStatus;            // 子状态（仅已纳版有值）
   train?: { id: string; name: string }; // 所属版本火车摘要（已纳版时有值）
+  schedule?: { id: string; name: string; status: string }; // 所属班次摘要（已纳版时有值，v2.0新增）
   reqType?: ReqType;                   // 需求类型（可选）
   sourceChannel?: SourceChannel;       // 来源渠道（可选）
   version: number;                     // 乐观锁版本号

@@ -19,17 +19,20 @@ export async function userRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // 查询该 BA 在进行中或计划中火车中作为业务归属人的系统
+      // 查询该 BA 在进行中或计划中班次中作为业务归属人的系统
       const trainSystems = await prisma.trainSystem.findMany({
         where: {
           baUserId: user.id,
           train: {
-            status: { in: ['PLANNING', 'IN_PROGRESS'] },
+            schedules: {
+              some: {
+                status: { in: ['PLANNING', 'IN_PROGRESS'] },
+              },
+            },
           },
         },
         include: {
           system: true,
-          train: true,
         },
         take: 1,
       });
@@ -72,7 +75,11 @@ export async function userRoutes(fastify: FastifyInstance) {
         where: {
           baUserId: user.id,
           train: {
-            status: { in: ['PLANNING', 'IN_PROGRESS'] },
+            schedules: {
+              some: {
+                status: { in: ['PLANNING', 'IN_PROGRESS'] },
+              },
+            },
           },
         },
         include: { system: true },

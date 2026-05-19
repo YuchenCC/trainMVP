@@ -66,7 +66,6 @@ interface AvailableSystemResponse {
   conflictTrain?: {
     id: string;
     name: string;
-    status: string;
   };
 }
 
@@ -89,6 +88,7 @@ interface TrainScheduleDetailResponse {
   id: string;
   trainId: string;
   name: string;
+  status: string;
   startDate?: string;
   endDate?: string;
   boardingDate?: string;
@@ -125,12 +125,12 @@ async function getUserDisplayName(userId: string | null): Promise<{ id: string; 
 async function checkSystemConflict(
   systemId: string,
   excludeTrainId?: string,
-): Promise<{ conflict: boolean; train?: { id: string; name: string; status: string } }> {
+): Promise<{ conflict: boolean; train?: { id: string; name: string } }> {
   const trainSystems = await prisma.trainSystem.findMany({
     where: { systemId },
     include: {
       train: {
-        select: { id: true, name: true, status: true },
+        select: { id: true, name: true },
       },
     },
   });
@@ -145,7 +145,7 @@ async function checkSystemConflict(
   if (conflictTrain) {
     return {
       conflict: true,
-      train: conflictTrain.train as { id: string; name: string; status: string },
+      train: conflictTrain.train as { id: string; name: string },
     };
   }
 
@@ -242,7 +242,7 @@ export async function listTrains(
       orderBy: { createdAt: 'desc' },
       include: {
         trainSystems: {
-          select: { id: true },
+          select: { id: true, capacityPoints: true },
         },
         schedules: {
           select: { id: true },
@@ -251,14 +251,18 @@ export async function listTrains(
     }),
   ]);
 
-  const list: TrainListItemResponse[] = trains.map((train) => ({
-    id: train.id,
-    name: train.name,
-    description: train.description || undefined,
-    systemCount: train.trainSystems.length,
-    scheduleCount: train.schedules.length,
-    createdAt: train.createdAt.toISOString(),
-  }));
+  const list: TrainListItemResponse[] = trains.map((train) => {
+    const totalCapacity = train.trainSystems.reduce((sum, ts) => sum + ts.capacityPoints, 0);
+    return {
+      id: train.id,
+      name: train.name,
+      description: train.description || undefined,
+      systemCount: train.trainSystems.length,
+      scheduleCount: train.schedules.length,
+      totalCapacity,
+      createdAt: train.createdAt.toISOString(),
+    };
+  });
 
   return {
     list,
@@ -692,7 +696,7 @@ export async function getAvailableSystems(trainId?: string): Promise<AvailableSy
     orderBy: { name: 'asc' },
     include: {
       trainSystems: {
-        include: { train: { select: { id: true, name: true, status: true } } },
+        include: { train: { select: { id: true, name: true } } },
       },
     },
   });
@@ -872,7 +876,7 @@ export async function listAllSchedules(
       orderBy: { createdAt: 'desc' },
       include: {
         train: {
-          select: { id: true, name: true, status: true },
+          select: { id: true, name: true },
         },
         snapshots: {
           select: { id: true, capacityPoints: true, usedPoints: true },
@@ -968,6 +972,7 @@ export async function getTrainScheduleById(
     id: schedule.id,
     trainId: schedule.trainId,
     name: schedule.name,
+    status: schedule.status,
     startDate: schedule.startDate?.toISOString().split('T')[0],
     endDate: schedule.endDate?.toISOString().split('T')[0],
     boardingDate: schedule.boardingDate?.toISOString().split('T')[0],
@@ -1052,10 +1057,31 @@ export async function updateTrainSchedule(
 
   // 处理自定义关键日期
   await prisma.$transaction(async (tx) => {
-    await tx.trainSchedule.update({
-      where: { id: scheduleId },
-      data: updateData,
-    });
+    if (data.version !== undefined) {
+      const result = await tx.trainSchedule.updateMany({
+        where: { id: scheduleId, version: data.version },
+        data: updateData,
+      });
+
+      if (result.count === 0) {
+        const current = await tx.trainSchedule.findUnique({
+          where: { id: scheduleId },
+          select: { version: true },
+        });
+        if (!current) {
+          throw errors.trainNotFound();
+        }
+        if (current.version !== data.version) {
+          throw errors.trainVersionConflict();
+        }
+        throw errors.trainNotFound();
+      }
+    } else {
+      await tx.trainSchedule.update({
+        where: { id: scheduleId },
+        data: updateData,
+      });
+    }
 
     if (data.customKeyDates !== undefined) {
       // 删除旧的自定义关键日期
@@ -1099,18 +1125,48 @@ export async function updateTrainScheduleStatus(
     throw errors.badRequest(`不能从 ${schedule.status} 变更为 ${status}`);
   }
 
-  // 如果变更为已封板且没有封板日期，自动设置
+  // 设置状态变更时的对应日期（替换而非仅在为空时设置）
   const updateData: any = { status };
-  if (status === 'LOCKED_DOWN' && !schedule.lockdownDate) {
+  if (status === 'LOCKED_DOWN') {
     updateData.lockdownDate = new Date();
   }
-  if (status === 'RELEASED' && !schedule.releaseDate) {
+  if (status === 'RELEASED') {
     updateData.releaseDate = new Date();
   }
 
-  await prisma.trainSchedule.update({
-    where: { id: scheduleId },
-    data: updateData,
+  // 使用事务：班次状态变更时，同步更新关联需求状态
+  await prisma.$transaction(async (tx) => {
+    // 更新班次状态
+    await tx.trainSchedule.update({
+      where: { id: scheduleId },
+      data: updateData,
+    });
+
+    // 如果是封板操作，同步更新已纳版需求的子状态为 FROZEN
+    if (status === 'LOCKED_DOWN') {
+      await tx.requirement.updateMany({
+        where: {
+          scheduleId,
+          status: 'ONBOARDED',
+        },
+        data: {
+          subStatus: 'FROZEN',
+        },
+      });
+    }
+
+    // 如果是投产操作，同步更新已纳版需求的状态为 RELEASED
+    if (status === 'RELEASED') {
+      await tx.requirement.updateMany({
+        where: {
+          scheduleId,
+          status: 'ONBOARDED',
+        },
+        data: {
+          status: 'RELEASED',
+        },
+      });
+    }
   });
 
   return getTrainScheduleById(scheduleId) as Promise<TrainScheduleDetailResponse>;
@@ -1130,15 +1186,24 @@ export async function cancelTrainSchedule(scheduleId: string): Promise<void> {
     throw errors.trainNotFound();
   }
 
-  const hasOnboarded = schedule.requirements.some(
-    (req) => req.status === 'ONBOARDED' || req.status === 'RELEASED',
-  );
-  if (hasOnboarded) {
-    throw errors.trainHasOnboardedRequirements('该班次有已纳版的需求，无法取消');
-  }
+  // 使用事务：取消班次时，将已纳版的需求状态改为 READY
+  await prisma.$transaction(async (tx) => {
+    // 将该班次下所有 ONBOARDED 状态的需求改为 READY
+    await tx.requirement.updateMany({
+      where: {
+        scheduleId,
+        status: 'ONBOARDED',
+      },
+      data: {
+        status: 'READY',
+        scheduleId: null,
+      },
+    });
 
-  await prisma.trainSchedule.delete({
-    where: { id: scheduleId },
+    // 删除班次
+    await tx.trainSchedule.delete({
+      where: { id: scheduleId },
+    });
   });
 }
 
@@ -1303,6 +1368,10 @@ export async function precheckOnboard(
   let canOnboardCount = 0;
   let hasDependencyRiskCount = 0;
   let hasCapacityWarningCount = 0;
+  let lockdownBlockedCount = 0;
+
+  // 封板后的纳版限制：只允许经过紧急变更审批的需求
+  const isLockedDown = (schedule.status as string) === 'LOCKED_DOWN';
 
   for (const reqId of requirementIds) {
     const req = await prisma.requirement.findUnique({
@@ -1320,6 +1389,18 @@ export async function precheckOnboard(
     const dependencyCheck = await checkDependencyRisk(reqId, scheduleId);
     const capacityCheck = await checkCapacityImpact(scheduleId, req.systemId, req.storyPoints);
 
+    // 封板班次：检查需求是否有已审批的紧急变更
+    let blockedByLockdown = false;
+    if (isLockedDown) {
+      const emergencyApproved = await prisma.emergencyChange.findFirst({
+        where: { requirementId: reqId, status: 'APPROVED' },
+      });
+      if (!emergencyApproved) {
+        blockedByLockdown = true;
+        lockdownBlockedCount++;
+      }
+    }
+
     const result = {
       requirementId: req.id,
       reqCode: req.reqCode,
@@ -1329,11 +1410,12 @@ export async function precheckOnboard(
       systemConfigured,
       dependencyCheck,
       capacityCheck,
+      blockedByLockdown,        // 封板阻断标记（v2.0 新增）
     };
 
     results.push(result);
 
-    if (systemConfigured && req.status === 'READY') {
+    if (systemConfigured && req.status === 'READY' && !blockedByLockdown) {
       canOnboardCount++;
     }
     if (dependencyCheck.hasRisk) {
@@ -1352,6 +1434,8 @@ export async function precheckOnboard(
       canOnboardCount,
       hasDependencyRiskCount,
       hasCapacityWarningCount,
+      lockdownBlockedCount,      // 封板阻断数（v2.0 新增）
+      isLockedDown,              // 班次是否已封板（v2.0 新增）
     },
   };
 }
@@ -1456,6 +1540,9 @@ export async function onboardRequirements(
     throw errors.trainNotFound();
   }
 
+  // 封板后的纳版限制：只允许经过紧急变更审批的需求
+  const isLockedDown = (schedule.status as string) === 'LOCKED_DOWN';
+
   let onboardedCount = 0;
 
   await prisma.$transaction(async (tx) => {
@@ -1469,6 +1556,16 @@ export async function onboardRequirements(
       }
       if (req.status !== 'READY') {
         continue;
+      }
+
+      // 封板班次：检查需求是否有已审批的紧急变更
+      if (isLockedDown) {
+        const emergencyApproved = await tx.emergencyChange.findFirst({
+          where: { requirementId: reqId, status: 'APPROVED' },
+        });
+        if (!emergencyApproved) {
+          continue; // 跳过未经过紧急变更审批的需求
+        }
       }
 
       const snapshot = await tx.trainSystemSnapshot.findUnique({
@@ -1851,11 +1948,6 @@ export async function completeTrain(
   if (!checkResult.canComplete) {
     throw errors.badRequest('不满足完成条件');
   }
-
-  await prisma.train.update({
-    where: { id: trainId },
-    data: { status: 'COMPLETED' },
-  });
 
   return { success: true };
 }

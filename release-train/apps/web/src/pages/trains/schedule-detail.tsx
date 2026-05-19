@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Button, Spin, Result, Typography, Row, Col, message, Table, Calendar, Badge, Modal, Form, Input, DatePicker, Checkbox, Space, Divider, Avatar, List, Progress, Tag,
+  Card, Descriptions, Button, Spin, Result, Typography, Row, Col, message, Table, Calendar, Badge, Modal, Form, Input, DatePicker, Checkbox, Space, Divider, Avatar, List, Progress, Tag, Alert,
 } from 'antd';
 import { ArrowLeftOutlined, EditOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import {
@@ -15,6 +15,8 @@ import {
   REQ_SUB_STATUS_LABELS,
   REQ_STATUS_COLORS,
   ReqStatus,
+  TRAIN_SCHEDULE_STATUS_LABELS,
+  TRAIN_SCHEDULE_STATUS_OPTIONS,
 } from '@release-train/shared';
 import api from '../../services/api';
 import { trainService } from '../../services/train';
@@ -32,6 +34,7 @@ interface ScheduleDetail {
   id: string;
   trainId: string;
   name: string;
+  status: string; // 班次状态：PLANNING / IN_PROGRESS / LOCKED_DOWN / RELEASED
   startDate: string | null;
   endDate: string | null;
   boardingDate: string | null;
@@ -417,6 +420,16 @@ const ScheduleDetailPage: React.FC = () => {
               <Descriptions.Item label="班次名称">
                 <Text strong>{schedule.name}</Text>
               </Descriptions.Item>
+              <Descriptions.Item label="班次状态">
+                {(() => {
+                  const statusOption = TRAIN_SCHEDULE_STATUS_OPTIONS.find(opt => opt.value === schedule.status);
+                  return (
+                    <Tag color={statusOption?.color || 'default'}>
+                      {TRAIN_SCHEDULE_STATUS_LABELS[schedule.status as keyof typeof TRAIN_SCHEDULE_STATUS_LABELS] || schedule.status}
+                    </Tag>
+                  );
+                })()}
+              </Descriptions.Item>
               <Descriptions.Item label="所属火车">
                 <a onClick={() => navigate(`/trains/${schedule.train.id}`)}>{schedule.train.name}</a>
               </Descriptions.Item>
@@ -473,7 +486,9 @@ const ScheduleDetailPage: React.FC = () => {
             <OnboardTab
               scheduleId={scheduleId!}
               systems={schedule.snapshots}
+              scheduleStatus={schedule.status}
               onRefresh={handleRefresh}
+              navigate={navigate}
             />
           </Card>
         </Col>
@@ -627,7 +642,7 @@ const ScheduleDetailPage: React.FC = () => {
 };
 
 // ========== 纳版管理标签页组件 ==========
-const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; systems: any[]; onRefresh?: () => void }) => {
+const OnboardTab = ({ scheduleId, systems, scheduleStatus, onRefresh, navigate }: { scheduleId: string; systems: any[]; scheduleStatus?: string; onRefresh?: () => void; navigate: any }) => {
   const [selectedRequirements, setSelectedRequirements] = useState<string[]>([]);
   const [selectedOnboardedIds, setSelectedOnboardedIds] = useState<string[]>([]);
   const [precheckResult, setPrecheckResult] = useState<PrecheckOnboardResponse | null>(null);
@@ -636,6 +651,8 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
   const [dataLoading, setDataLoading] = useState(true);
   const [readyRequirements, setReadyRequirements] = useState<RequirementListItem[]>([]);
   const [onboardedRequirements, setOnboardedRequirements] = useState<RequirementListItem[]>([]);
+
+  const isLockedDown = scheduleStatus === 'LOCKED_DOWN';
 
   // 容量颜色映射
   const getCapacityColor = (used: number, total: number): string => {
@@ -690,7 +707,16 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
 
   // 已纳版需求表格列
   const onboardedColumns = [
-    { title: '需求编号', dataIndex: 'reqCode', key: 'reqCode' },
+    { 
+      title: '需求编号', 
+      dataIndex: 'reqCode', 
+      key: 'reqCode',
+      render: (text: string, record: RequirementListItem) => (
+        <a onClick={() => navigate(`/requirements/${record.id}`)} style={{ color: '#1890ff' }}>
+          {text}
+        </a>
+      ),
+    },
     { title: '需求标题', dataIndex: 'title', key: 'title' },
     { title: '系统', dataIndex: ['system', 'name'], key: 'system' },
     { title: '优先级', dataIndex: 'priority', key: 'priority' },
@@ -699,12 +725,12 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
       title: '需求状态',
       key: 'status',
       width: 130,
-      render: (_: any, record: any) => {
-        const statusLabel = REQ_STATUS_LABELS[record.status as ReqStatus] || record.status;
+      render: (_: any, record: { status: ReqStatus; subStatus?: string }) => {
+        const statusLabel = REQ_STATUS_LABELS[record.status] || record.status;
         const displayText = record.status === 'ONBOARDED' && record.subStatus
-          ? `${statusLabel}-${REQ_SUB_STATUS_LABELS[record.subStatus] || record.subStatus}`
+          ? `${statusLabel}-${REQ_SUB_STATUS_LABELS[record.subStatus as keyof typeof REQ_SUB_STATUS_LABELS] || record.subStatus}`
           : statusLabel;
-        return <Tag color={REQ_STATUS_COLORS[record.status as ReqStatus]}>{displayText}</Tag>;
+        return <Tag color={REQ_STATUS_COLORS[record.status]}>{displayText}</Tag>;
       },
     },
     { 
@@ -751,7 +777,16 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
 
   // 待纳版需求表格列
   const readyColumns = [
-    { title: '需求编号', dataIndex: 'reqCode', key: 'reqCode' },
+    { 
+      title: '需求编号', 
+      dataIndex: 'reqCode', 
+      key: 'reqCode',
+      render: (text: string, record: RequirementListItem) => (
+        <a onClick={() => navigate(`/requirements/${record.id}`)} style={{ color: '#1890ff' }}>
+          {text}
+        </a>
+      ),
+    },
     { title: '需求标题', dataIndex: 'title', key: 'title' },
     { title: '系统', dataIndex: ['system', 'name'], key: 'system' },
     { title: '优先级', dataIndex: 'priority', key: 'priority' },
@@ -880,6 +915,15 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
       </Card>
 
       {/* 待纳版需求 */}
+      {isLockedDown && (
+        <Alert
+          type="warning"
+          showIcon
+          message="班次已封板"
+          description="封板后仅允许经过紧急变更审批的需求纳版。未经过紧急变更的需求将在纳版时被跳过。"
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <Card
         title={`待纳版需求（已就绪，共 ${readyRequirements.length} 条）`}
         extra={
@@ -916,13 +960,19 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
       >
         {precheckResult && (
           <div>
-            {precheckResult.results.every((r) => !r.dependencyCheck.hasRisk) ? (
-              <Result
-                status="success"
-                title="预检通过"
-                subTitle="所有需求均可安全纳版"
+            {/* 封板阻断提示 */}
+            {precheckResult.results.some((r) => r.blockedByLockdown) && (
+              <Alert
+                type="error"
+                showIcon
+                message="封板阻断"
+                description={`${precheckResult.summary.lockdownBlockedCount} 条需求未经过紧急变更审批，封板后无法纳版，将被自动跳过。`}
+                style={{ marginBottom: 16 }}
               />
-            ) : (
+            )}
+
+            {/* 风险提示 */}
+            {precheckResult.results.some((r) => r.dependencyCheck.hasRisk) && (
               <div>
                 <Typography.Title level={5}>风险提示</Typography.Title>
                 <List
@@ -932,19 +982,28 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
                       <List.Item.Meta
                         title={`${result.reqCode} ${result.title}`}
                         description={result.dependencyCheck.risks.map((risk) => (
-                          <div key={risk.dependencyId}>
-                            {risk.dependencyId} ({risk.dependencyStatus}): {risk.riskLevel}
+                          <div key={risk.dependencyId} style={{ marginBottom: 4 }}>
+                            <Tag color={risk.riskLevel === 'critical' ? 'red' : risk.riskLevel === 'high' ? 'orange' : 'gold'}>
+                              {risk.riskLevel === 'critical' ? '严重' : risk.riskLevel === 'high' ? '高风险' : '警告'}
+                            </Tag>
+                            <span style={{ marginLeft: 8 }}>
+                              前置依赖 <strong>{risk.reqCode} {risk.title}</strong> — 状态：{risk.dependencyStatus}
+                            </span>
+                            {risk.message && (
+                              <div style={{ color: '#94a3b8', fontSize: 12, marginTop: 2 }}>
+                                {risk.message}
+                              </div>
+                            )}
                           </div>
                         ))}
                       />
                     </List.Item>
                   )}
                 />
-                <Divider />
-                <Typography.Text type="secondary">请确认是否继续纳版</Typography.Text>
               </div>
             )}
 
+            {/* 容量影响 */}
             {precheckResult.results.some((r) => r.capacityCheck && !r.capacityCheck.hasCapacity) && (
               <div style={{ marginTop: 16 }}>
                 <Typography.Title level={5}>容量影响</Typography.Title>
@@ -961,6 +1020,23 @@ const OnboardTab = ({ scheduleId, systems, onRefresh }: { scheduleId: string; sy
                 />
               </div>
             )}
+
+            {/* 无风险无阻断时展示通过 */}
+            {!precheckResult.results.some((r) => r.dependencyCheck.hasRisk) &&
+              !precheckResult.results.some((r) => r.blockedByLockdown) && (
+                <Result
+                  status="success"
+                  title="预检通过"
+                  subTitle="所有需求均可安全纳版"
+                />
+              )}
+
+            <Divider />
+            <Typography.Text type="secondary">
+              {precheckResult.summary.canOnboardCount > 0
+                ? `将纳版 ${precheckResult.summary.canOnboardCount} 条需求，请确认`
+                : '没有可纳版的需求'}
+            </Typography.Text>
           </div>
         )}
       </Modal>

@@ -42,6 +42,7 @@ import {
   REQ_TYPE_LABELS,
   SOURCE_CHANNEL_LABELS,
   OPERATION_TYPE_LABELS,
+  TRAIN_SCHEDULE_STATUS_LABELS,
   Role,
   DependencyItem,
   StatusLogItem,
@@ -647,6 +648,23 @@ const RequirementDetailPage: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label="归属系统">
                 {requirement.system.name}
+              </Descriptions.Item>
+              <Descriptions.Item label="所属班次">
+                {requirement.schedule && requirement.train ? (
+                  <span>
+                    <a 
+                      onClick={() => navigate(`/trains/${requirement.train.id}/schedules/${requirement.schedule.id}`)} 
+                      style={{ color: '#1890ff', marginRight: 8 }}
+                    >
+                      {requirement.schedule.name}
+                    </a>
+                    <Tag color="blue">
+                      {TRAIN_SCHEDULE_STATUS_LABELS[requirement.schedule.status as keyof typeof TRAIN_SCHEDULE_STATUS_LABELS] || requirement.schedule.status}
+                    </Tag>
+                  </span>
+                ) : (
+                  '未纳版'
+                )}
               </Descriptions.Item>
               <Descriptions.Item label="所属火车">
                 {requirement.train?.name || '未纳版'}

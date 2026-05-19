@@ -234,24 +234,12 @@ const TrainSystemList: React.FC<TrainSystemListProps> = ({
       width: 180,
     },
     {
-      title: '容量点数',
-      key: 'capacity',
-      width: 200,
-      render: (_: any, record: TrainSystemDetail) => (
-        <div>
-          <Space>
-            <span>{record.usedPoints} / {record.capacityPoints}</span>
-            <Progress
-              percent={record.usageRate}
-              size="small"
-              strokeColor={getUsageRateColor(record.usageRate)}
-              status={getUsageRateStatus(record.usageRate)}
-              format={(percent) => `${percent}%`}
-              style={{ width: 100 }}
-            />
-          </Space>
-        </div>
-      ),
+      title: '系统容量',
+      dataIndex: 'capacityPoints',
+      key: 'capacityPoints',
+      width: 80,
+      align: 'center',
+      render: (capacity: number) => capacity || 0,
     },
     {
       title: '业务 BA',
@@ -302,32 +290,6 @@ const TrainSystemList: React.FC<TrainSystemListProps> = ({
         );
       },
     },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 120,
-      render: (_: any, record: TrainSystemDetail) => (
-        <Space>
-          <Button
-            type="text"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleOpenEditModal(record)}
-          >
-            编辑
-          </Button>
-          <Button
-            type="text"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleRemoveSystem(record)}
-          >
-            移除
-          </Button>
-        </Space>
-      ),
-    },
   ];
 
   // ========== 过滤可选系统列表 ==========
@@ -345,17 +307,6 @@ const TrainSystemList: React.FC<TrainSystemListProps> = ({
 
   return (
     <div>
-      {/* 操作栏 */}
-      <div style={{ marginBottom: 16 }}>
-        <Button
-          type="primary"
-          icon={<EditOutlined />}
-          onClick={handleOpenAddModal}
-        >
-          添加搭载系统
-        </Button>
-      </div>
-
       {/* 系统列表表格 */}
       {systems.length === 0 ? (
         <Card>

@@ -359,15 +359,14 @@ const TrainForm: React.FC<TrainFormProps> = ({ mode, initialData, onCancel, onSu
 
                     {/* 配置项 */}
                     <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                      {/* 本期可用点数 */}
+                      {/* 系统容量 */}
                       <div style={{ width: 140 }}>
-                        <Text type="secondary" style={{ fontSize: 12 }}>本期可用点数</Text>
+                        <Text type="secondary" style={{ fontSize: 12 }}>系统容量</Text>
                         <InputNumber
                           min={1}
                           max={500}
                           value={sys.capacityPoints}
                           onChange={(value) => handleUpdateSystem(sys.systemId, 'capacityPoints', value)}
-                          disabled={!isPlanning}
                           style={{ width: '100%', marginTop: 4 }}
                         />
                       </div>

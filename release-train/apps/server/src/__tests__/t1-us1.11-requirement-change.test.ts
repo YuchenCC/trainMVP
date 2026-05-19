@@ -69,23 +69,23 @@ describe('T1 US1.11 需求变更', () => {
     });
   };
 
-  const createOnboardedRequirement = async (trainId: string) => {
+  const createOnboardedRequirement = async (scheduleId: string) => {
     return prisma.requirement.create({
       data: {
         title: 'Onboarded Req', description: '<p>test</p>', systemId, priority: 'P1',
         storyPoints: 8, baId, creatorId: baId, status: 'ONBOARDED',
-        subStatus: 'DEV_IN_PROGRESS', trainId,
+        subStatus: 'DEV_IN_PROGRESS', scheduleId,
         reqCode: 'REQ-111-' + Date.now(), version: 1,
       },
     });
   };
 
-  const createFrozenRequirement = async (trainId: string) => {
+  const createFrozenRequirement = async (scheduleId: string) => {
     return prisma.requirement.create({
       data: {
         title: 'Frozen Req', description: '<p>test</p>', systemId, priority: 'P1',
         storyPoints: 3, baId, creatorId: baId, status: 'ONBOARDED',
-        subStatus: 'FROZEN', trainId,
+        subStatus: 'FROZEN', scheduleId,
         reqCode: 'REQ-111-' + Date.now(), version: 1,
       },
     });
@@ -154,16 +154,23 @@ describe('T1 US1.11 需求变更', () => {
   });
 
   describe('已纳版状态需求变更', () => {
-    it('BA变更已纳版需求成功，状态变为草稿，train清空', async () => {
-      // 创建火车
+    it('BA变更已纳版需求成功，状态变为草稿，schedule清空', async () => {
+      // 创建火车和班次
       const train = await prisma.train.create({
-        data: { name: 'US111_Train', startDate: new Date(), endDate: new Date(), createdById: baId },
+        data: { name: 'US111_Train', createdById: baId },
       });
       await prisma.trainSystem.create({
         data: { trainId: train.id, systemId, capacityPoints: 100, usedPoints: 0 },
       });
+      const schedule = await prisma.trainSchedule.create({
+        data: {
+          trainId: train.id,
+          name: 'US111_Schedule',
+          createdById: baId,
+        },
+      });
 
-      const req = await createOnboardedRequirement(train.id);
+      const req = await createOnboardedRequirement(schedule.id);
       const res = await app.inject({
         method: 'POST',
         url: `/api/requirements/${req.id}/change`,
@@ -174,23 +181,31 @@ describe('T1 US1.11 需求变更', () => {
       const body = res.json();
       expect(body.success).toBe(true);
       expect(body.data.status).toBe('DRAFT');
-      expect(body.data.train).toBeUndefined();
+      expect(body.data.trainSchedule).toBeUndefined();
 
       // 清理
       await prisma.requirement.delete({ where: { id: req.id } });
+      await prisma.trainSchedule.delete({ where: { id: schedule.id } });
       await prisma.trainSystem.deleteMany({ where: { trainId: train.id } });
       await prisma.train.delete({ where: { id: train.id } });
     });
 
     it('封板状态不能发起变更', async () => {
       const train = await prisma.train.create({
-        data: { name: 'US111_Train_Frozen', startDate: new Date(), endDate: new Date(), createdById: baId },
+        data: { name: 'US111_Train_Frozen', createdById: baId },
       });
       await prisma.trainSystem.create({
         data: { trainId: train.id, systemId, capacityPoints: 100, usedPoints: 0 },
       });
+      const schedule = await prisma.trainSchedule.create({
+        data: {
+          trainId: train.id,
+          name: 'US111_Schedule_Frozen',
+          createdById: baId,
+        },
+      });
 
-      const req = await createFrozenRequirement(train.id);
+      const req = await createFrozenRequirement(schedule.id);
       const res = await app.inject({
         method: 'POST',
         url: `/api/requirements/${req.id}/change`,
@@ -204,6 +219,7 @@ describe('T1 US1.11 需求变更', () => {
 
       // 清理
       await prisma.requirement.delete({ where: { id: req.id } });
+      await prisma.trainSchedule.delete({ where: { id: schedule.id } });
       await prisma.trainSystem.deleteMany({ where: { trainId: train.id } });
       await prisma.train.delete({ where: { id: train.id } });
     });

@@ -52,7 +52,6 @@ describe('T2 US2.2 火车班次创建', () => {
       data: {
         name: 'US22_Test_Train_' + testTimestamp + '_' + Math.random(),
         description: '测试火车',
-        status: 'PLANNING',
         createdById: trainAdminId,
       },
     });
@@ -86,11 +85,7 @@ describe('T2 US2.2 火车班次创建', () => {
   // ========== 班次创建基础功能 ==========
 
   describe('班次创建基础功能', () => {
-    it('创建班次成功 - 火车状态变为 IN_PROGRESS', async () => {
-      // 创建班次前，火车状态应该是 PLANNING
-      const beforeTrain = await prisma.train.findUnique({ where: { id: trainId } });
-      expect(beforeTrain?.status).toBe('PLANNING');
-
+    it('创建班次成功 - 班次状态为 PLANNING', async () => {
       const res = await app.inject({
         method: 'POST',
         url: `/api/trains/${trainId}/schedules`,
@@ -104,14 +99,9 @@ describe('T2 US2.2 火车班次创建', () => {
       expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.success).toBe(true);
-      // 班次状态为 PLANNING
       expect(body.data.status).toBe('PLANNING');
       expect(body.data.startDate).toBe('2026-06-02');
       expect(body.data.endDate).toBe('2026-06-27');
-
-      // 创建班次后，火车状态应该变为 IN_PROGRESS
-      const afterTrain = await prisma.train.findUnique({ where: { id: trainId } });
-      expect(afterTrain?.status).toBe('IN_PROGRESS');
     });
 
     it('创建班次成功 - 关键节点日期自动计算', async () => {
@@ -184,38 +174,6 @@ describe('T2 US2.2 火车班次创建', () => {
       const body = res.json();
       expect(body.success).toBe(false);
       expect(body.code).toBe('TRAIN_NOT_FOUND');
-    });
-
-    it('火车状态非 PLANNING - 返回业务错误', async () => {
-      // 先创建一个班次使火车状态变为 IN_PROGRESS
-      const createRes = await app.inject({
-        method: 'POST',
-        url: `/api/trains/${trainId}/schedules`,
-        headers: { Authorization: `Bearer ${trainAdminToken}` },
-        payload: {
-          startDate: '2026-06-01',
-          endDate: '2026-06-26',
-        },
-      });
-
-      const scheduleId = createRes.json().data.id;
-
-      // 尝试再次创建班次
-      const res = await app.inject({
-        method: 'POST',
-        url: `/api/trains/${trainId}/schedules`,
-        headers: { Authorization: `Bearer ${trainAdminToken}` },
-        payload: {
-          startDate: '2026-07-01',
-          endDate: '2026-07-28',
-        },
-      });
-
-      expect(res.statusCode).toBe(200);
-      const body = res.json();
-      expect(body.success).toBe(false);
-      // 火车状态已变为 IN_PROGRESS，不允许再次创建班次
-      expect(body.code).toBe('TRAIN_NOT_PLANNING');
     });
 
     it('结束时间早于开始时间 - 返回业务错误', async () => {

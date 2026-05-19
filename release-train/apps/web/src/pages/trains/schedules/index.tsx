@@ -371,7 +371,7 @@ const SchedulesPage: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 260,
+      width: 320,
       render: (_, record) => (
         <Space size={0}>
           {record.status === 'PLANNING' && (
@@ -387,6 +387,11 @@ const SchedulesPage: React.FC = () => {
           {record.status === 'LOCKED_DOWN' && (
             <Button type="link" size="small" onClick={() => handleChangeStatus(record, 'RELEASED')}>
               投产
+            </Button>
+          )}
+          {record.status !== 'RELEASED' && (
+            <Button type="link" size="small" danger onClick={() => handleCancelSchedule(record)}>
+              取消
             </Button>
           )}
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEditSchedule(record)}>
@@ -425,15 +430,29 @@ const SchedulesPage: React.FC = () => {
       content: '封板后将设置为当前日期，确定继续？',
       onOk: async () => {
         try {
-          await api.put(`/trains/${record.trainId}/schedules/${record.id}`, {
-            lockdownDate: dayjs().format('YYYY-MM-DD'),
-            version: record.version,
-          });
+          await api.post(`/trains/${record.trainId}/schedules/${record.id}/status`, { status: 'LOCKED_DOWN' });
           message.success('封板成功');
           loadTrainList();
           loadScheduleList();
         } catch (err: any) {
           message.error(err?.message || '封板失败');
+        }
+      },
+    });
+  };
+
+  const handleCancelSchedule = async (record: ScheduleItem) => {
+    Modal.confirm({
+      title: '确认取消班次',
+      content: `确定取消班次「${record.name || '未命名'}」？取消后，已纳版的需求将被移除并恢复为就绪状态。`,
+      onOk: async () => {
+        try {
+          await api.delete(`/trains/${record.trainId}/schedules/${record.id}`);
+          message.success('取消成功');
+          loadTrainList();
+          loadScheduleList();
+        } catch (err: any) {
+          message.error(err?.message || '取消失败');
         }
       },
     });

@@ -277,6 +277,9 @@ async function buildRequirementDetail(
     train: requirement.trainSchedule?.train
       ? { id: requirement.trainSchedule.train.id, name: requirement.trainSchedule.train.name } // 所属火车摘要（已纳版时有值）
       : undefined,                                                           // null → undefined
+    schedule: requirement.trainSchedule
+      ? { id: requirement.trainSchedule.id, name: requirement.trainSchedule.name, status: requirement.trainSchedule.status } // 所属班次摘要（v2.0，已纳版时有值）
+      : undefined,
     reqType: requirement.reqType ?? undefined,             // 需求类型（null → undefined）
     sourceChannel: requirement.sourceChannel ?? undefined,  // 来源渠道（null → undefined）
     version: requirement.version,                           // 乐观锁版本号
@@ -777,16 +780,9 @@ export async function emergencyChange(
   });
 }
 
-// 找到下一个审批人 (step: 1→PROJECT_MGR, 2→null 表示终审)
+// 找到下一个审批人 (step: 2→PROJECT_MGR, 3→null 表示终审)
 async function findApproverForStep(systemId: string, scheduleId: string | null, step: number): Promise<string | null> {
   if (step === 2) {
-    if (scheduleId) {
-      const snapshot = await prisma.trainSystemSnapshot.findUnique({
-        where: { trainScheduleId_systemId: { trainScheduleId: scheduleId, systemId } },
-        select: { pmUserId: true },
-      });
-      if (snapshot?.pmUserId) return snapshot.pmUserId;
-    }
     const pmMgr = await prisma.systemMember.findFirst({
       where: { systemId, role: 'PROJECT_MGR' },
       select: { userId: true },

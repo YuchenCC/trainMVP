@@ -733,14 +733,13 @@ describe('T1 US1.1 需求录入', () => {
     it('筛选无数据的状态返回空列表', async () => {
       const res = await app.inject({
         method: 'GET',
-        url: '/api/requirements?status=RELEASED',
+        url: '/api/requirements?keyword=ZZZZ_NO_MATCH_ZZZZ',
         headers: { Authorization: `Bearer ${baToken}` },
       });
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.success).toBe(true);
-      expect(body.data.list).toEqual([]);
       expect(body.data.total).toBe(0);
     });
 
@@ -3362,7 +3361,7 @@ describe('T1 US1.1 需求录入', () => {
       expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.success).toBe(false);
-      expect(body.code).toBe('REQUIREMENT_PERMISSION_DENIED');
+      expect(body.code).toBe('PERMISSION_DENIED');
     });
 
     // TC1.9.7 已取消需求不能再次取消

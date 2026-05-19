@@ -307,6 +307,7 @@ export interface PrecheckOnboardResultItem {
     remainingPoints: number;
     afterOnboard: number;
   };
+  blockedByLockdown?: boolean; // 封板后未经过紧急变更审批则阻断（v2.0 新增）
 }
 
 export interface PrecheckOnboardResponse {
@@ -317,6 +318,8 @@ export interface PrecheckOnboardResponse {
     canOnboardCount: number;
     hasDependencyRiskCount: number;
     hasCapacityWarningCount: number;
+    lockdownBlockedCount?: number; // 封板阻断数（v2.0 新增）
+    isLockedDown?: boolean;        // 班次是否已封板（v2.0 新增）
   };
 }
 

@@ -35,13 +35,9 @@ interface TrainListItem {
   id: string;
   name: string;
   description?: string;
-  startDate?: string;
-  endDate?: string;
-  boardingDate?: string;
-  lockdownDate?: string;
-  releaseDate?: string;
   systemCount: number;
-  requirementCount: number;
+  scheduleCount: number;
+  totalCapacity: number;
   createdAt: string;
 }
 
@@ -91,53 +87,47 @@ const TrainsPage: React.FC = () => {
       title: '火车名称',
       dataIndex: 'name',
       key: 'name',
-      width: 200,
+      flex: 1,
+      ellipsis: true,
       render: (name: string, record) => (
-        <a onClick={() => navigate(`/trains/${record.id}`)}>{name}</a>
+        <a 
+          onClick={() => navigate(`/trains/${record.id}`)} 
+          style={{ 
+            display: 'block', 
+            overflow: 'hidden', 
+            textOverflow: 'ellipsis', 
+            whiteSpace: 'nowrap',
+            maxWidth: '100%'
+          }}
+        >
+          {name}
+        </a>
       ),
-    },
-    {
-      title: '开始时间',
-      dataIndex: 'startDate',
-      key: 'startDate',
-      width: 120,
-      render: (date: string) => (date ? dayjs(date).format('YYYY-MM-DD') : '-'),
-    },
-    {
-      title: '结束时间',
-      dataIndex: 'endDate',
-      key: 'endDate',
-      width: 120,
-      render: (date: string) => (date ? dayjs(date).format('YYYY-MM-DD') : '-'),
-    },
-    {
-      title: '统一投产日',
-      dataIndex: 'releaseDate',
-      key: 'releaseDate',
-      width: 120,
-      render: (date: string) => (date ? dayjs(date).format('YYYY-MM-DD') : '-'),
     },
     {
       title: '搭载系统',
       dataIndex: 'systemCount',
       key: 'systemCount',
-      width: 80,
       align: 'center',
       render: (count: number) => count || 0,
     },
     {
-      title: '已纳版需求',
-      dataIndex: 'requirementCount',
-      key: 'requirementCount',
-      width: 100,
+      title: '火车容量',
+      dataIndex: 'totalCapacity',
+      key: 'totalCapacity',
+      align: 'center',
+      render: (capacity: number) => capacity || 0,
+    },
+    {
+      title: '班次数量',
+      dataIndex: 'scheduleCount',
+      key: 'scheduleCount',
       align: 'center',
       render: (count: number) => count || 0,
     },
     {
       title: '操作',
       key: 'action',
-      width: 200,
-      fixed: 'right' as const,
       render: (_, record) => (
         <Space>
           <Button

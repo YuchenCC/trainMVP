@@ -96,7 +96,6 @@ describe('T2 US2.1 版本火车创建', () => {
       expect(res.statusCode).toBe(201);
       expect(res.json().success).toBe(true);
       expect(res.json().data.name).toBe('[UT]火车_创建');
-      expect(res.json().data.status).toBe('PLANNING');
     });
 
     it('火车名称必填', async () => {
@@ -152,16 +151,6 @@ describe('T2 US2.1 版本火车创建', () => {
       expect(res.statusCode).toBe(200);
       expect(res.json().success).toBe(true);
       expect(Array.isArray(res.json().data.list)).toBe(true);
-    });
-
-    it('支持按状态筛选', async () => {
-      const res = await app.inject({
-        method: 'GET',
-        url: '/api/trains?status=PLANNING',
-        headers: { authorization: `Bearer ${adminToken}` },
-      });
-      expect(res.statusCode).toBe(200);
-      expect(res.json().success).toBe(true);
     });
 
     it('支持分页参数', async () => {
@@ -258,7 +247,7 @@ describe('T2 US2.1 版本火车创建', () => {
 
   // TC2.1.5 取消火车
   describe('TC2.1.5 POST /api/trains/:id/cancel 取消火车', () => {
-    it('可以取消规划中的火车', async () => {
+    it('可以取消无纳版需求的火车', async () => {
       const createRes = await createTrain('[UT]火车_待取消', [{ systemId: systemIds[9], capacityPoints: 30 }]);
       const trainId = createRes.json().data.id;
 
@@ -269,10 +258,10 @@ describe('T2 US2.1 版本火车创建', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(res.json().data.status).toBe('CANCELLED');
+      expect(res.json().success).toBe(true);
     });
 
-    it('非规划中状态不能取消', async () => {
+    it('重复取消返回错误', async () => {
       const createRes = await createTrain('[UT]火车_重复取消', [{ systemId: systemIds[10], capacityPoints: 25 }]);
       const trainId = createRes.json().data.id;
 
