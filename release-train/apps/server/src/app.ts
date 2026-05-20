@@ -9,6 +9,8 @@ import swaggerUI from '@fastify/swagger-ui';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 
 // 获取当前目录的父目录（monorepo 根目录），用于定位 .env 文件
 const __filename = fileURLToPath(import.meta.url);
@@ -33,6 +35,8 @@ dotenv.config();
 
 // ========== 创建Fastify实例 ==========
 export async function createApp() {
+  const LOG_DIR = process.env.LOG_DIR || './logs';
+  
   const app = Fastify({
     logger: {
       level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
@@ -52,6 +56,40 @@ export async function createApp() {
       redact: {
         paths: ['req.headers.authorization', 'req.headers.cookie', '*.password', '*.token'],
         censor: '[REDACTED]',
+      },
+      transport: {
+        targets: [
+          // 控制台输出（开发环境）
+          {
+            target: 'pino-pretty',
+            options: {
+              colorize: true,
+              translateTime: 'HH:MM:ss',
+            },
+            level: process.env.NODE_ENV === 'production' ? 'silent' : 'debug',
+          },
+          // 文件输出（所有环境）
+          {
+            target: 'pino-roll',
+            options: {
+              file: path.join(LOG_DIR, 'application.log'),
+              frequency: 'daily',
+              size: '50m', // 超过50M生成新文件
+              limit: 7,   // 保留最近7天
+            },
+          },
+          // 错误日志单独记录
+          {
+            target: 'pino-roll',
+            options: {
+              file: path.join(LOG_DIR, 'error.log'),
+              frequency: 'daily',
+              size: '50m',
+              limit: 7,
+            },
+            level: 'error',
+          },
+        ],
       },
     },
   });
