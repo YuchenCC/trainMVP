@@ -36,10 +36,11 @@ dotenv.config();
 // ========== 创建Fastify实例 ==========
 export async function createApp() {
   const LOG_DIR = process.env.LOG_DIR || './logs';
+  const isTest = process.env.NODE_ENV === 'test';
   
   const app = Fastify({
     logger: {
-      level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+      level: isTest ? 'silent' : (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
       serializers: {
         req(request) {
           return {
@@ -57,40 +58,42 @@ export async function createApp() {
         paths: ['req.headers.authorization', 'req.headers.cookie', '*.password', '*.token'],
         censor: '[REDACTED]',
       },
-      transport: {
-        targets: [
-          // 控制台输出（开发环境）
-          {
-            target: 'pino-pretty',
-            options: {
-              colorize: true,
-              translateTime: 'HH:MM:ss',
+      ...(isTest ? {} : {
+        transport: {
+          targets: [
+            // 控制台输出（开发环境）
+            {
+              target: 'pino-pretty',
+              options: {
+                colorize: true,
+                translateTime: 'HH:MM:ss',
+              },
+              level: process.env.NODE_ENV === 'production' ? 'silent' : 'debug',
             },
-            level: process.env.NODE_ENV === 'production' ? 'silent' : 'debug',
-          },
-          // 文件输出（所有环境）
-          {
-            target: 'pino-roll',
-            options: {
-              file: path.join(LOG_DIR, 'application.log'),
-              frequency: 'daily',
-              size: '50m', // 超过50M生成新文件
-              limit: 7,   // 保留最近7天
+            // 文件输出（所有环境）
+            {
+              target: 'pino-roll',
+              options: {
+                file: path.join(LOG_DIR, 'application.log'),
+                frequency: 'daily',
+                size: '50m', // 超过50M生成新文件
+                limit: { days: 7 },   // 保留最近7天
+              },
             },
-          },
-          // 错误日志单独记录
-          {
-            target: 'pino-roll',
-            options: {
-              file: path.join(LOG_DIR, 'error.log'),
-              frequency: 'daily',
-              size: '50m',
-              limit: 7,
+            // 错误日志单独记录
+            {
+              target: 'pino-roll',
+              options: {
+                file: path.join(LOG_DIR, 'error.log'),
+                frequency: 'daily',
+                size: '50m',
+                limit: { days: 7 },
+              },
+              level: 'error',
             },
-            level: 'error',
-          },
-        ],
-      },
+          ],
+        },
+      }),
     },
   });
 
