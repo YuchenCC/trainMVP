@@ -10,6 +10,7 @@ import {
   UpdateTrainScheduleRequest,
   PreviewKeyDatesRequest,
   AvailableSystem,
+  ScheduleProgressItem,
 } from '@release-train/shared';
 import { errors } from '../../../common/errors/index.js';
 import { prisma } from '../../../prisma/index.js';
@@ -1950,6 +1951,94 @@ export async function completeTrain(
   }
 
   return { success: true };
+}
+
+// ========== API-04: 班次进度聚合 ==========
+export async function getScheduleProgress(params: {
+  trainId?: string;
+}): Promise<ScheduleProgressItem[]> {
+  const where: Prisma.TrainScheduleWhereInput = {};
+  if (params.trainId) {
+    where.trainId = params.trainId;
+  }
+
+  const schedules = await prisma.trainSchedule.findMany({
+    where,
+    include: {
+      train: { select: { id: true, name: true } },
+    },
+    orderBy: { startDate: 'asc' },
+  });
+
+  const now = new Date();
+
+  return Promise.all(schedules.map(async schedule => {
+    let currentPhase: ScheduleProgressItem['currentPhase'] = 'planning';
+    let progress: number = 0;
+
+    // 基于班次状态计算阶段
+    if (schedule.status === 'RELEASED') {
+      currentPhase = 'released';
+      progress = 100;
+    } else if (schedule.status === 'LOCKED_DOWN') {
+      currentPhase = 'pre-release';
+      progress = 85;
+    } else if (schedule.status === 'IN_PROGRESS') {
+      currentPhase = 'testing';
+      progress = 60;
+    } else {
+      currentPhase = 'planning';
+      progress = 25;
+    }
+
+    // 查询班次下的需求统计
+    const [totalRequirements, completedCount] = await Promise.all([
+      prisma.requirement.count({
+        where: { scheduleId: schedule.id },
+      }),
+      prisma.requirement.count({
+        where: {
+          scheduleId: schedule.id,
+          status: { in: ['ONBOARDED', 'RELEASED'] },
+        },
+      }),
+    ]);
+
+    // 查询容量快照
+    const snapshots = await prisma.trainSystemSnapshot.findMany({
+      where: { trainScheduleId: schedule.id },
+      select: { capacityPoints: true, usedPoints: true },
+    });
+    const capacityTotal = snapshots.reduce((sum, s) => sum + s.capacityPoints, 0);
+    const capacityUsed = snapshots.reduce((sum, s) => sum + s.usedPoints, 0);
+
+    const progressPercent = totalRequirements > 0
+      ? Math.round((completedCount / totalRequirements) * 100)
+      : progress;
+
+    return {
+      id: schedule.id,
+      scheduleId: schedule.id,
+      scheduleName: schedule.name,
+      trainName: schedule.train.name,
+      version: String(schedule.version),
+      status: schedule.status as ScheduleProgressItem['status'],
+      currentPhase,
+      totalRequirements,
+      completedCount,
+      inProgressCount: totalRequirements - completedCount,
+      capacityUsed,
+      capacityTotal,
+      progress,
+      progressPercent,
+      startDate: schedule.startDate ? schedule.startDate.toISOString() : new Date().toISOString(),
+      endDate: schedule.endDate ? schedule.endDate.toISOString() : null,
+      boardingDate: schedule.boardingDate ? schedule.boardingDate.toISOString() : null,
+      uatEndDate: null,
+      lockdownDate: schedule.lockdownDate ? schedule.lockdownDate.toISOString() : null,
+      releaseDate: schedule.releaseDate ? schedule.releaseDate.toISOString() : null,
+    };
+  }));
 }
 
 export type {

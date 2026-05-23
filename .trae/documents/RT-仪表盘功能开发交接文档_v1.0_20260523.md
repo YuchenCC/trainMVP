@@ -21,15 +21,21 @@
 - `GET /api/requirements/my-todos` - 个人待办事项
 - `GET /api/schedules/progress` - 班次进度数据
 
+**修改文件**:
+- `apps/server/src/modules/requirements/service.ts`
+- `apps/server/src/modules/requirements/index.ts`
+- `apps/server/src/modules/trains/services/train.service.ts`
+- `apps/server/src/modules/trains/routes/schedule.ts`
+
 ### 3. 前端Service层更新
 - `apps/web/src/services/requirement.ts`
 - `apps/web/src/services/train.ts`
 
 ### 4. 新组件（4个）
-- `StatusStatCards.tsx` - 状态统计卡片
-- `TodoList.tsx` - 待办事项列表
-- `ScheduleProgressCard.tsx` - 班次进度卡片
-- `CalendarView.tsx` - 月历视图组件
+- `apps/web/src/components/dashboard/StatusStatCards.tsx` - 状态统计卡片
+- `apps/web/src/components/dashboard/TodoList.tsx` - 待办事项列表
+- `apps/web/src/components/dashboard/ScheduleProgressCard.tsx` - 班次进度卡片
+- `apps/web/src/components/dashboard/CalendarView.tsx` - 月历视图组件
 
 ### 5. 新页面（3个）
 - `apps/web/src/pages/dashboard/ba.tsx` - BA仪表盘
@@ -42,15 +48,17 @@
 
 ## Pending Tasks
 - 启动前端服务进行测试验证
-- 根据测试反馈调整UI细节
+- 可能需要根据测试反馈调整UI细节
 
 ## Key Decisions
 - 每个角色的待办基于审批流程/结果设计
 - 子状态变更不需要审核（正常开发/测试流转）
 - BA角色不应该有子状态变更功能
+- "待评审"在BA视角改为"未评审"
 
 ## Relevant Artifacts
-- **项目规范**: `AGENTS.md`
+- **项目规范**: `/Users/laiyang/Library/Application Support/TRAE SOLO CN/ModularData/ai-agent/work-mode-projects/版本火车/AGENTS.md`
+- **角色高频功能分析**: `/Users/laiyang/Library/Application Support/TRAE SOLO CN/ModularData/ai-agent/work-mode-projects/69fab7e1a29c125df6f0f954/需求和设计/共享/RT-角色高频功能分析与优化_v1.1_20260520.md`
 - **后端服务**: `release-train/apps/server/src/modules/`
 - **前端代码**: `release-train/apps/web/src/`
 
@@ -60,7 +68,12 @@
 - `diagnose`: 如果发现bug需要调试
 
 ## Context
-已完成仪表盘功能第一批（月历、BA、项目经理）开发，所有代码已就位。
+版本火车需求管理系统MVP正在积极开发中。已完成的核心功能：
+- 火车和班次管理
+- 需求纳版与依赖检查
+- 紧急变更审批流程（两级：TEST_MGR → PROJECT_MGR）
+- 班次状态管理（PLANNING/IN_PROGRESS/LOCKED_DOWN/RELEASED）
+- 仪表盘功能（月历、BA、项目经理）
 
 ### 启动前端服务
 ```bash

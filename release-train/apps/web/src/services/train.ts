@@ -21,6 +21,7 @@ import {
   PrecheckOnboardResponse,
   OnboardRequest,
   OnboardResponse,
+  ScheduleProgressItem,        // 班次进度项
 } from '@release-train/shared';
 
 /**
@@ -329,6 +330,17 @@ export const trainService = {
       `/trains/schedules/${scheduleId}/requirements/${requirementId}/rollback`,
       data
     );
+    return response.data;
+  },
+
+  /**
+   * 获取班次进度聚合
+   * 
+   * @param params - 查询参数（trainId 可选，只返回特定火车的班次
+   * @returns 班次进度列表，包含当前阶段和进度
+   */
+  getScheduleProgress: async (params?: { trainId?: string }): Promise<ApiResponse<ScheduleProgressItem[]>> => {
+    const response = await api.get('/schedules/progress', { params }); // GET /api/schedules/progress
     return response.data;
   },
 };

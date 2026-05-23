@@ -31,6 +31,9 @@ import {
   emergencyChange,                  // 紧急变更 service
   approveEmergencyChange,           // 紧急变更审批通过 service
   rejectEmergencyChange,            // 紧急变更审批驳回 service
+  getRequirementStats,              // 需求聚合统计
+  getEmergencyChanges,              // 紧急变更列表
+  getMyTodos,                       // 用户待办聚合
   RequirementSearchItem,            // 搜索单项类型
 } from './service.js';
 
@@ -81,6 +84,57 @@ export async function requirementRoutes(fastify: FastifyInstance): Promise<void>
     async (request, reply) => {
       const results = await searchRequirements(request.query.q || ''); // 调用 service 搜索
       return reply.send({ success: true, data: results });            // 返回搜索结果
+    },
+  );
+
+  // ======================== 需求聚合统计 ========================
+  fastify.get<{
+    Querystring: { systemIds?: string; scheduleId?: string; trainId?: string };
+    Reply: ApiResponse<any>;
+  }>(
+    '/api/stats/requirements',                             // GET /api/stats/requirements
+    {
+      onRequest: [fastify.authenticate],                  // 需要登录
+    },
+    async (request, reply) => {
+      const { systemIds, scheduleId, trainId } = request.query;
+      const systemIdsArray = systemIds ? systemIds.split(',') : undefined;
+      const result = await getRequirementStats({ systemIds: systemIdsArray, scheduleId, trainId });
+      return reply.send({ success: true, data: result });
+    },
+  );
+
+  // ======================== 紧急变更列表 ========================
+  fastify.get<{
+    Querystring: { status?: string; approverId?: string };
+    Reply: ApiResponse<any>;
+  }>(
+    '/api/emergency-changes',                            // GET /api/emergency-changes
+    {
+      onRequest: [fastify.authenticate],                  // 需要登录
+    },
+    async (request, reply) => {
+      const result = await getEmergencyChanges(request.query);
+      return reply.send({ success: true, data: result });
+    },
+  );
+
+  // ======================== 用户待办聚合 ========================
+  fastify.get<{
+    Reply: ApiResponse<any>;
+  }>(
+    '/api/requirements/my-todos',                        // GET /api/requirements/my-todos
+    {
+      onRequest: [fastify.authenticate],                  // 需要登录
+    },
+    async (request, reply) => {
+      const user = request.user as JwtPayload;
+      const result = await getMyTodos({
+        id: user.sub,
+        role: user.role,
+        systemIds: user.systemIds,
+      });
+      return reply.send({ success: true, data: result });
     },
   );
 

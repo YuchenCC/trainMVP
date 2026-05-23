@@ -1,0 +1,1578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>版本火车 · 角色仪表盘</title>
+<style>
+/* ===== CSS Variables ===== */
+:root {
+  --sidebar-w: 220px;
+  --topbar-h: 48px;
+  --sidebar-bg: #1a1d23;
+  --sidebar-text: #8b949e;
+  --sidebar-active: #58a6ff;
+  --sidebar-hover: #21262d;
+  --bg: #f0f2f5;
+  --card-bg: #ffffff;
+  --border: #e8e8e8;
+  --text: #1d1d1f;
+  --text-secondary: #6b7280;
+  --accent: #1677ff;
+  --accent-light: #e6f4ff;
+  --danger: #ff4d4f;
+  --danger-light: #fff2f0;
+  --warning: #faad14;
+  --warning-light: #fffbe6;
+  --success: #52c41a;
+  --success-light: #f6ffed;
+  --purple: #722ed1;
+  --orange: #fa8c16;
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.12);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== Sidebar ===== */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.sidebar-logo {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.sidebar-logo .logo-icon {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, #58a6ff, #3fb950);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; color: #fff; margin-right: 10px;
+  font-weight: 700;
+}
+
+.sidebar-logo .logo-text {
+  font-size: 15px; font-weight: 600; color: #e6edf3;
+  letter-spacing: 0.5px;
+}
+
+.sidebar-nav {
+  flex: 1; padding: 12px 0;
+}
+
+.nav-item {
+  display: flex; align-items: center;
+  padding: 10px 20px; margin: 2px 8px; border-radius: 6px;
+  color: var(--sidebar-text); font-size: 13.5px; cursor: pointer;
+  transition: all 0.15s; text-decoration: none;
+  gap: 10px;
+}
+
+.nav-item:hover { background: var(--sidebar-hover); color: #e6edf3; }
+.nav-item.active { 
+  background: rgba(88,166,255,0.12); color: var(--sidebar-active); 
+  font-weight: 500;
+}
+
+.nav-item .nav-dot {
+  width: 3px; height: 3px; border-radius: 50%; background: transparent;
+  transition: background 0.2s;
+}
+.nav-item.active .nav-dot { background: var(--sidebar-active); }
+
+.nav-icon { font-size: 16px; width: 20px; text-align: center; }
+
+.sidebar-footer {
+  padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.06);
+  display: flex; align-items: center; gap: 10px;
+}
+
+.avatar { width: 32px; height: 32px; border-radius: 50%; 
+  background: linear-gradient(135deg, #58a6ff, #3fb950);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 13px; font-weight: 600;
+}
+
+.user-info { flex: 1; min-width: 0; }
+.user-name { font-size: 13px; color: #e6edf3; font-weight: 500; }
+.user-role { font-size: 11px; color: var(--sidebar-text); }
+
+/* ===== Main ===== */
+.main {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* ===== Top Bar ===== */
+.topbar {
+  height: var(--topbar-h);
+  background: #fff; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 20px;
+  flex-shrink: 0;
+}
+
+.topbar-breadcrumb {
+  display: flex; align-items: center; gap: 6px; font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.topbar-breadcrumb a { color: var(--text-secondary); text-decoration: none; }
+.topbar-breadcrumb a:hover { color: var(--accent); }
+.topbar-breadcrumb .sep { color: #d0d5dd; }
+.topbar-breadcrumb .current { color: var(--text); font-weight: 500; }
+
+.topbar-right {
+  margin-left: auto; display: flex; align-items: center; gap: 16px;
+}
+
+/* ===== Content ===== */
+.content { flex: 1; overflow-y: auto; padding: 20px 24px; }
+
+/* ===== Role Selector ===== */
+.role-selector {
+  background: #fff; border-radius: var(--radius); padding: 12px 16px;
+  margin-bottom: 20px; box-shadow: var(--shadow);
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+
+.role-selector-label {
+  font-size: 12px; color: var(--text-secondary); font-weight: 500;
+  margin-right: 4px;
+}
+
+.role-btn {
+  padding: 5px 14px; border: 1.5px solid var(--border); border-radius: 20px;
+  font-size: 12.5px; cursor: pointer; background: #fff;
+  color: var(--text-secondary); transition: all 0.2s;
+  font-family: inherit;
+}
+
+.role-btn:hover { border-color: var(--accent); color: var(--accent); }
+.role-btn.active {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+  font-weight: 500;
+}
+
+/* ===== Dashboard Page Title ===== */
+.page-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.page-title {
+  font-size: 20px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 10px;
+}
+
+.page-title .icon { font-size: 22px; }
+
+/* ===== Stat Cards Row ===== */
+.stat-cards {
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  gap: 14px; margin-bottom: 20px;
+}
+
+.stat-card {
+  background: #fff; border-radius: var(--radius);
+  padding: 18px 20px; box-shadow: var(--shadow);
+  cursor: pointer; transition: all 0.2s;
+  border: 1.5px solid transparent;
+  position: relative; overflow: hidden;
+}
+
+.stat-card:hover {
+  box-shadow: var(--shadow-lg);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.stat-card .stat-label { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
+.stat-card .stat-value { font-size: 32px; font-weight: 700; color: var(--text); line-height: 1; }
+.stat-card .stat-sub { font-size: 12px; color: var(--text-secondary); margin-top: 6px; }
+
+.stat-card::after {
+  content: ''; position: absolute; right: 14px; top: 50%;
+  transform: translateY(-50%); width: 4px; height: 32px;
+  border-radius: 2px; opacity: 0.35;
+}
+
+.stat-card.draft::after { background: #8c8c8c; }
+.stat-card.pending::after { background: var(--accent); }
+.stat-card.ready::after { background: var(--success); }
+.stat-card.onboarded::after { background: var(--purple); }
+.stat-card.released::after { background: var(--success); }
+
+/* ===== Two Column Grid ===== */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+.grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 20px; }
+
+/* ===== Card ===== */
+.card {
+  background: #fff; border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: hidden;
+}
+
+.card-header {
+  padding: 14px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+.card-title {
+  font-size: 14px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+
+.card-title .dot { width: 8px; height: 8px; border-radius: 50%; }
+.card-title .dot.red { background: var(--danger); }
+.card-title .dot.orange { background: var(--orange); }
+.card-title .dot.blue { background: var(--accent); }
+.card-title .dot.green { background: var(--success); }
+
+.card-badge {
+  background: var(--accent-light); color: var(--accent);
+  padding: 2px 10px; border-radius: 12px;
+  font-size: 12px; font-weight: 500;
+}
+
+.card-body { padding: 16px 20px; }
+.card-body.no-padding { padding: 0; }
+
+/* ===== Table ===== */
+.table-wrap { overflow-x: auto; }
+
+table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+
+table th {
+  text-align: left; padding: 10px 14px;
+  font-weight: 500; color: var(--text-secondary);
+  background: #fafafa; border-bottom: 1px solid var(--border);
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px;
+}
+
+table td {
+  padding: 10px 14px; border-bottom: 1px solid #f5f5f5;
+  color: var(--text); vertical-align: middle;
+}
+
+table tr:hover td { background: var(--accent-light); }
+table tr.clickable { cursor: pointer; }
+
+.tag {
+  display: inline-block; padding: 2px 10px; border-radius: 4px;
+  font-size: 11.5px; font-weight: 500; letter-spacing: 0.2px;
+}
+
+.tag-blue { background: var(--accent-light); color: var(--accent); }
+.tag-orange { background: #fff7e6; color: #d46b08; }
+.tag-purple { background: #f9f0ff; color: #531dab; }
+.tag-green { background: var(--success-light); color: #389e0d; }
+.tag-red { background: var(--danger-light); color: var(--danger); }
+.tag-gray { background: #fafafa; color: #8c8c8c; }
+.tag-p0 { background: #fff1f0; color: #cf1322; font-weight: 700; }
+.tag-p1 { background: #fff7e6; color: #d46b08; }
+.tag-p2 { background: var(--accent-light); color: #1677ff; }
+.tag-p3 { background: #fafafa; color: #8c8c8c; }
+
+/* ===== Progress ===== */
+.progress-bar {
+  height: 6px; background: #f0f0f0; border-radius: 3px;
+  overflow: hidden; min-width: 80px;
+}
+
+.progress-fill {
+  height: 100%; border-radius: 3px; transition: width 0.4s;
+  background: var(--accent);
+}
+
+.progress-fill.warning { background: var(--warning); }
+.progress-fill.success { background: var(--success); }
+.progress-fill.danger { background: var(--danger); }
+
+.progress-label { font-size: 12px; color: var(--text-secondary); margin-top: 3px; }
+
+/* ===== Badge ===== */
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 1px 8px; border-radius: 10px;
+  font-size: 11.5px; font-weight: 600;
+  line-height: 18px; min-width: 20px; justify-content: center;
+}
+
+.badge-count {
+  background: var(--accent-light); color: var(--accent);
+}
+.badge-warning {
+  background: var(--warning-light); color: #d48806;
+}
+.badge-danger {
+  background: var(--danger-light); color: var(--danger);
+}
+
+/* ===== Kanban ===== */
+.kanban { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.kanban-col { 
+  background: #fafafa; border-radius: var(--radius); 
+  padding: 12px; min-height: 200px;
+}
+.kanban-col-title {
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+}
+
+.kanban-card {
+  background: #fff; border-radius: 6px; padding: 12px;
+  margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  border: 1px solid var(--border); cursor: pointer;
+  transition: all 0.15s;
+}
+
+.kanban-card:hover { box-shadow: var(--shadow); border-color: var(--accent); }
+.kanban-card .kc-code { font-size: 11px; color: var(--accent); font-weight: 600; }
+.kanban-card .kc-title { font-size: 13px; color: var(--text); margin: 4px 0; }
+.kanban-card .kc-meta { font-size: 11px; color: var(--text-secondary); display: flex; gap: 8px; }
+
+/* ===== Timeline ===== */
+.timeline { padding: 6px 0; }
+.timeline-item {
+  display: flex; gap: 12px; padding: 8px 0;
+  position: relative; font-size: 13px;
+}
+
+.timeline-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  flex-shrink: 0; margin-top: 4px;
+  position: relative;
+}
+
+.timeline-dot::after {
+  content: ''; position: absolute;
+  left: 50%; top: 12px; width: 1.5px; height: calc(100% + 8px);
+  background: #e8e8e8; transform: translateX(-50%);
+}
+
+.timeline-item:last-child .timeline-dot::after { display: none; }
+.timeline-dot.orange { background: var(--orange); }
+.timeline-dot.green { background: var(--success); }
+.timeline-dot.blue { background: var(--accent); }
+.timeline-content { flex: 1; }
+.timeline-content .tc-date { font-size: 11px; color: var(--text-secondary); }
+.timeline-content .tc-days { font-size: 11px; color: var(--orange); font-weight: 500; }
+
+/* ===== Alert ===== */
+.alert {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 14px 16px; border-radius: var(--radius);
+  font-size: 13px; margin-bottom: 12px;
+}
+
+.alert-warning { background: var(--warning-light); border: 1px solid #ffe58f; color: #ad6800; }
+.alert-icon { font-size: 16px; flex-shrink: 0; }
+
+/* ===== Empty State ===== */
+.empty { text-align: center; padding: 32px 20px; color: var(--text-secondary); font-size: 13px; }
+
+/* ===== Quick Actions Bar ===== */
+.quick-bar {
+  background: #fff; border-radius: var(--radius); padding: 10px 16px;
+  box-shadow: var(--shadow); margin-bottom: 16px;
+  display: flex; align-items: center; gap: 6px;
+}
+
+.quick-btn {
+  padding: 5px 14px; border: 1px solid var(--border); border-radius: 6px;
+  font-size: 12.5px; background: #fff; cursor: pointer;
+  color: var(--text-secondary); transition: all 0.15s;
+  font-family: inherit;
+}
+
+.quick-btn:hover { border-color: var(--accent); color: var(--accent); }
+.quick-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ===== Section Divider ===== */
+.section-label {
+  font-size: 11px; font-weight: 600; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: 0.8px;
+  margin: 16px 0 12px;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 1200px) {
+  .stat-cards { grid-template-columns: repeat(3, 1fr); }
+  .kanban { grid-template-columns: repeat(2, 1fr); }
+  .grid-2 { grid-template-columns: 1fr; }
+}
+
+/* ===== Calendar Grid ===== */
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border-bottom: 1px solid var(--border);
+}
+
+.cal-header {
+  padding: 10px 8px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+  background: #fafafa;
+}
+
+.cal-header.weekend { color: #d0d5dd; }
+
+.cal-day {
+  min-height: 100px;
+  padding: 6px 8px;
+  border-right: 1px solid #f0f0f0;
+  border-bottom: 1px solid #f0f0f0;
+  position: relative;
+  cursor: default;
+  transition: background 0.1s;
+}
+
+.cal-day:hover { background: #fafcff; }
+.cal-day.other-month { background: #fafafa; }
+.cal-day.other-month .cal-date { color: #d0d5dd; }
+.cal-day.today { background: #e6f4ff; }
+.cal-day.weekend { background: #fafbfc; }
+
+.cal-date {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 2px;
+  display: inline-block;
+  min-width: 24px;
+  height: 24px;
+  line-height: 24px;
+  text-align: center;
+  border-radius: 50%;
+}
+
+.cal-day.today .cal-date {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.cal-events {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.cal-event {
+  font-size: 10px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  transition: opacity 0.15s;
+}
+
+.cal-event:hover { opacity: 0.8; }
+
+.cal-event.boarding {
+  background: var(--accent-light);
+  color: var(--accent);
+  border-left: 3px solid var(--accent);
+}
+
+.cal-event.lockdown {
+  background: #fff7e6;
+  color: #d46b08;
+  border-left: 3px solid var(--orange);
+}
+
+.cal-event.release {
+  background: var(--success-light);
+  color: #389e0d;
+  border-left: 3px solid var(--success);
+}
+
+.cal-event.schedule-range {
+  background: #f9f0ff;
+  color: #722ed1;
+  border-left: 3px solid var(--purple);
+  font-size: 9px;
+  opacity: 0.6;
+}
+
+.cal-event.more {
+  background: none;
+  color: var(--text-secondary);
+  font-size: 10px;
+  text-align: center;
+  cursor: default;
+}
+
+/* ===== Dashboard Hidden ===== */
+.dashboard { display: none; }
+.dashboard.active { display: block; }
+
+/* ===== Link button ===== */
+.link-btn {
+  background: none; border: none; color: var(--accent);
+  font-size: 12px; cursor: pointer; padding: 4px 8px;
+  border-radius: 4px; font-family: inherit;
+}
+.link-btn:hover { background: var(--accent-light); }
+.link-btn.danger { color: var(--danger); }
+.link-btn.danger:hover { background: var(--danger-light); }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">🚂</div>
+    <div class="logo-text">版本火车</div>
+  </div>
+  <nav class="sidebar-nav">
+    <a class="nav-item active" href="#" onclick="switchTo('dashboard')">
+      <span class="nav-dot"></span>
+      <span class="nav-icon">◉</span> 仪表盘
+    </a>
+    <a class="nav-item" href="#">
+      <span class="nav-dot"></span>
+      <span class="nav-icon">▦</span> 需求池
+    </a>
+    <a class="nav-item" href="#">
+      <span class="nav-dot"></span>
+      <span class="nav-icon">🚃</span> 版本火车
+    </a>
+    <a class="nav-item" href="#" onclick="showCalendar(); return false;">
+      <span class="nav-dot"></span>
+      <span class="nav-icon">📅</span> 月历
+    </a>
+    <a class="nav-item" href="#">
+      <span class="nav-dot"></span>
+      <span class="nav-icon">⬡</span> 系统管理
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="avatar" id="sidebarAvatar">张</div>
+    <div class="user-info">
+      <div class="user-name" id="sidebarName">张三</div>
+      <div class="user-role" id="sidebarRole">业务BA</div>
+    </div>
+  </div>
+</aside>
+
+<!-- Main -->
+<div class="main">
+  <!-- Top Bar -->
+  <header class="topbar">
+    <div class="topbar-breadcrumb">
+      <a href="#">首页</a>
+      <span class="sep">/</span>
+      <span class="current">仪表盘</span>
+    </div>
+    <div class="topbar-right" style="font-size:13px; color: var(--text-secondary);">
+      当前班次：<strong style="color: var(--accent);">2026年Q2第1班</strong>
+    </div>
+  </header>
+
+  <!-- Content -->
+  <div class="content">
+
+    <!-- Role Selector -->
+    <div class="role-selector">
+      <span class="role-selector-label">切换视角：</span>
+      <button class="role-btn active" onclick="switchRole('ba')" id="role-ba">业务BA</button>
+      <button class="role-btn" onclick="switchRole('pm')" id="role-pm">产品经理</button>
+      <button class="role-btn" onclick="switchRole('proj')" id="role-proj">项目经理</button>
+      <button class="role-btn" onclick="switchRole('train')" id="role-train">火车管理员</button>
+      <button class="role-btn" onclick="switchRole('tech')" id="role-tech">技术经理</button>
+      <button class="role-btn" onclick="switchRole('test')" id="role-test">测试负责人</button>
+    </div>
+
+    <!-- ==================== BA Dashboard ==================== -->
+    <div class="dashboard active" id="dash-ba">
+      <div class="page-header">
+        <div class="page-title"><span class="icon">📊</span> 业务BA · 用户中心系统</div>
+        <span style="font-size:12px;color:var(--text-secondary)">当前关注班次：2026年Q2第1班（进行中）</span>
+      </div>
+
+      <!-- Stat Cards -->
+      <div class="stat-cards">
+        <div class="stat-card draft">
+          <div class="stat-label">草稿</div>
+          <div class="stat-value">3</div>
+          <div class="stat-sub">待完善 · 发起评审</div>
+        </div>
+        <div class="stat-card pending">
+          <div class="stat-label">待评审</div>
+          <div class="stat-value">2</div>
+          <div class="stat-sub">REQ-UC-008 · REQ-UC-010</div>
+        </div>
+        <div class="stat-card ready">
+          <div class="stat-label">已就绪</div>
+          <div class="stat-value">5</div>
+          <div class="stat-sub">可纳版 · 等待班次</div>
+        </div>
+        <div class="stat-card onboarded">
+          <div class="stat-label">已纳版</div>
+          <div class="stat-value">8</div>
+          <div class="stat-sub">开发中 2 · SIT 3 · UAT 1 · 封板 2</div>
+        </div>
+        <div class="stat-card released">
+          <div class="stat-label">已投产</div>
+          <div class="stat-value">12</div>
+          <div class="stat-sub">本季度累计交付</div>
+        </div>
+      </div>
+
+      <!-- Alert + Todo -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-body">
+            <div class="alert alert-warning">
+              <span class="alert-icon">⚠️</span>
+              <div>
+                <strong>Q2第1班纳版截止：5月23日（3天后）</strong>
+                <br>您有 5 个已就绪需求未纳版，请尽快提交
+              </div>
+            </div>
+            <div style="display:flex;gap:16px">
+              <div style="flex:1;text-align:center;padding:12px;background:#fafafa;border-radius:6px">
+                <div style="font-size:28px;font-weight:700;color:var(--orange)">5</div>
+                <div style="font-size:12px;color:var(--text-secondary)">未纳版需求</div>
+              </div>
+              <div style="flex:1;text-align:center;padding:12px;background:#fafafa;border-radius:6px">
+                <div style="font-size:28px;font-weight:700;color:var(--accent)">85%</div>
+                <div style="font-size:12px;color:var(--text-secondary)">容量使用率</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">📋 我的待办 <span class="badge badge-count">3</span></div>
+          </div>
+          <div class="card-body no-padding">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>需求编号</th><th>标题</th><th>状态</th><th>原因</th><th style="width:50px"></th></tr>
+                </thead>
+                <tbody>
+                  <tr class="clickable">
+                    <td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-008</td>
+                    <td>用户注销功能</td>
+                    <td><span class="tag tag-red">已拒绝</span></td>
+                    <td style="font-size:12px;color:var(--text-secondary)">需求描述不清</td>
+                    <td><button class="link-btn">编辑</button></td>
+                  </tr>
+                  <tr class="clickable">
+                    <td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-005</td>
+                    <td>登录页优化</td>
+                    <td><span class="tag tag-red">已拒绝</span></td>
+                    <td style="font-size:12px;color:var(--text-secondary)">优先级存疑</td>
+                    <td><button class="link-btn">编辑</button></td>
+                  </tr>
+                  <tr class="clickable">
+                    <td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-007</td>
+                    <td>订单导出功能</td>
+                    <td><span class="tag tag-orange">变更通过</span></td>
+                    <td style="font-size:12px;color:var(--text-secondary)">待重新发起评审</td>
+                    <td><button class="link-btn">发起</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Current Schedule Requirements -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📈 当前班次 · 我的系统需求</div>
+          <button class="link-btn">查看全量列表 →</button>
+        </div>
+        <div class="card-body no-padding">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>需求编号</th><th>标题</th><th>状态</th><th>子状态</th><th>优先级</th><th>进度</th></tr>
+              </thead>
+              <tbody>
+                <tr class="clickable">
+                  <td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-001</td>
+                  <td>用户登录优化</td>
+                  <td><span class="tag tag-purple">已纳版</span></td>
+                  <td><span class="tag tag-green">封板</span></td>
+                  <td><span class="tag tag-p1">P1</span></td>
+                  <td><div class="progress-bar"><div class="progress-fill success" style="width:85%"></div></div><div class="progress-label">封板 · 5-23投产</div></td>
+                </tr>
+                <tr class="clickable">
+                  <td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-002</td>
+                  <td>支付密码修改</td>
+                  <td><span class="tag tag-purple">已纳版</span></td>
+                  <td><span class="tag tag-orange">SIT测试</span></td>
+                  <td><span class="tag tag-p0">P0</span></td>
+                  <td><div class="progress-bar"><div class="progress-fill" style="width:60%"></div></div><div class="progress-label">SIT中 · 预计5-22完成</div></td>
+                </tr>
+                <tr class="clickable">
+                  <td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-003</td>
+                  <td>订单列表筛选</td>
+                  <td><span class="tag tag-purple">已纳版</span></td>
+                  <td><span class="tag tag-blue">开发中</span></td>
+                  <td><span class="tag tag-p2">P2</span></td>
+                  <td><div class="progress-bar"><div class="progress-fill" style="width:35%"></div></div><div class="progress-label">开发中 · 预计5-25提测</div></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PM Dashboard ==================== -->
+    <div class="dashboard" id="dash-pm">
+      <div class="page-header">
+        <div class="page-title"><span class="icon">🎯</span> 产品经理 · 全局视角</div>
+      </div>
+
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header">
+          <div class="card-title">🚆 班次汇总</div>
+        </div>
+        <div class="card-body no-padding">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>班次</th><th>所属火车</th><th>状态</th><th>需求数</th><th>容量</th><th>进度</th><th>关键日期</th></tr>
+              </thead>
+              <tbody>
+                <tr class="clickable">
+                  <td><strong>Q2第1班</strong></td>
+                  <td>2026年Q2火车</td>
+                  <td><span class="tag tag-blue">进行中</span></td>
+                  <td>28</td>
+                  <td><span class="badge badge-warning">85/100</span></td>
+                  <td><div class="progress-bar"><div class="progress-fill warning" style="width:85%"></div></div><div class="progress-label">85%</div></td>
+                  <td style="font-size:12px">纳版5-16 · 封板5-23 · 投产5-30</td>
+                </tr>
+                <tr class="clickable">
+                  <td><strong>Q2第2班</strong></td>
+                  <td>2026年Q2火车</td>
+                  <td><span class="tag tag-gray">计划中</span></td>
+                  <td>12</td>
+                  <td><span class="badge badge-count">40/100</span></td>
+                  <td><div class="progress-bar"><div class="progress-fill" style="width:40%"></div></div><div class="progress-label">40%</div></td>
+                  <td style="font-size:12px">纳版6-13 · 封板6-20 · 投产6-27</td>
+                </tr>
+                <tr class="clickable">
+                  <td><strong>Q3第1班</strong></td>
+                  <td>2026年Q3火车</td>
+                  <td><span class="tag tag-gray">规划中</span></td>
+                  <td>5</td>
+                  <td><span class="badge badge-count">10/120</span></td>
+                  <td><div class="progress-bar"><div class="progress-fill" style="width:8%"></div></div><div class="progress-label">8%</div></td>
+                  <td style="font-size:12px">纳版7-18 · 待定</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><span class="dot orange"></span> 待评审需求 <span class="badge badge-count">3</span></div>
+          </div>
+          <div class="card-body no-padding">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>编号</th><th>标题</th><th>系统</th><th>优先级</th><th>提交时间</th></tr></thead>
+                <tbody>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-008</td><td>用户注销功能</td><td>用户中心</td><td><span class="tag tag-p0">P0</span></td><td style="font-size:12px;color:var(--text-secondary)">5-18</td></tr>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-ORDER-005</td><td>订单导出优化</td><td>订单系统</td><td><span class="tag tag-p1">P1</span></td><td style="font-size:12px;color:var(--text-secondary)">5-16</td></tr>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-PAY-003</td><td>支付回调重构</td><td>支付系统</td><td><span class="tag tag-p2">P2</span></td><td style="font-size:12px;color:var(--text-secondary)">5-17</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><span class="dot red"></span> P0/P1 重点需求</div>
+          </div>
+          <div class="card-body no-padding">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>编号</th><th>标题</th><th>系统</th><th>状态</th><th>优先级</th></tr></thead>
+                <tbody>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-001</td><td>用户登录优化</td><td>用户中心</td><td><span class="tag tag-purple">已纳版</span></td><td><span class="tag tag-p0">P0</span></td></tr>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-008</td><td>用户注销功能</td><td>用户中心</td><td><span class="tag tag-orange">待评审</span></td><td><span class="tag tag-p0">P0</span></td></tr>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-PAY-001</td><td>支付安全加固</td><td>支付系统</td><td><span class="tag tag-purple">已纳版</span></td><td><span class="tag tag-p1">P1</span></td></tr>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-ORDER-008</td><td>批量退款</td><td>订单系统</td><td><span class="tag tag-green">已就绪</span></td><td><span class="tag tag-p1">P1</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== Project Manager Dashboard ==================== -->
+    <div class="dashboard" id="dash-proj">
+      <div class="page-header">
+        <div class="page-title"><span class="icon">🗂️</span> 项目经理 · 全局管控</div>
+      </div>
+
+      <div class="stat-cards">
+        <div class="stat-card draft"><div class="stat-label">全系统 · 草稿</div><div class="stat-value">12</div></div>
+        <div class="stat-card pending"><div class="stat-label">全系统 · 待评审</div><div class="stat-value">8</div></div>
+        <div class="stat-card ready"><div class="stat-label">全系统 · 已就绪</div><div class="stat-value">15</div></div>
+        <div class="stat-card onboarded"><div class="stat-label">全系统 · 已纳版</div><div class="stat-value">42</div></div>
+        <div class="stat-card released"><div class="stat-label">本季度 · 已投产</div><div class="stat-value">28</div></div>
+      </div>
+
+      <div class="grid-2-1">
+        <div class="card">
+          <div class="card-header"><div class="card-title">🚆 所有火车班次进度</div></div>
+          <div class="card-body no-padding">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>火车/班次</th><th>状态</th><th>进度</th><th>容量</th><th>纳版截止</th></tr></thead>
+                <tbody>
+                  <tr class="clickable">
+                    <td><strong>2026Q2 · 第1班</strong></td>
+                    <td><span class="tag tag-blue">进行中</span></td>
+                    <td><div class="progress-bar"><div class="progress-fill" style="width:85%"></div></div><div class="progress-label">24/28 · 85%</div></td>
+                    <td><span style="font-size:12px;color:var(--orange);font-weight:500">85/100 ⚠️</span></td>
+                    <td style="font-size:12px">5-16 (已截止)</td>
+                  </tr>
+                  <tr class="clickable">
+                    <td><strong>2026Q2 · 第2班</strong></td>
+                    <td><span class="tag tag-gray">计划中</span></td>
+                    <td><div class="progress-bar"><div class="progress-fill" style="width:30%"></div></div><div class="progress-label">12/40 · 30%</div></td>
+                    <td><span style="font-size:12px;color:var(--success);font-weight:500">40/100</span></td>
+                    <td style="font-size:12px">6-13 (24天后)</td>
+                  </tr>
+                  <tr class="clickable">
+                    <td><strong>2026Q3 · 第1班</strong></td>
+                    <td><span class="tag tag-gray">规划中</span></td>
+                    <td><div class="progress-bar"><div class="progress-fill" style="width:5%"></div></div><div class="progress-label">5/30 · 5%</div></td>
+                    <td><span style="font-size:12px;color:var(--text-secondary)">10/120</span></td>
+                    <td style="font-size:12px">7-18</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><span class="dot red"></span> 紧急变更待审批 <span class="badge badge-danger">2</span></div>
+          </div>
+          <div class="card-body no-padding">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>编号</th><th>紧急度</th><th>审批步骤</th><th style="width:70px"></th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td style="font-size:12px"><strong style="color:var(--accent)">REQ-UC-010</strong><br><span style="font-size:11px;color:var(--text-secondary)">支付回调优化</span></td>
+                    <td><span class="tag tag-p0">P0</span></td>
+                    <td><span class="tag tag-orange">步骤2 · PM</span></td>
+                    <td>
+                      <button class="link-btn">通过</button>
+                      <button class="link-btn danger">驳回</button>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:12px"><strong style="color:var(--accent)">REQ-UC-012</strong><br><span style="font-size:11px;color:var(--text-secondary)">核心流程重构</span></td>
+                    <td><span class="tag tag-p0">P0</span></td>
+                    <td><span class="tag tag-purple">步骤1 · 测试经理</span></td>
+                    <td><span class="tag tag-gray">等待中</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dependency Risk -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="dot orange"></span> 依赖风险提示 <span class="badge badge-warning">3</span></div>
+        </div>
+        <div class="card-body no-padding">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>需求编号</th><th>标题</th><th>系统</th><th>依赖项</th><th>风险等级</th></tr></thead>
+              <tbody>
+                <tr class="clickable">
+                  <td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-008</td>
+                  <td>用户注销功能</td>
+                  <td>用户中心</td>
+                  <td style="font-size:12px">依赖 REQ-ORDER-003 (订单查询) — 状态: 已取消</td>
+                  <td><span class="tag tag-red">严重</span></td>
+                </tr>
+                <tr class="clickable">
+                  <td style="color:var(--accent);font-weight:600;font-size:12px">REQ-PAY-005</td>
+                  <td>对账报表</td>
+                  <td>支付系统</td>
+                  <td style="font-size:12px">依赖 REQ-UC-002 (支付密码) — 状态: 草稿</td>
+                  <td><span class="tag tag-orange">高</span></td>
+                </tr>
+                <tr class="clickable">
+                  <td style="color:var(--accent);font-weight:600;font-size:12px">REQ-ORDER-008</td>
+                  <td>批量退款</td>
+                  <td>订单系统</td>
+                  <td style="font-size:12px">依赖 REQ-PAY-001 (支付安全) — 状态: 已就绪</td>
+                  <td><span class="tag tag-blue">警告</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== Train Admin Dashboard ==================== -->
+    <div class="dashboard" id="dash-train">
+      <div class="page-header">
+        <div class="page-title"><span class="icon">🚂</span> 火车管理员 · 运营管控</div>
+      </div>
+
+      <div class="grid-2-1" style="margin-bottom:20px">
+        <div class="card">
+          <div class="card-header"><div class="card-title">🚆 所有火车班次概览</div></div>
+          <div class="card-body no-padding">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>班次</th><th>状态</th><th>需求数</th><th>进度</th><th>容量</th></tr></thead>
+                <tbody>
+                  <tr class="clickable">
+                    <td><strong>2026Q2 · 第1班</strong></td>
+                    <td><span class="tag tag-blue">进行中</span></td>
+                    <td>28</td>
+                    <td><div class="progress-bar"><div class="progress-fill warning" style="width:85%"></div></div></td>
+                    <td><span class="badge badge-warning">85/100</span></td>
+                  </tr>
+                  <tr class="clickable">
+                    <td><strong>2026Q2 · 第2班</strong></td>
+                    <td><span class="tag tag-gray">计划中</span></td>
+                    <td>12</td>
+                    <td><div class="progress-bar"><div class="progress-fill" style="width:40%"></div></div></td>
+                    <td><span class="badge badge-count">40/100</span></td>
+                  </tr>
+                  <tr class="clickable">
+                    <td><strong>2026Q3 · 第1班</strong></td>
+                    <td><span class="tag tag-gray">规划中</span></td>
+                    <td>5</td>
+                    <td><div class="progress-bar"><div class="progress-fill" style="width:8%"></div></div></td>
+                    <td><span class="badge badge-count">10/120</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">⏱️ 关键日期</div></div>
+          <div class="card-body">
+            <div class="timeline">
+              <div class="timeline-item">
+                <div class="timeline-dot orange"></div>
+                <div class="timeline-content">
+                  <strong>Q2第1班 · 封板</strong>
+                  <div class="tc-date">5月23日</div>
+                  <div class="tc-days">⚠️ 3天后</div>
+                </div>
+              </div>
+              <div class="timeline-item">
+                <div class="timeline-dot green"></div>
+                <div class="timeline-content">
+                  <strong>Q2第1班 · 投产</strong>
+                  <div class="tc-date">5月30日</div>
+                  <div class="tc-days">10天后</div>
+                </div>
+              </div>
+              <div class="timeline-item">
+                <div class="timeline-dot blue"></div>
+                <div class="timeline-content">
+                  <strong>Q2第2班 · 纳版截止</strong>
+                  <div class="tc-date">6月13日</div>
+                  <div class="tc-days">24天后</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><span class="dot orange"></span> 待纳版需求 <span class="badge badge-warning">5</span></div>
+          </div>
+          <div class="card-body no-padding">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>编号</th><th>标题</th><th>系统</th><th>点数</th><th>优先级</th></tr></thead>
+                <tbody>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-008</td><td>用户注销功能</td><td>用户中心</td><td>5</td><td><span class="tag tag-p0">P0</span></td></tr>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-009</td><td>个人信息页</td><td>用户中心</td><td>3</td><td><span class="tag tag-p2">P2</span></td></tr>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-ORDER-008</td><td>批量退款</td><td>订单系统</td><td>8</td><td><span class="tag tag-p1">P1</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><span class="dot green"></span> 待确认投产 <span class="badge badge-count">4</span></div>
+          </div>
+          <div class="card-body no-padding">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>编号</th><th>标题</th><th>系统</th><th>测试状态</th></tr></thead>
+                <tbody>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-001</td><td>用户登录优化</td><td>用户中心</td><td><span class="tag tag-green">SIT完成</span></td></tr>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-002</td><td>支付密码修改</td><td>用户中心</td><td><span class="tag tag-purple">UAT完成</span></td></tr>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-PAY-001</td><td>支付安全加固</td><td>支付系统</td><td><span class="tag tag-green">SIT完成</span></td></tr>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-ORDER-002</td><td>订单搜索</td><td>订单系统</td><td><span class="tag tag-purple">UAT完成</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== Tech Manager Dashboard ==================== -->
+    <div class="dashboard" id="dash-tech">
+      <div class="page-header">
+        <div class="page-title"><span class="icon">💻</span> 技术经理 · 用户中心系统</div>
+        <span style="font-size:12px;color:var(--text-secondary)">本周开发概览：已开始 3 · SIT中 2 · 已封板 1</span>
+      </div>
+
+      <div class="stat-cards">
+        <div class="stat-card draft"><div class="stat-label">待开发</div><div class="stat-value">3</div><div class="stat-sub">已纳版 · 未开始</div></div>
+        <div class="stat-card pending"><div class="stat-label">开发中</div><div class="stat-value">2</div><div class="stat-sub">DEV_IN_PROGRESS</div></div>
+        <div class="stat-card ready"><div class="stat-label">SIT测试</div><div class="stat-value">3</div><div class="stat-sub">已提测</div></div>
+        <div class="stat-card onboarded"><div class="stat-label">UAT测试</div><div class="stat-value">1</div><div class="stat-sub">业务验收中</div></div>
+        <div class="stat-card released"><div class="stat-label">已封板</div><div class="stat-value">2</div><div class="stat-sub">等待投产</div></div>
+      </div>
+
+      <!-- Kanban Board -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header"><div class="card-title">🏗️ 开发进度看板</div></div>
+        <div class="card-body">
+          <div class="kanban">
+            <div class="kanban-col">
+              <div class="kanban-col-title">🏗️ 待开发 <span class="badge badge-count">3</span></div>
+              <div class="kanban-card">
+                <div class="kc-code">REQ-UC-008</div>
+                <div class="kc-title">用户注销功能</div>
+                <div class="kc-meta"><span class="tag tag-p1">P1</span> 5点 · 计划5-21</div>
+              </div>
+              <div class="kanban-card">
+                <div class="kc-code">REQ-UC-009</div>
+                <div class="kc-title">个人信息修改</div>
+                <div class="kc-meta"><span class="tag tag-p2">P2</span> 3点 · 计划5-25</div>
+              </div>
+              <div class="kanban-card">
+                <div class="kc-code">REQ-UC-011</div>
+                <div class="kc-title">登录修复</div>
+                <div class="kc-meta"><span class="tag tag-p0">P0</span> 2点 · 紧急</div>
+              </div>
+            </div>
+            <div class="kanban-col">
+              <div class="kanban-col-title">💻 开发中 <span class="badge badge-count">2</span></div>
+              <div class="kanban-card">
+                <div class="kc-code">REQ-UC-003</div>
+                <div class="kc-title">订单列表筛选</div>
+                <div class="kc-meta"><span class="tag tag-p2">P2</span> 8点 · 5-25提测</div>
+              </div>
+              <div class="kanban-card">
+                <div class="kc-code">REQ-UC-006</div>
+                <div class="kc-title">消息通知</div>
+                <div class="kc-meta"><span class="tag tag-p1">P1</span> 5点 · 5-23提测</div>
+              </div>
+            </div>
+            <div class="kanban-col">
+              <div class="kanban-col-title">🧪 SIT测试 <span class="badge badge-warning">3</span></div>
+              <div class="kanban-card">
+                <div class="kc-code">REQ-UC-002</div>
+                <div class="kc-title">支付密码修改</div>
+                <div class="kc-meta"><span class="tag tag-p0">P0</span> 5-18提测</div>
+              </div>
+              <div class="kanban-card">
+                <div class="kc-code">REQ-UC-005</div>
+                <div class="kc-title">登录页优化</div>
+                <div class="kc-meta"><span class="tag tag-p1">P1</span> 5-17提测</div>
+              </div>
+              <div class="kanban-card">
+                <div class="kc-code">REQ-UC-007</div>
+                <div class="kc-title">订单导出</div>
+                <div class="kc-meta"><span class="tag tag-p2">P2</span> 5-20提测</div>
+              </div>
+            </div>
+            <div class="kanban-col">
+              <div class="kanban-col-title">🔒 UAT测试 <span class="badge badge-count">1</span></div>
+              <div class="kanban-card">
+                <div class="kc-code">REQ-UC-004</div>
+                <div class="kc-title">安全日志</div>
+                <div class="kc-meta"><span class="tag tag-p1">P1</span> SIT 5-15通过</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== Test Manager Dashboard ==================== -->
+    <div class="dashboard" id="dash-test">
+      <div class="page-header">
+        <div class="page-title"><span class="icon">🧪</span> 测试负责人 · 质量把控</div>
+        <span style="font-size:12px;color:var(--text-secondary)">当前测试班次：2026年Q2第1班（进行中）</span>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><span class="dot orange"></span> 待测试需求 <span class="badge badge-warning">5</span></div>
+          </div>
+          <div class="card-body no-padding">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>编号</th><th>标题</th><th>系统</th><th>测试阶段</th><th>提测时间</th></tr></thead>
+                <tbody>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-006</td><td>订单查询</td><td>用户中心</td><td><span class="tag tag-orange">SIT测试</span></td><td style="font-size:12px;color:var(--text-secondary)">5-18</td></tr>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-007</td><td>订单导出</td><td>订单系统</td><td><span class="tag tag-orange">SIT测试</span></td><td style="font-size:12px;color:var(--text-secondary)">5-17</td></tr>
+                  <tr class="clickable"><td style="color:var(--accent);font-weight:600;font-size:12px">REQ-PAY-002</td><td>支付通知</td><td>支付系统</td><td><span class="tag tag-purple">UAT测试</span></td><td style="font-size:12px;color:var(--text-secondary)">5-15</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><span class="dot red"></span> 紧急变更 · 待测试 <span class="badge badge-danger">2</span></div>
+          </div>
+          <div class="card-body no-padding">
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>编号</th><th>标题</th><th>紧急度</th><th>原因</th></tr></thead>
+                <tbody>
+                  <tr class="clickable">
+                    <td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-010</td>
+                    <td>支付回调优化</td>
+                    <td><span class="tag tag-p0">P0</span></td>
+                    <td style="font-size:12px;color:var(--text-secondary);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">线上故障 · 回调超时导致订单丢失</td>
+                  </tr>
+                  <tr class="clickable">
+                    <td style="color:var(--accent);font-weight:600;font-size:12px">REQ-UC-011</td>
+                    <td>登录功能修复</td>
+                    <td><span class="tag tag-p1">P1</span></td>
+                    <td style="font-size:12px;color:var(--text-secondary);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">用户反馈 · 部分用户无法登录</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Test Kanban -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">🧪 测试进度看板</div></div>
+        <div class="card-body">
+          <div class="kanban">
+            <div class="kanban-col">
+              <div class="kanban-col-title">🧪 SIT测试 <span class="badge badge-warning">3</span></div>
+              <div class="kanban-card"><div class="kc-code">REQ-UC-006</div><div class="kc-title">订单查询</div><div class="kc-meta">用户中心 · 5-18提测</div></div>
+              <div class="kanban-card"><div class="kc-code">REQ-UC-007</div><div class="kc-title">订单导出</div><div class="kc-meta">订单系统 · 5-17提测</div></div>
+              <div class="kanban-card"><div class="kc-code">REQ-PAY-002</div><div class="kc-title">支付通知</div><div class="kc-meta">支付系统 · 5-16提测</div></div>
+            </div>
+            <div class="kanban-col">
+              <div class="kanban-col-title">👤 UAT测试 <span class="badge badge-count">2</span></div>
+              <div class="kanban-card"><div class="kc-code">REQ-UC-004</div><div class="kc-title">安全日志</div><div class="kc-meta">用户中心 · SIT 5-15通过</div></div>
+              <div class="kanban-card"><div class="kc-code">REQ-ORDER-003</div><div class="kc-title">退款流程</div><div class="kc-meta">订单系统 · SIT 5-14通过</div></div>
+            </div>
+            <div class="kanban-col">
+              <div class="kanban-col-title">🔒 封板 <span class="badge badge-count">5</span></div>
+              <div class="kanban-card"><div class="kc-code">REQ-UC-001</div><div class="kc-title">用户登录优化</div><div class="kc-meta">用户中心 · UAT通过</div></div>
+              <div class="kanban-card"><div class="kc-code">REQ-PAY-001</div><div class="kc-title">支付安全加固</div><div class="kc-meta">支付系统 · UAT通过</div></div>
+            </div>
+            <div class="kanban-col">
+              <div class="kanban-col-title">✅ 已投产 <span class="badge badge-count">12</span></div>
+              <div class="kanban-card"><div class="kc-code">REQ-UC-000</div><div class="kc-title">初始版本</div><div class="kc-meta">用户中心 · 4-30投产</div></div>
+              <div class="kanban-card"><div class="kc-code">REQ-ORDER-001</div><div class="kc-title">订单创建</div><div class="kc-meta">订单系统 · 5-2投产</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- ==================== Calendar Page ==================== -->
+<div class="page calendar-page" id="page-calendar" style="display:none;">
+  <div class="main" style="margin-left:0;">
+    <header class="topbar">
+      <div class="topbar-breadcrumb">
+        <a href="#" onclick="showDashboard()">首页</a>
+        <span class="sep">/</span>
+        <span class="current">版本月历</span>
+      </div>
+      <div class="topbar-right">
+        <button class="quick-btn" onclick="showDashboard()">← 返回仪表盘</button>
+      </div>
+    </header>
+    <div class="content">
+
+      <!-- Train Selector -->
+      <div class="role-selector" style="margin-bottom:16px">
+        <span class="role-selector-label">选择火车：</span>
+        <button class="role-btn active cal-train-btn" onclick="switchCalendarTrain('q2')">2026年Q2火车</button>
+        <button class="role-btn cal-train-btn" onclick="switchCalendarTrain('q3')">2026年Q3火车</button>
+        <button class="role-btn cal-train-btn" onclick="switchCalendarTrain('q4')">2026年Q4火车</button>
+        <span style="margin-left:auto;font-size:12px;color:var(--text-secondary)">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--accent);margin:0 4px;vertical-align:middle"></span>纳版日
+          <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--orange);margin:0 4px;vertical-align:middle"></span>封板日
+          <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--success);margin:0 4px;vertical-align:middle"></span>投产日
+          <span style="display:inline-block;width:10px;height:4px;border-radius:2px;background:var(--purple);margin:0 4px;vertical-align:middle"></span>班次区间
+        </span>
+      </div>
+
+      <!-- Month Navigator -->
+      <div class="page-header" style="margin-bottom:12px">
+        <div class="page-title">
+          <button onclick="calPrevMonth()" style="border:none;background:none;cursor:pointer;font-size:18px;padding:4px 8px;color:var(--text-secondary)">◀</button>
+          <span id="cal-month-label" style="min-width:160px;text-align:center">2026年5月</span>
+          <button onclick="calNextMonth()" style="border:none;background:none;cursor:pointer;font-size:18px;padding:4px 8px;color:var(--text-secondary)">▶</button>
+          <button onclick="calGoToday()" style="margin-left:12px;font-size:12px;padding:4px 12px;border:1px solid var(--border);border-radius:4px;background:#fff;cursor:pointer;font-family:inherit;color:var(--text-secondary)">今天</button>
+        </div>
+        <span id="cal-train-label" style="font-size:13px;color:var(--text-secondary)">2026年Q2火车 · 2个班次</span>
+      </div>
+
+      <!-- Calendar Grid -->
+      <div class="card" style="overflow:visible">
+        <div class="card-body no-padding">
+          <div class="cal-grid" id="cal-grid">
+            <!-- Rendered by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Schedule Legend -->
+      <div style="margin-top:16px;display:flex;gap:16px;flex-wrap:wrap">
+        <div class="card" style="flex:1;min-width:320px">
+          <div class="card-header"><div class="card-title">📋 Q2·第1班 (进行中)</div></div>
+          <div class="card-body" style="padding:12px 20px">
+            <div style="display:flex;gap:20px;font-size:12px;color:var(--text-secondary)">
+              <div><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--accent);margin-right:6px"></span>纳版日：5月16日</div>
+              <div><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--orange);margin-right:6px"></span>封板日：5月23日</div>
+              <div><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--success);margin-right:6px"></span>投产日：5月30日</div>
+              <div>需求数：28</div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="flex:1;min-width:320px">
+          <div class="card-header"><div class="card-title">📋 Q2·第2班 (计划中)</div></div>
+          <div class="card-body" style="padding:12px 20px">
+            <div style="display:flex;gap:20px;font-size:12px;color:var(--text-secondary)">
+              <div><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--accent);margin-right:6px"></span>纳版日：6月13日</div>
+              <div><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--orange);margin-right:6px"></span>封板日：6月20日</div>
+              <div><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--success);margin-right:6px"></span>投产日：6月27日</div>
+              <div>需求数：12</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Role switching
+const roles = ['ba', 'pm', 'proj', 'train', 'tech', 'test'];
+const roleNames = { ba: '业务BA', pm: '产品经理', proj: '项目经理', train: '火车管理员', tech: '技术经理', test: '测试负责人' };
+const userNames = { ba: '张三', pm: '李四', proj: '王五', train: '赵六', tech: '陈七', test: '周八' };
+const avatarChars = { ba: '张', pm: '李', proj: '王', train: '赵', tech: '陈', test: '周' };
+
+function switchRole(role) {
+  // Update buttons
+  document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('role-' + role).classList.add('active');
+
+  // Update dashboards
+  document.querySelectorAll('.dashboard').forEach(d => d.classList.remove('active'));
+  document.getElementById('dash-' + role).classList.add('active');
+
+  // Update sidebar
+  document.getElementById('sidebarName').textContent = userNames[role];
+  document.getElementById('sidebarRole').textContent = roleNames[role];
+  document.getElementById('sidebarAvatar').textContent = avatarChars[role];
+}
+
+function switchTo(page) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  event.target.closest('.nav-item').classList.add('active');
+}
+
+// ========== Calendar Logic ==========
+const CAL_MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+const CAL_WEEKDAYS = ['日','一','二','三','四','五','六'];
+
+// Mock schedule data organized by train
+const CAL_TRAIN_DATA = {
+  q2: {
+    name: '2026年Q2火车',
+    schedules: [
+      {
+        name: 'Q2·第1班', status: '进行中', reqCount: 28,
+        start: '2026-05-01', end: '2026-05-30',
+        boarding: '2026-05-16', lockdown: '2026-05-23', release: '2026-05-30'
+      },
+      {
+        name: 'Q2·第2班', status: '计划中', reqCount: 12,
+        start: '2026-06-01', end: '2026-06-27',
+        boarding: '2026-06-13', lockdown: '2026-06-20', release: '2026-06-27'
+      }
+    ]
+  },
+  q3: {
+    name: '2026年Q3火车',
+    schedules: [
+      {
+        name: 'Q3·第1班', status: '规划中', reqCount: 5,
+        start: '2026-07-01', end: '2026-07-31',
+        boarding: '2026-07-18', lockdown: '2026-07-25', release: '2026-07-31'
+      },
+      {
+        name: 'Q3·第2班', status: '规划中', reqCount: 0,
+        start: '2026-08-15', end: '2026-09-12',
+        boarding: '2026-09-01', lockdown: '2026-09-08', release: '2026-09-12'
+      }
+    ]
+  },
+  q4: {
+    name: '2026年Q4火车',
+    schedules: [
+      {
+        name: 'Q4·第1班', status: '规划中', reqCount: 0,
+        start: '2026-10-01', end: '2026-10-28',
+        boarding: '2026-10-15', lockdown: '2026-10-22', release: '2026-10-28'
+      }
+    ]
+  }
+};
+
+let calYear = 2026, calMonth = 5;
+let calTrain = 'q2';
+
+function showCalendar() {
+  document.querySelector('.sidebar').style.display = 'none';
+  document.querySelector('.main').style.display = 'none';
+  document.getElementById('page-calendar').style.display = 'block';
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.nav-item')[3].classList.add('active');
+  renderCalendar();
+}
+
+function showDashboard() {
+  document.querySelector('.sidebar').style.display = '';
+  document.querySelector('.main').style.display = '';
+  document.getElementById('page-calendar').style.display = 'none';
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.nav-item')[0].classList.add('active');
+}
+
+function switchCalendarTrain(train) {
+  calTrain = train;
+  document.querySelectorAll('.cal-train-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.cal-train-btn').forEach(b => {
+    if (b.textContent.includes(train.toUpperCase())) b.classList.add('active');
+  });
+  const tdata = CAL_TRAIN_DATA[train];
+  document.getElementById('cal-train-label').textContent = tdata.name + ' · ' + tdata.schedules.length + '个班次';
+  // Jump to first schedule's month
+  const firstSched = tdata.schedules[0];
+  const fd = new Date(firstSched.start);
+  calYear = fd.getFullYear();
+  calMonth = fd.getMonth() + 1;
+  renderCalendar();
+}
+
+function calPrevMonth() {
+  calMonth--;
+  if (calMonth < 1) { calMonth = 12; calYear--; }
+  renderCalendar();
+}
+
+function calNextMonth() {
+  calMonth++;
+  if (calMonth > 12) { calMonth = 1; calYear++; }
+  renderCalendar();
+}
+
+function calGoToday() {
+  const now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth() + 1;
+  renderCalendar();
+}
+
+function renderCalendar() {
+  document.getElementById('cal-month-label').textContent = calYear + '年' + CAL_MONTHS[calMonth - 1];
+
+  const grid = document.getElementById('cal-grid');
+  let html = '';
+
+  // Weekday headers
+  CAL_WEEKDAYS.forEach((d, i) => {
+    html += '<div class="cal-header' + (i === 0 || i === 6 ? ' weekend' : '') + '">' + d + '</div>';
+  });
+
+  // Calculate calendar days
+  const firstDay = new Date(calYear, calMonth - 1, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth, 0).getDate();
+  const daysInPrevMonth = new Date(calYear, calMonth - 1, 0).getDate();
+
+  const now = new Date();
+  const today = now.getFullYear() + '-' +
+    String(now.getMonth() + 1).padStart(2, '0') + '-' +
+    String(now.getDate()).padStart(2, '0');
+
+  const totalCells = firstDay + daysInMonth;
+  const totalRows = Math.ceil(totalCells / 7);
+  const totalCellsRounded = totalRows * 7;
+
+  // Collect events for this month
+  const tdata = CAL_TRAIN_DATA[calTrain];
+  const eventsByDate = {};
+
+  tdata.schedules.forEach((sch, si) => {
+    // Parse dates
+    const startD = new Date(sch.start);
+    const endD = new Date(sch.end);
+    const bd = sch.boarding;
+    const ld = sch.lockdown;
+    const rd = sch.release;
+
+    // Mark schedule range (show on first day of schedule only)
+    const startKey = sch.start;
+    if (!eventsByDate[startKey]) eventsByDate[startKey] = [];
+    eventsByDate[startKey].push({
+      type: 'schedule-range',
+      text: sch.name + ' 开始',
+      schedule: si
+    });
+
+    // Boarding date
+    if (!eventsByDate[bd]) eventsByDate[bd] = [];
+    eventsByDate[bd].push({ type: 'boarding', text: sch.name + ' 纳版', schedule: si });
+
+    // Lockdown date
+    if (!eventsByDate[ld]) eventsByDate[ld] = [];
+    eventsByDate[ld].push({ type: 'lockdown', text: sch.name + ' 封板', schedule: si });
+
+    // Release date
+    if (!eventsByDate[rd]) eventsByDate[rd] = [];
+    eventsByDate[rd].push({ type: 'release', text: sch.name + ' 投产', schedule: si });
+  });
+
+  for (let i = 0; i < totalCellsRounded; i++) {
+    let dayNum, dateStr, classes = [];
+
+    if (i < firstDay) {
+      // Previous month
+      dayNum = daysInPrevMonth - firstDay + i + 1;
+      const pm = calMonth === 1 ? 12 : calMonth - 1;
+      const py = calMonth === 1 ? calYear - 1 : calYear;
+      dateStr = py + '-' + String(pm).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0');
+      classes.push('other-month');
+    } else if (i >= firstDay + daysInMonth) {
+      // Next month
+      dayNum = i - firstDay - daysInMonth + 1;
+      const nm = calMonth === 12 ? 1 : calMonth + 1;
+      const ny = calMonth === 12 ? calYear + 1 : calYear;
+      dateStr = ny + '-' + String(nm).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0');
+      classes.push('other-month');
+    } else {
+      // Current month
+      dayNum = i - firstDay + 1;
+      dateStr = calYear + '-' + String(calMonth).padStart(2, '0') + '-' + String(dayNum).padStart(2, '0');
+    }
+
+    const dayOfWeek = i % 7;
+    if (dayOfWeek === 0 || dayOfWeek === 6) classes.push('weekend');
+    if (dateStr === today) classes.push('today');
+
+    // Build events for this day
+    let eventsHtml = '';
+    const dayEvents = eventsByDate[dateStr] || [];
+    dayEvents.forEach(ev => {
+      eventsHtml += '<div class="cal-event ' + ev.type + '">' + ev.text + '</div>';
+    });
+
+    // Schedule range — show continuous bar for schedule duration
+    tdata.schedules.forEach((sch, si) => {
+      const sd = new Date(sch.start);
+      const ed = new Date(sch.end);
+      const cd = new Date(dateStr);
+      if (cd > sd && cd < ed && !dayEvents.some(e => e.schedule === si && e.type === 'schedule-range')) {
+        eventsHtml += '<div class="cal-event schedule-range" style="border-left-color:transparent;opacity:0.3">' + sch.name + '</div>';
+      }
+    });
+
+    html += '<div class="cal-day' + (classes.length ? ' ' + classes.join(' ') : '') + '">' +
+      '<span class="cal-date">' + dayNum + '</span>' +
+      '<div class="cal-events">' + eventsHtml + '</div>' +
+      '</div>';
+  }
+
+  grid.innerHTML = html;
+}
+
+// Render calendar on load
+renderCalendar();
+</script>
+
+</body>
+</html>

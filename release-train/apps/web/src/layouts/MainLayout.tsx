@@ -10,6 +10,8 @@ import {
   UserOutlined,
   LogoutOutlined,
   ArrowLeftOutlined,
+  DashboardOutlined,
+  CalendarOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../stores/auth';
 import { ROLE_LABELS } from '@release-train/shared';
@@ -26,6 +28,9 @@ const BREADCRUMB_MAP: Record<string, string> = {
   '/trains/new': '新增火车',
   '/systems': '系统管理',
   '/dashboard': '仪表盘',
+  '/dashboard/ba': 'BA 仪表盘',
+  '/dashboard/pm': '项目经理仪表盘',
+  '/calendar': '月历视图',
 };
 
 // 动态路由模式：首页 + 父级 + 当前页面
@@ -111,6 +116,26 @@ const MainLayout: React.FC = () => {
   // 侧边栏菜单
   const menuItems: MenuProps['items'] = [
     {
+      key: '/dashboard',
+      icon: <DashboardOutlined />,
+      label: '仪表盘',
+      children: [
+        {
+          key: '/dashboard/ba',
+          label: 'BA 仪表盘',
+        },
+        {
+          key: '/dashboard/pm',
+          label: '项目经理仪表盘',
+        },
+      ],
+    },
+    {
+      key: '/calendar',
+      icon: <CalendarOutlined />,
+      label: '月历视图',
+    },
+    {
       key: '/requirements',
       icon: <FileTextOutlined />,
       label: '需求池',
@@ -130,6 +155,8 @@ const MainLayout: React.FC = () => {
   // 子路由高亮父菜单
   const selectedKey = (() => {
     const p = location.pathname;
+    if (p.startsWith('/dashboard')) return p;
+    if (p.startsWith('/calendar')) return '/calendar';
     if (p.startsWith('/requirements')) return '/requirements';
     if (p.startsWith('/trains')) return '/trains';
     if (p.startsWith('/systems')) return '/systems';

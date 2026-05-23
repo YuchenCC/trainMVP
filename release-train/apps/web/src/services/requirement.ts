@@ -10,6 +10,9 @@ import {
   RequirementListQuery,       // 需求列表查询参数
   ApiResponse,                // 通用 API 响应包装
   PaginatedResponse,          // 分页响应包装
+  RequirementStatsResponse,   // 需求聚合统计
+  EmergencyChangeItem,        // 紧急变更项
+  MyTodosResponse,            // 用户待办聚合
 } from '@release-train/shared';
 
 /**
@@ -197,6 +200,38 @@ export const requirementService = {
 
   rejectEmergencyChange: async (id: string, reason: string): Promise<ApiResponse<void>> => {
     const response = await api.post(`/requirements/${id}/emergency-reject`, { reason }); // POST /api/requirements/:id/emergency-reject
+    return response.data;
+  },
+
+  /**
+   * 需求聚合统计
+   * 
+   * @param params - 查询参数（systemIds 可选，逗号分隔；scheduleId 可选；trainId 可选）
+   * @returns 需求统计 { byStatus, bySubStatus, byPriority, total, activeCount }
+   */
+  getStats: async (params?: { systemIds?: string; scheduleId?: string; trainId?: string }): Promise<ApiResponse<RequirementStatsResponse>> => {
+    const response = await api.get('/stats/requirements', { params }); // GET /api/stats/requirements
+    return response.data;
+  },
+
+  /**
+   * 获取紧急变更列表
+   * 
+   * @param params - 查询参数（status 可选；approverId 可选）
+   * @returns 紧急变更分页列表
+   */
+  getEmergencyChanges: async (params?: { status?: string; approverId?: string }): Promise<ApiResponse<PaginatedResponse<EmergencyChangeItem>>> => {
+    const response = await api.get('/emergency-changes', { params }); // GET /api/emergency-changes
+    return response.data;
+  },
+
+  /**
+   * 获取用户待办聚合
+   * 
+   * @returns 当前用户的待办事项（根据角色不同返回不同内容）
+   */
+  getMyTodos: async (): Promise<ApiResponse<MyTodosResponse>> => {
+    const response = await api.get('/requirements/my-todos'); // GET /api/requirements/my-todos
     return response.data;
   },
 };

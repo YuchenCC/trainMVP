@@ -5,6 +5,9 @@ import zhCN from 'antd/locale/zh_CN';
 import MainLayout from './layouts/MainLayout';
 import LoginPage from './pages/login';
 import DashboardPage from './pages/dashboard';
+import BADashboard from './pages/dashboard/ba';
+import PMDashboard from './pages/dashboard/pm';
+import CalendarPage from './pages/calendar';
 import RequirementsPage from './pages/requirements';
 import RequirementCreatePage from './pages/requirements/create';
 import RequirementDetailPage from './pages/requirements/detail';
@@ -62,6 +65,9 @@ const App: React.FC = () => {
             {/* 其他模块 */}
             <Route path="/systems" element={<SystemsPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/dashboard/ba" element={<BADashboard />} />
+            <Route path="/dashboard/pm" element={<PMDashboard />} />
+            <Route path="/calendar" element={<CalendarPage />} />
           </Route>
 
           {/* 404兜底 */}

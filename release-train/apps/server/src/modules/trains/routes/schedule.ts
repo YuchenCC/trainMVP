@@ -24,6 +24,7 @@ import {
   getTrainScheduleById,
   previewKeyDates,
   updateTrainScheduleStatus,
+  getScheduleProgress,
   TrainScheduleDetailResponse,
   TrainScheduleListItemResponse,
 } from '../services/train.service.js';
@@ -105,6 +106,21 @@ export async function scheduleRoutes(fastify: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const result = await listAllSchedules(request.query);
       return reply.status(200).send({ success: true, data: result });
+    },
+  );
+
+  // 班次进度聚合
+  fastify.get<{
+    Querystring: { trainId?: string };
+    Reply: ApiResponse<any>;
+  }>(
+    '/api/schedules/progress',                            // GET /api/schedules/progress
+    {
+      onRequest: [fastify.authenticate],                  // 需要登录
+    },
+    async (request, reply) => {
+      const result = await getScheduleProgress(request.query);
+      return reply.send({ success: true, data: result });
     },
   );
 

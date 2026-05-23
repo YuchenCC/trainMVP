@@ -17,8 +17,11 @@ import {
   ReqStatus,                  // 需求状态枚举（用于风险分级）
   ReqSubStatus,               // 需求子状态枚举（用于子状态变更）
   Role,                       // 角色枚举（用于发起评审权限校验）
+  RequirementStatsResponse,   // 需求统计响应类型（仪表盘）
+  EmergencyChangeItem,        // 紧急变更项类型（仪表盘）
+  MyTodosResponse,            // 用户待办响应类型（仪表盘）
 } from '@release-train/shared';
-import { PaginatedResponse } from '@release-train/shared';
+import { PaginatedResponse, ApprovalStatus } from '@release-train/shared';
 
 // ========== XSS 过滤白名单配置 ==========
 // 定义需求描述中允许保留的 HTML 标签、属性和 URL 协议
@@ -1876,4 +1879,237 @@ export async function changeSubStatus(
 
     return buildRequirementDetail(updated!, tx);
   });
+}
+
+// ========== API-01: 需求聚合统计 ==========
+export async function getRequirementStats(params: {
+  systemIds?: string[];
+  scheduleId?: string;
+  trainId?: string;
+}): Promise<RequirementStatsResponse> {
+  const where: Prisma.RequirementWhereInput = {};
+  if (params.systemIds?.length) {
+    where.systemId = { in: params.systemIds };
+  }
+  if (params.scheduleId) {
+    where.scheduleId = params.scheduleId;
+  }
+  if (params.trainId) {
+    where.trainSchedule = { trainId: params.trainId };
+  }
+
+  const byStatus = await prisma.requirement.groupBy({
+    by: ['status'],
+    where,
+    _count: true,
+  });
+  const bySubStatus = await prisma.requirement.groupBy({
+    by: ['subStatus'],
+    where: { ...where, status: ReqStatus.ONBOARDED },
+    _count: true,
+  });
+  const byPriority = await prisma.requirement.groupBy({
+    by: ['priority'],
+    where,
+    _count: true,
+  });
+  const total = await prisma.requirement.count({ where });
+  const activeCount = await prisma.requirement.count({
+    where: {
+      ...where,
+      status: { notIn: [ReqStatus.CANCELLED, ReqStatus.RELEASED] },
+    },
+  });
+
+  return {
+    byStatus: Object.fromEntries(byStatus.map(item => [item.status, item._count])),
+    bySubStatus: Object.fromEntries(bySubStatus.filter(item => item.subStatus).map(item => [item.subStatus, item._count])),
+    byPriority: Object.fromEntries(byPriority.map(item => [item.priority, item._count])),
+    total,
+    activeCount,
+  };
+}
+
+// ========== API-02: 紧急变更列表 ==========
+export async function getEmergencyChanges(params: {
+  status?: ApprovalStatus;
+  approverId?: string;
+}): Promise<PaginatedResponse<EmergencyChangeItem>> {
+  const where: Prisma.EmergencyChangeWhereInput = {};
+  if (params.status) where.status = params.status;
+  if (params.approverId) where.approverId = params.approverId;
+
+  const [list, total] = await Promise.all([
+    prisma.emergencyChange.findMany({
+      where,
+      include: {
+        requirement: {
+          select: { reqCode: true, title: true, system: { select: { id: true, name: true } } },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.emergencyChange.count({ where }),
+  ]);
+
+  return {
+    list: list.map(item => ({
+      id: item.id,
+      requirementId: item.requirementId,
+      reqCode: item.requirement.reqCode,
+      title: item.requirement.title,
+      system: item.requirement.system,
+      urgency: item.urgency,
+      reason: item.reason,
+      status: item.status,
+      approvalStep: item.approvalStep,
+      approverId: item.approverId,
+      createdAt: item.createdAt.toISOString(),
+    })),
+    total,
+    page: 1,
+    pageSize: list.length,
+  };
+}
+
+// ========== API-03: 用户待办聚合 ==========
+export async function getMyTodos(user: {
+  id: string;
+  role: Role;
+  systemIds: string[];
+}): Promise<MyTodosResponse> {
+  const role = user.role;
+
+  switch (role) {
+    case Role.BA: {
+      const pendingReviewRejected = await prisma.requirement.findMany({
+        where: { status: ReqStatus.REJECTED, systemId: { in: user.systemIds } },
+        include: { system: { select: { id: true, name: true } } },
+        orderBy: { updatedAt: 'desc' },
+        take: 50,
+      }).then(reqs => reqs.map(item => ({
+        ...item,
+        status: item.status as unknown as RequirementListItem['status'],
+        subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
+        priority: item.priority as unknown as RequirementListItem['priority'],
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })));
+
+      const changedDraftIds = await prisma.statusLog.findMany({
+        where: {
+          operationType: OperationType.CHANGE_REQUIREMENT,
+          requirement: { status: ReqStatus.DRAFT, systemId: { in: user.systemIds } },
+        },
+        select: { requirementId: true },
+        distinct: ['requirementId'],
+      });
+      const changeApprovedNeedsResubmit = await prisma.requirement.findMany({
+        where: { id: { in: changedDraftIds.map(l => l.requirementId) } },
+        include: { system: { select: { id: true, name: true } } },
+        orderBy: { updatedAt: 'desc' },
+        take: 50,
+      }).then(reqs => reqs.map(item => ({
+        ...item,
+        status: item.status as unknown as RequirementListItem['status'],
+        subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
+        priority: item.priority as unknown as RequirementListItem['priority'],
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })));
+
+      return { pendingReviewRejected, changeApprovedNeedsResubmit };
+    }
+    case Role.PM: {
+      const pendingReviewList = await prisma.requirement.findMany({
+        where: { status: ReqStatus.PENDING_REVIEW },
+        include: { system: { select: { id: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }).then(reqs => reqs.map(item => ({
+        ...item,
+        status: item.status as unknown as RequirementListItem['status'],
+        subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
+        priority: item.priority as unknown as RequirementListItem['priority'],
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })));
+
+      return { pendingReviewList };
+    }
+    case Role.PROJECT_MGR: {
+      const pendingReviewList = await prisma.requirement.findMany({
+        where: { status: ReqStatus.PENDING_REVIEW },
+        include: { system: { select: { id: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }).then(reqs => reqs.map(item => ({
+        ...item,
+        status: item.status as unknown as RequirementListItem['status'],
+        subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
+        priority: item.priority as unknown as RequirementListItem['priority'],
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })));
+
+      const emergencyPendingApproval = await prisma.emergencyChange.findMany({
+        where: { status: ApprovalStatus.PENDING },
+        include: {
+          requirement: { select: { reqCode: true, title: true, system: { select: { id: true, name: true } } } }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }).then(list => list.map(item => ({
+        id: item.id,
+        requirementId: item.requirementId,
+        reqCode: item.requirement.reqCode,
+        title: item.requirement.title,
+        system: item.requirement.system,
+        urgency: item.urgency,
+        reason: item.reason,
+        status: item.status,
+        approvalStep: item.approvalStep,
+        approverId: item.approverId,
+        createdAt: item.createdAt.toISOString(),
+      })));
+
+      return { pendingReviewList, emergencyPendingApproval };
+    }
+    case Role.TRAIN_ADMIN: {
+      const pendingOnboard = await prisma.requirement.findMany({
+        where: { status: ReqStatus.READY },
+        include: { system: { select: { id: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }).then(reqs => reqs.map(item => ({
+        ...item,
+        status: item.status as unknown as RequirementListItem['status'],
+        subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
+        priority: item.priority as unknown as RequirementListItem['priority'],
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })));
+
+      const pendingRelease = await prisma.requirement.findMany({
+        where: {
+          status: ReqStatus.ONBOARDED,
+          subStatus: { in: [ReqSubStatus.SIT_TESTING, ReqSubStatus.UAT_TESTING] },
+        },
+        include: { system: { select: { id: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }).then(reqs => reqs.map(item => ({
+        ...item,
+        status: item.status as unknown as RequirementListItem['status'],
+        subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
+        priority: item.priority as unknown as RequirementListItem['priority'],
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })));
+
+      return { pendingOnboard, pendingRelease };
+    }
+    default:
+      return {};
+  }
 }
