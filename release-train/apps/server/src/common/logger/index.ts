@@ -6,15 +6,16 @@
 // Logger 核心
 export {
   Logger,
-  AppLogger,
   LogLevel,
-  BusinessLogMeta,
   setGlobalLogger,
   getGlobalLogger,
   createBusinessLogger,
   getLoggerFromRequest,
   logBusinessOperation,
 } from './logger';
+
+// Logger 类型 (使用 type export 避免运行时问题)
+export type { AppLogger, BusinessLogMeta } from './logger';
 
 // 请求追踪
 export { correlationMiddleware } from './correlation';

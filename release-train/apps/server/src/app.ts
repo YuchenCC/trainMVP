@@ -77,7 +77,7 @@ export async function createApp() {
                 file: path.join(LOG_DIR, 'application.log'),
                 frequency: 'daily',
                 size: '50m', // 超过50M生成新文件
-                limit: { days: 7 },   // 保留最近7天
+                limit: { count: 7 },   // 保留最近7天
               },
             },
             // 错误日志单独记录
@@ -87,7 +87,7 @@ export async function createApp() {
                 file: path.join(LOG_DIR, 'error.log'),
                 frequency: 'daily',
                 size: '50m',
-                limit: { days: 7 },
+                limit: { count: 7 },
               },
               level: 'error',
             },
