@@ -203,7 +203,7 @@ const TrainDetailPage: React.FC = () => {
           <Button
             type="link"
             icon={<ArrowLeftOutlined />}
-            onClick={() => navigate('/trains/list')}
+            onClick={() => navigate('/trains')}
           >
             返回火车列表
           </Button>

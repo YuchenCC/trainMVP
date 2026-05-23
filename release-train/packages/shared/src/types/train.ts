@@ -115,6 +115,8 @@ export interface TrainScheduleDetail {
   startDate?: string;              // 开始日期
   endDate?: string;               // 结束日期
   boardingDate?: string;           // 纳版截止日期
+  sitDate?: string;               // SIT提测日期
+  uatDate?: string;               // UAT提测日期
   lockdownDate?: string;          // 封板日期
   releaseDate?: string;            // 投产日期
   version: number;                 // 乐观锁版本号
@@ -207,6 +209,8 @@ export interface CreateTrainScheduleRequest {
   startDate: string;              // 必填，开始日期，格式 YYYY-MM-DD
   endDate: string;               // 必填，结束日期，格式 YYYY-MM-DD
   boardingDate?: string;         // 可选，统一纳版日
+  sitDate?: string;              // 可选，SIT提测日
+  uatDate?: string;              // 可选，UAT提测日
   lockdownDate?: string;        // 可选，统一封板日
   releaseDate?: string;          // 可选，统一投产日
   customKeyDates?: CustomKeyDate[]; // 可选，自定义关键日期
@@ -219,6 +223,8 @@ export interface UpdateTrainScheduleRequest {
   startDate?: string | null;      // 可选，开始日期
   endDate?: string | null;        // 可选，结束日期
   boardingDate?: string | null;   // 可选，统一纳版日
+  sitDate?: string | null;       // 可选，SIT提测日
+  uatDate?: string | null;       // 可选，UAT提测日
   lockdownDate?: string | null;  // 可选，统一封板日
   releaseDate?: string | null;    // 可选，统一投产日
   customKeyDates?: CustomKeyDate[]; // 可选，自定义关键日期
@@ -231,6 +237,8 @@ export interface KeyDatesResponse {
   startDate: string;              // 开始日期
   endDate: string;              // 结束日期
   boardingDate: string;           // 统一纳版日
+  sitDate: string;               // SIT提测日
+  uatDate: string;               // UAT提测日
   lockdownDate: string;          // 统一封板日
   releaseDate: string;            // 统一投产日
   daysCount: number;               // 周期天数
@@ -240,6 +248,8 @@ export interface KeyDatesResponse {
 // 用于 calculateKeyDates 函数的返回值
 export interface CalculatedKeyDates {
   boardingDate: Date;              // 统一纳版日
+  sitDate: Date;                  // SIT提测日
+  uatDate: Date;                  // UAT提测日
   lockdownDate: Date;              // 统一封板日
   releaseDate: Date;              // 统一投产日
 }
@@ -272,6 +282,8 @@ export interface PreviewKeyDatesRequest {
 // ========== 预览关键日期响应（US2.2 新增） ==========
 export interface PreviewKeyDatesResponse {
   boardingDate: string;
+  sitDate: string;
+  uatDate: string;
   lockdownDate: string;
   releaseDate: string;
 }

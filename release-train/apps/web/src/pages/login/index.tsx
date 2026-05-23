@@ -18,7 +18,7 @@ const LoginPage: React.FC = () => {
     try {
       await login(values.username, values.password);
       message.success('登录成功');
-      navigate('/');
+      navigate('/dashboard');
     } catch (error) {
       message.error(error instanceof Error ? error.message : '登录失败');
     }

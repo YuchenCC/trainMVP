@@ -26,6 +26,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   '/requirements/new': '新增需求',
   '/trains': '版本火车',
   '/trains/new': '新增火车',
+  '/schedules': '班次列表',
   '/systems': '系统管理',
   '/dashboard': '仪表盘',
   '/dashboard/ba': 'BA 仪表盘',
@@ -42,7 +43,7 @@ const DYNAMIC_BREADCRUMB: { pattern: RegExp; breadcrumb: string[] }[] = [
   { pattern: /^\/trains\/[^/]+\/edit$/, breadcrumb: ['版本火车', '编辑火车'] },
   { pattern: /^\/trains\/[^/]+$/, breadcrumb: ['版本火车', '火车详情'] },
   // 班次详情
-  { pattern: /^\/trains\/[^/]+\/schedules\/[^/]+$/, breadcrumb: ['版本火车', '班次详情'] },
+  { pattern: /^\/trains\/[^/]+\/schedules\/[^/]+$/, breadcrumb: ['班次列表', '班次详情'] },
 ];
 
 // 根据路径生成面包屑
@@ -50,7 +51,7 @@ function buildBreadcrumbs(pathname: string) {
   const items: { title: string; path?: string }[] = [];
   
   // 首页始终是第一个
-  const homeItem = { title: '首页', path: '/' };
+  const homeItem = { title: '首页', path: '/dashboard' };
   
   // 检查动态路由模式
   for (const { pattern, breadcrumb } of DYNAMIC_BREADCRUMB) {
@@ -60,7 +61,9 @@ function buildBreadcrumbs(pathname: string) {
         if (index === breadcrumb.length - 1) {
           items.push({ title: name });
         } else {
-          const path = name === '需求池' ? '/requirements' : '/trains';
+          const path = name === '需求池' ? '/requirements' : 
+                       name === '版本火车' ? '/trains' : 
+                       name === '班次列表' ? '/schedules' : '/trains';
           items.push({ title: name, path });
         }
       });
@@ -103,7 +106,7 @@ function getParentPath(pathname: string): string {
   if (pathname === '/trains/new') return '/trains';
 
   // 其他子页面兜底返回首页
-  return '/requirements';
+  return '/dashboard';
 }
 
 // ========== 主布局组件 ==========
@@ -141,7 +144,7 @@ const MainLayout: React.FC = () => {
       label: '需求池',
     },
     {
-      key: '/trains',
+      key: '/schedules',
       icon: <CarOutlined />,
       label: '版本火车',
     },
@@ -159,6 +162,7 @@ const MainLayout: React.FC = () => {
     if (p.startsWith('/calendar')) return '/calendar';
     if (p.startsWith('/requirements')) return '/requirements';
     if (p.startsWith('/trains')) return '/trains';
+    if (p === '/schedules') return '/trains';
     if (p.startsWith('/systems')) return '/systems';
     return p;
   })();

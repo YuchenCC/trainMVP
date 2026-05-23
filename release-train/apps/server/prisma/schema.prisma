@@ -240,9 +240,11 @@ model TrainSchedule {
   status        TrainScheduleStatus  @default(PLANNING)          // 班次状态
   startDate     DateTime?                                        // 开始日期
   endDate       DateTime?                                        // 结束日期
-  boardingDate  DateTime?                                        // 统一纳版日
-  lockdownDate  DateTime?                                        // 统一封板日
-  releaseDate   DateTime?                                        // 统一投产日
+  boardingDate  DateTime?                                        // 统一纳版日（第一节点）
+  sitDate       DateTime?                                        // SIT提测日（第三节点）
+  uatDate       DateTime?                                        // UAT提测日（第四节点）
+  lockdownDate  DateTime?                                        // 统一封板日（第五节点）
+  releaseDate   DateTime?                                        // 统一投产日（第六节点）
   version       Int                   @default(1)                  // 乐观锁版本号
 
   createdById   String                                              // 创建人ID
@@ -284,6 +286,7 @@ model TrainSystem {
   system         System  @relation(fields: [systemId], references: [id], onDelete: Cascade) // 所属系统
 
   @@unique([trainId, systemId])                            // 同一火车同一系统唯一
+  @@unique([systemId])                                     // 同一系统只能在一个火车中
   @@index([trainId])                                       // 按火车查询搭载系统
 }
 

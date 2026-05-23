@@ -9,6 +9,7 @@ import {
   CreateTrainScheduleRequest,
   UpdateTrainScheduleRequest,
   PreviewKeyDatesRequest,
+  PreviewKeyDatesResponse,
   AvailableSystem,
   ScheduleProgressItem,
 } from '@release-train/shared';
@@ -748,14 +749,18 @@ export async function createTrainSchedule(
   }
 
   // 如果用户手动设置了关键日期，使用用户设置的；否则自动计算
-  let boardingDate, lockdownDate, releaseDate;
-  if (data.boardingDate || data.lockdownDate || data.releaseDate) {
+  let boardingDate, sitDate, uatDate, lockdownDate, releaseDate;
+  if (data.boardingDate || data.sitDate || data.uatDate || data.lockdownDate || data.releaseDate) {
     boardingDate = data.boardingDate ? new Date(data.boardingDate) : undefined;
+    sitDate = data.sitDate ? new Date(data.sitDate) : undefined;
+    uatDate = data.uatDate ? new Date(data.uatDate) : undefined;
     lockdownDate = data.lockdownDate ? new Date(data.lockdownDate) : undefined;
     releaseDate = data.releaseDate ? new Date(data.releaseDate) : undefined;
   } else {
     const keyDates = calculateKeyDates(startDate, endDate);
     boardingDate = keyDates.boardingDate;
+    sitDate = keyDates.sitDate;
+    uatDate = keyDates.uatDate;
     lockdownDate = keyDates.lockdownDate;
     releaseDate = keyDates.releaseDate;
   }
@@ -771,6 +776,8 @@ export async function createTrainSchedule(
         startDate,
         endDate,
         boardingDate,
+        sitDate,
+        uatDate,
         lockdownDate,
         releaseDate,
         createdById: userId,
@@ -977,6 +984,8 @@ export async function getTrainScheduleById(
     startDate: schedule.startDate?.toISOString().split('T')[0],
     endDate: schedule.endDate?.toISOString().split('T')[0],
     boardingDate: schedule.boardingDate?.toISOString().split('T')[0],
+    sitDate: schedule.sitDate?.toISOString().split('T')[0],
+    uatDate: schedule.uatDate?.toISOString().split('T')[0],
     lockdownDate: schedule.lockdownDate?.toISOString().split('T')[0],
     releaseDate: schedule.releaseDate?.toISOString().split('T')[0],
     customKeyDates,
@@ -1040,6 +1049,20 @@ export async function updateTrainSchedule(
     // 只有在用户没有手动设置，并且更新了开始/结束日期时，才重新计算
     const newKeyDates = calculateKeyDates(startDate, endDate);
     updateData.boardingDate = newKeyDates.boardingDate;
+  }
+
+  if (data.sitDate !== undefined) {
+    updateData.sitDate = data.sitDate ? new Date(data.sitDate) : null;
+  } else if (needCalculateKeyDates && startDate && endDate) {
+    const newKeyDates = calculateKeyDates(startDate, endDate);
+    updateData.sitDate = newKeyDates.sitDate;
+  }
+
+  if (data.uatDate !== undefined) {
+    updateData.uatDate = data.uatDate ? new Date(data.uatDate) : null;
+  } else if (needCalculateKeyDates && startDate && endDate) {
+    const newKeyDates = calculateKeyDates(startDate, endDate);
+    updateData.uatDate = newKeyDates.uatDate;
   }
 
   if (data.lockdownDate !== undefined) {
@@ -1210,7 +1233,7 @@ export async function cancelTrainSchedule(scheduleId: string): Promise<void> {
 
 export async function previewKeyDates(
   data: PreviewKeyDatesRequest,
-): Promise<{ boardingDate: string; lockdownDate: string; releaseDate: string }> {
+): Promise<PreviewKeyDatesResponse> {
   const startDate = new Date(data.startDate);
   const endDate = new Date(data.endDate);
 
@@ -1229,6 +1252,8 @@ export async function previewKeyDates(
 
   return {
     boardingDate: keyDates.boardingDate.toISOString().split('T')[0],
+    sitDate: keyDates.sitDate.toISOString().split('T')[0],
+    uatDate: keyDates.uatDate.toISOString().split('T')[0],
     lockdownDate: keyDates.lockdownDate.toISOString().split('T')[0],
     releaseDate: keyDates.releaseDate.toISOString().split('T')[0],
   };

@@ -55,8 +55,8 @@ const App: React.FC = () => {
             <Route path="/requirements/:id/edit" element={<RequirementEditPage />} />
 
             {/* 版本火车模块 */}
-            <Route path="/trains" element={<SchedulesPage />} />
-            <Route path="/trains/list" element={<TrainsPage />} />
+            <Route path="/schedules" element={<SchedulesPage />} />
+            <Route path="/trains" element={<TrainsPage />} />
             <Route path="/trains/new" element={<TrainCreatePage />} />
             <Route path="/trains/:trainId/schedules/:scheduleId" element={<ScheduleDetailPage />} />
             <Route path="/trains/:id" element={<TrainDetailPage />} />
@@ -71,7 +71,7 @@ const App: React.FC = () => {
           </Route>
 
           {/* 404兜底 */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>
     </ConfigProvider>

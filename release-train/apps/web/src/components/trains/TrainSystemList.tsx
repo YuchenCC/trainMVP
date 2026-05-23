@@ -2,7 +2,7 @@
 // TrainSystemList — 显示火车搭载系统的列表组件
 // 支持查看系统容量、人员配置，支持编辑模式和操作按钮
 // 文件名：TrainSystemList.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Table, Card, Typography, message, Modal, Select, InputNumber, Tooltip,
 } from 'antd';
@@ -87,18 +87,21 @@ const TrainSystemList: React.FC<TrainSystemListProps> = ({
   }, [trainId]);
 
   // ========== 加载系统成员列表 ==========
-  const loadSystemUsers = useCallback((systemId: string): Promise<void> => {
+  const loadSystemUsers = useCallback(async (systemId: string): Promise<SystemUserOption[]> => {
     setUsersLoading(true);
-    return systemService.getUsers(systemId)
-      .then((users: SystemUserOption[]) => {
-        setSystemUsers(users);
-      })
-      .catch(() => {
-        setSystemUsers([]);
-      })
-      .finally(() => {
-        setUsersLoading(false);
-      });
+    try {
+      const users = await systemService.getUsers(systemId);
+      console.log('loadSystemUsers 获取到用户:', users);
+      setSystemUsers(users);
+      console.log('setSystemUsers 已调用');
+      return users;
+    } catch (error) {
+      console.error('loadSystemUsers 错误:', error);
+      setSystemUsers([]);
+      return [];
+    } finally {
+      setUsersLoading(false);
+    }
   }, []);
 
   // ========== 打开添加系统弹窗 ==========
@@ -108,21 +111,52 @@ const TrainSystemList: React.FC<TrainSystemListProps> = ({
   };
 
   // ========== 选择系统后加载成员 ==========
-  const handleSelectSystem = (systemId: string) => {
+  const handleSelectSystem = async (systemId: string) => {
+    console.log('handleSelectSystem 被调用, systemId:', systemId);
     const system = availableSystems.find((s) => s.id === systemId);
-    setSelectedSystem(system || null);
+    setSelectedSystem(system ? { ...system } : null);
+    setCapacityPoints(100);
+    
     if (systemId) {
-      loadSystemUsers(systemId);
+      console.log('开始加载系统成员...');
+      await loadSystemUsers(systemId);
+      console.log('加载系统成员完成');
     } else {
       setSystemUsers([]);
+      setBaUserId(undefined);
+      setPmUserId(undefined);
+      setTechMgrUserId(undefined);
+      setTestMgrUserId(undefined);
+      setDevTeamUserIds([]);
     }
-    setCapacityPoints(100);
-    setBaUserId(undefined);
-    setPmUserId(undefined);
-    setTechMgrUserId(undefined);
-    setTestMgrUserId(undefined);
-    setDevTeamUserIds([]);
   };
+
+  // ========== 当 systemUsers 更新后自动填充表单 ==========
+  useEffect(() => {
+    console.log('useEffect 触发:', { selectedSystem: selectedSystem?.id, systemUsersLength: systemUsers.length });
+    
+    if (selectedSystem && systemUsers.length > 0) {
+      const baUser = systemUsers.find((u) => u.role === 'BA');
+      const pmUser = systemUsers.find((u) => u.role === 'PM');
+      const techMgrUser = systemUsers.find((u) => u.role === 'TECH_MGR');
+      const testMgrUser = systemUsers.find((u) => u.role === 'TEST_MGR');
+      const devUsers = systemUsers.filter((u) => u.role === 'DEV');
+      
+      console.log('设置表单值:', {
+        baUserId: baUser?.id,
+        pmUserId: pmUser?.id,
+        techMgrUserId: techMgrUser?.id,
+        testMgrUserId: testMgrUser?.id,
+        devTeamUserIds: devUsers.map((u) => u.id),
+      });
+      
+      setBaUserId(baUser?.id);
+      setPmUserId(pmUser?.id);
+      setTechMgrUserId(techMgrUser?.id);
+      setTestMgrUserId(testMgrUser?.id);
+      setDevTeamUserIds(devUsers.map((u) => u.id));
+    }
+  }, [systemUsers]);
 
   // ========== 添加搭载系统 ==========
   const handleAddSystem = async () => {
@@ -302,7 +336,7 @@ const TrainSystemList: React.FC<TrainSystemListProps> = ({
   // ========== 成员角色选项 ==========
   const getRoleOptions = (role: string) => {
     return systemUsers
-      .filter((u) => u.role === role || (role === 'DEV' && ['DEV', 'PM'].includes(u.role)))
+      .filter((u) => u.role === role)
       .map((u) => ({ value: u.id, label: u.displayName }));
   };
 

@@ -1,5 +1,18 @@
 // ========== 关键日期计算工具函数 ==========
-// 用于 US2.2 火车班次创建时自动计算统一纳版日、统一封板日、统一投产日
+// 用于 US2.2 火车班次创建时自动计算关键日期
+// 节点顺序：纳版 -> 开始 -> SIT提测 -> UAT提测 -> 封板 -> 投产 -> 结束
+
+/**
+ * 日期加法工具函数
+ * @param date 基准日期
+ * @param days 加上的天数
+ * @returns 计算后的新日期
+ */
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
 
 /**
  * 日期减法工具函数
@@ -54,41 +67,59 @@ function calculateDaysDifference(startDate: Date, endDate: Date): number {
 
 /**
  * 计算关键日期
- * 根据开始日期和结束日期，自动计算三个关键节点：
- * - 统一纳版日：周期过半前的最后一个周五
- * - 统一封板日：投产前一周的周五
- * - 统一投产日：结束日期
+ * 根据开始日期和结束日期，自动计算关键节点：
+ * - 纳版日：开始前3天
+ * - SIT提测日：开始后（开始到封板周期 × 50%）天
+ * - UAT提测日：SIT到封板的中点
+ * - 封板日：投产前3天
+ * - 投产日：结束日期
+ *
+ * 节点顺序：纳版 -> 开始 -> SIT提测 -> UAT提测 -> 封板 -> 投产 -> 结束
  *
  * @param startDate 火车开始日期
  * @param endDate 火车结束日期
- * @returns 包含三个关键日期的对象
+ * @returns 包含关键日期的对象
  */
 export function calculateKeyDates(startDate: Date, endDate: Date): {
   boardingDate: Date;
+  sitDate: Date;
+  uatDate: Date;
   lockdownDate: Date;
   releaseDate: Date;
 } {
-  // 1. 统一投产日 = 结束日期
+  // 1. 投产日 = 结束日期
   const releaseDate = new Date(endDate);
 
-  // 2. 统一封板日 = 投产前一周的周五
-  const oneWeekBeforeRelease = subtractDays(releaseDate, 7);
-  const lockdownDate = getPreviousFriday(oneWeekBeforeRelease);
+  // 2. 封板日 = 投产前3天
+  const lockdownDate = subtractDays(releaseDate, 3);
 
-  // 3. 统一纳版日 = 周期过半前的最后一个周五
-  const totalDays = calculateDaysDifference(startDate, endDate);
-  const halfDays = Math.floor(totalDays / 2);
-  const halfwayDate = subtractDays(startDate, -(halfDays - 1)); // 从开始日期往后推 halfDays-1 天
-  const boardingDate = getPreviousFriday(halfwayDate);
+  // 3. 计算 SIT 周期（开始 → 封板）
+  const sitCycleDays = Math.round((lockdownDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+
+  // 4. SIT提测日 = 开始后 sitCycleDays * 50% 天
+  const sitOffset = Math.floor(sitCycleDays * 0.5);
+  const sitDate = addDays(startDate, sitOffset);
+
+  // 5. UAT提测日 = SIT后一段时间，且早于封板日
+  // 计算到封板日的天数（不含SIT当天），UAT提测在两者中间偏左
+  const daysToLockdown = Math.round((lockdownDate.getTime() - sitDate.getTime()) / (1000 * 60 * 60 * 24));
+  const uatOffset = Math.floor(daysToLockdown * 0.5);
+  const uatDate = addDays(sitDate, uatOffset);
+
+  // 6. 纳版日 = 开始前3天
+  const boardingDate = subtractDays(startDate, 3);
 
   return {
     boardingDate,
+    sitDate,
+    uatDate,
     lockdownDate,
     releaseDate,
   };
 }
 
 export {
+  addDays,
   subtractDays,
   getPreviousFriday,
   calculateDaysDifference,

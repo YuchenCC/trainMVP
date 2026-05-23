@@ -6,7 +6,7 @@ with sync_playwright() as p:
     
     # 访问登录页
     print("1. 访问登录页...")
-    page.goto('http://localhost:5175/login')
+    page.goto('http://localhost:5173/login')
     page.wait_for_load_state('networkidle')
     
     # 获取页面内容

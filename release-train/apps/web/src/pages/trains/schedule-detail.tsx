@@ -5,9 +5,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Card, Descriptions, Button, Spin, Result, Typography, Row, Col, message, Table, Calendar, Badge, Modal, Form, Input, DatePicker, Checkbox, Space, Divider, Avatar, List, Progress, Tag, Alert,
+  Card, Descriptions, Button, Spin, Result, Typography, Row, Col, message, Table, Badge, Modal, Form, Input, DatePicker, Checkbox, Space, Divider, List, Progress, Tag, Alert,
 } from 'antd';
-import { ArrowLeftOutlined, EditOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
 import {
   PrecheckOnboardResponse,
   RequirementListItem,
@@ -18,11 +18,12 @@ import {
   TRAIN_SCHEDULE_STATUS_LABELS,
   TRAIN_SCHEDULE_STATUS_OPTIONS,
 } from '@release-train/shared';
+import ScheduleCalendar from '../../components/schedules/ScheduleCalendar';
 import api from '../../services/api';
 import { trainService } from '../../services/train';
 import dayjs from 'dayjs';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 interface CustomKeyDate {
   id?: string;
@@ -37,9 +38,11 @@ interface ScheduleDetail {
   status: string; // 班次状态：PLANNING / IN_PROGRESS / LOCKED_DOWN / RELEASED
   startDate: string | null;
   endDate: string | null;
-  boardingDate: string | null;
-  lockdownDate: string | null;
-  releaseDate: string | null;
+  boardingDate: string | null;  // 纳版日
+  sitDate: string | null;       // SIT提测日
+  uatDate: string | null;       // UAT提测日
+  lockdownDate: string | null;  // 封板日
+  releaseDate: string | null;   // 投产日
   customKeyDates?: CustomKeyDate[];
   version: number;
   createdAt: string;
@@ -116,8 +119,8 @@ const ScheduleDetailPage: React.FC = () => {
         title="加载失败"
         subTitle={error || '班次不存在'}
         extra={
-          <Button onClick={() => navigate('/trains')}>
-            返回火车列表
+          <Button onClick={() => navigate('/schedules')}>
+            返回班次列表
           </Button>
         }
       />
@@ -163,16 +166,16 @@ const ScheduleDetailPage: React.FC = () => {
     }
 
     try {
-      const res = await api.get('/trains/key-dates', {
-        params: {
-          startDate: values.startDate.format('YYYY-MM-DD'),
-          endDate: values.endDate.format('YYYY-MM-DD'),
-        },
+      const res = await api.post('/trains/schedules/preview', {
+        startDate: values.startDate.format('YYYY-MM-DD'),
+        endDate: values.endDate.format('YYYY-MM-DD'),
       });
       if (res.data.success) {
         setPreviewDates(res.data.data);
         form.setFieldsValue({
           boardingDate: dayjs(res.data.data.boardingDate),
+          sitDate: dayjs(res.data.data.sitDate),
+          uatDate: dayjs(res.data.data.uatDate),
           lockdownDate: dayjs(res.data.data.lockdownDate),
           releaseDate: dayjs(res.data.data.releaseDate),
         });
@@ -221,6 +224,8 @@ const ScheduleDetailPage: React.FC = () => {
         startDate: values.startDate ? values.startDate.format('YYYY-MM-DD') : null,
         endDate: values.endDate ? values.endDate.format('YYYY-MM-DD') : null,
         boardingDate: values.boardingDate ? values.boardingDate.format('YYYY-MM-DD') : null,
+        sitDate: values.sitDate ? values.sitDate.format('YYYY-MM-DD') : null,
+        uatDate: values.uatDate ? values.uatDate.format('YYYY-MM-DD') : null,
         lockdownDate: values.lockdownDate ? values.lockdownDate.format('YYYY-MM-DD') : null,
         releaseDate: values.releaseDate ? values.releaseDate.format('YYYY-MM-DD') : null,
         customKeyDates: validCustomDates,
@@ -281,14 +286,7 @@ const ScheduleDetailPage: React.FC = () => {
       {/* 关键日期卡片 */}
           <Card size="small" style={{ marginBottom: 16 }}>
             <Row gutter={[16, 16]}>
-              <Col xs={24} sm={12} md={8}>
-                <div style={{ textAlign: 'center', padding: '8px 0' }}>
-                  <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>开始日期</Text>
-                  <Text strong style={{ fontSize: 16 }}>
-                    {schedule.startDate ? dayjs(schedule.startDate).format('YYYY-MM-DD') : '-'}
-                  </Text>
-                </div>
-              </Col>
+              {/* 纳版日 - 第一个 */}
               <Col xs={24} sm={12} md={8}>
                 <div style={{ textAlign: 'center', padding: '8px 0' }}>
                   <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>统一纳版日</Text>
@@ -297,6 +295,34 @@ const ScheduleDetailPage: React.FC = () => {
                   </Text>
                 </div>
               </Col>
+              {/* 开始日期 - 第二个 */}
+              <Col xs={24} sm={12} md={8}>
+                <div style={{ textAlign: 'center', padding: '8px 0' }}>
+                  <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>开始日期</Text>
+                  <Text strong style={{ fontSize: 16 }}>
+                    {schedule.startDate ? dayjs(schedule.startDate).format('YYYY-MM-DD') : '-'}
+                  </Text>
+                </div>
+              </Col>
+              {/* SIT提测日 - 第三个 */}
+              <Col xs={24} sm={12} md={8}>
+                <div style={{ textAlign: 'center', padding: '8px 0' }}>
+                  <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>SIT提测日</Text>
+                  <Text strong style={{ fontSize: 16, color: '#722ed1' }}>
+                    {schedule.sitDate ? dayjs(schedule.sitDate).format('YYYY-MM-DD') : '-'}
+                  </Text>
+                </div>
+              </Col>
+              {/* UAT提测日 - 第四个 */}
+              <Col xs={24} sm={12} md={8}>
+                <div style={{ textAlign: 'center', padding: '8px 0' }}>
+                  <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>UAT提测日</Text>
+                  <Text strong style={{ fontSize: 16, color: '#eb2f96' }}>
+                    {schedule.uatDate ? dayjs(schedule.uatDate).format('YYYY-MM-DD') : '-'}
+                  </Text>
+                </div>
+              </Col>
+              {/* 封板日 - 第五个 */}
               <Col xs={24} sm={12} md={8}>
                 <div style={{ textAlign: 'center', padding: '8px 0' }}>
                   <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>统一封板日</Text>
@@ -305,6 +331,7 @@ const ScheduleDetailPage: React.FC = () => {
                   </Text>
                 </div>
               </Col>
+              {/* 投产日 - 第六个 */}
               <Col xs={24} sm={12} md={8}>
                 <div style={{ textAlign: 'center', padding: '8px 0' }}>
                   <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>统一投产日</Text>
@@ -313,6 +340,7 @@ const ScheduleDetailPage: React.FC = () => {
                   </Text>
                 </div>
               </Col>
+              {/* 结束日期 - 第七个 */}
               <Col xs={24} sm={12} md={8}>
                 <div style={{ textAlign: 'center', padding: '8px 0' }}>
                   <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>结束日期</Text>
@@ -347,56 +375,7 @@ const ScheduleDetailPage: React.FC = () => {
           </Card>
 
       {/* 日历组件 */}
-      <Calendar
-        defaultValue={schedule.startDate ? dayjs(schedule.startDate) : dayjs()}
-        cellRender={(current) => {
-          const listData = [];
-
-          // 标记开始日期
-          if (schedule.startDate && dayjs(schedule.startDate).isSame(current, 'day')) {
-            listData.push({ type: 'success', content: '开始' });
-          }
-
-          // 标记结束日期
-          if (schedule.endDate && dayjs(schedule.endDate).isSame(current, 'day')) {
-            listData.push({ type: 'error', content: '结束' });
-          }
-
-          // 标记统一纳版日
-          if (schedule.boardingDate && dayjs(schedule.boardingDate).isSame(current, 'day')) {
-            listData.push({ type: 'warning', content: '纳版' });
-          }
-
-          // 标记统一封板日
-          if (schedule.lockdownDate && dayjs(schedule.lockdownDate).isSame(current, 'day')) {
-            listData.push({ type: 'processing', content: '封板' });
-          }
-
-          // 标记统一投产日
-          if (schedule.releaseDate && dayjs(schedule.releaseDate).isSame(current, 'day')) {
-            listData.push({ type: 'success', content: '投产' });
-          }
-
-          // 标记自定义关键日期
-          if (schedule.customKeyDates) {
-            schedule.customKeyDates.forEach((customDate) => {
-              if (customDate.date && dayjs(customDate.date).isSame(current, 'day')) {
-                listData.push({ type: 'default', content: customDate.name });
-              }
-            });
-          }
-
-          return (
-            <ul className="events">
-              {listData.map((item, index) => (
-                <li key={`${item.content}-${index}`}>
-                  <Badge status={item.type as any} text={item.content} />
-                </li>
-              ))}
-            </ul>
-          );
-        }}
-      />
+      <ScheduleCalendar schedule={schedule} />
     </div>
   );
 
@@ -404,7 +383,7 @@ const ScheduleDetailPage: React.FC = () => {
     <div>
       {/* 操作栏 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate('/trains')}>
+        <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate('/schedules')}>
           返回班次列表
         </Button>
         <Button type="primary" icon={<EditOutlined />} onClick={handleEdit}>
@@ -563,6 +542,26 @@ const ScheduleDetailPage: React.FC = () => {
             </Col>
             <Col span={8}>
               <Form.Item
+                name="sitDate"
+                label="SIT提测日"
+                rules={[{ required: true, message: '请选择SIT提测日' }]}
+              >
+                <DatePicker style={{ width: '100%' }} disabled={!isManualMode && !previewDates} />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="uatDate"
+                label="UAT提测日"
+                rules={[{ required: true, message: '请选择UAT提测日' }]}
+              >
+                <DatePicker style={{ width: '100%' }} disabled={!isManualMode && !previewDates} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
                 name="lockdownDate"
                 label="统一封板日"
                 rules={[{ required: true, message: '请选择统一封板日' }]}
@@ -588,6 +587,8 @@ const ScheduleDetailPage: React.FC = () => {
               </Text>
               <div style={{ marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                 <div>📅 纳版：{dayjs(previewDates.boardingDate).format('MM-DD')}</div>
+                <div>🧪 SIT：{dayjs(previewDates.sitDate).format('MM-DD')}</div>
+                <div>🧪 UAT：{dayjs(previewDates.uatDate).format('MM-DD')}</div>
                 <div>🔒 封板：{dayjs(previewDates.lockdownDate).format('MM-DD')}</div>
                 <div>🚀 投产：{dayjs(previewDates.releaseDate).format('MM-DD')}</div>
               </div>

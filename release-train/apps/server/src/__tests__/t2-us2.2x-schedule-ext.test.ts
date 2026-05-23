@@ -71,8 +71,10 @@ describe('T2 US2.2.x 火车班次扩展功能', () => {
         name: 'US22x_Test_Schedule',
         startDate: new Date('2026-06-01'),
         endDate: new Date('2026-06-26'),
-        boardingDate: new Date('2026-06-12'),
-        lockdownDate: new Date('2026-06-19'),
+        boardingDate: new Date('2026-05-29'),
+        sitDate: new Date('2026-06-12'),
+        uatDate: new Date('2026-06-17'),
+        lockdownDate: new Date('2026-06-23'),
         releaseDate: new Date('2026-06-26'),
         status: 'PLANNING',
         createdById: trainAdminId,
@@ -289,8 +291,10 @@ describe('T2 US2.2.x 火车班次扩展功能', () => {
       expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.success).toBe(true);
-      expect(body.data.boardingDate).toBeDefined();
-      expect(body.data.lockdownDate).toBeDefined();
+      expect(body.data.boardingDate).toBe('2026-05-29'); // 开始前3天
+      expect(body.data.sitDate).toBe('2026-06-12'); // 开始后11天
+      expect(body.data.uatDate).toBe('2026-06-17'); // SIT后5天
+      expect(body.data.lockdownDate).toBe('2026-06-23'); // 投产前3天
       expect(body.data.releaseDate).toBe('2026-06-26');
     });
 

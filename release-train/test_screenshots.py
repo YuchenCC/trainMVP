@@ -7,7 +7,7 @@ with sync_playwright() as p:
     
     # 1. 访问登录页
     print("1. 访问登录页...")
-    page.goto('http://localhost:5175/login')
+    page.goto('http://localhost:5173/login')
     page.wait_for_load_state('networkidle')
     page.screenshot(path='/tmp/01_login.png', full_page=True)
     print("✅ 已保存: /tmp/01_login.png")

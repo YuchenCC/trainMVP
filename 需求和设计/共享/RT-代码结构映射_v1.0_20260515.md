@@ -1,7 +1,7 @@
 # 代码结构映射 — 用户故事 → 代码文件
 
-**版本号**: v1.2
-**日期**: 2026-05-19
+**版本号**: v1.4
+**日期**: 2026-05-23
 **用途**: Bug 修复时快速定位代码文件，先判断属于哪个 US，再查此表
 
 ---
@@ -10,6 +10,9 @@
 
 ```
 release-train/
+├── dev.sh                     # 服务管理脚本（start/stop/restart/status）
+├── server.log                 # 后端日志（dev.sh 启动时生成）
+├── web.log                    # 前端日志（dev.sh 启动时生成）
 ├── apps/
 │   ├── server/src/           # 后端 (Fastify + Prisma)
 │   │   ├── modules/
@@ -17,29 +20,62 @@ release-train/
 │   │   │   ├── requirements/ # 需求模块 (核心)
 │   │   │   ├── systems/      # 系统模块
 │   │   │   └── trains/       # 版本火车模块
+│   │   │       ├── index.ts          # 火车路由 (GET/POST /api/trains)
+│   │   │       ├── routes/
+│   │   │       │   └── schedule.ts   # 班次路由
+│   │   │       └── services/
+│   │   │           └── train.service.ts  # 火车+班次业务逻辑
 │   │   ├── common/
 │   │   │   ├── errors/       # 错误处理
 │   │   │   ├── middleware/   # 中间件 (鉴权/校验)
+│   │   │   ├── logger/       # 日志
 │   │   │   └── token-blacklist/ # Token 黑名单
-│   │   └── prisma/           # Prisma 客户端
+│   │   ├── prisma/           # Prisma 客户端单例
+│   │   └── __tests__/        # 后端测试
+│   │       ├── t0-framework.test.ts
+│   │       ├── t0-security.test.ts
+│   │       ├── t1-us1-requirement-entry.test.ts
+│   │       ├── t1-us1.4-requirement-detail-risklevel.test.ts
+│   │       ├── t1-us1.11-requirement-change.test.ts
+│   │       ├── t2-us2.1-train-crud.test.ts
+│   │       ├── t2-us2.2-train-schedule-create.test.ts
+│   │       └── t2-us2.2x-schedule-ext.test.ts
 │   └── web/src/              # 前端 (React + Ant Design)
 │       ├── pages/
+│       │   ├── dashboard/    # 仪表盘（首页 /dashboard）
 │       │   ├── requirements/ # 需求页面 (核心)
 │       │   ├── login/        # 登录页
 │       │   ├── systems/      # 系统管理页
 │       │   ├── trains/       # 版本火车页
-│       │   └── dashboard/    # 仪表盘
+│       │   │   ├── index.tsx             # 火车列表 /trains
+│       │   │   ├── create.tsx            # 创建火车 /trains/new
+│       │   │   ├── [id].tsx              # 火车详情 /trains/:id
+│       │   │   ├── [id]/edit.tsx         # 编辑火车 /trains/:id/edit
+│       │   │   └── schedule-detail.tsx   # 班次详情 /trains/:trainId/schedules/:scheduleId
+│       │   └── schedules/    # 班次列表页 /schedules
 │       ├── components/
+│       │   ├── dashboard/
+│       │   │   └── CalendarView.tsx      # 月历视图（双月显示）
 │       │   ├── requirements/ # 需求组件
+│       │   ├── schedules/
+│       │   │   └── ScheduleCalendar.tsx  # 单班次月历视图组件
 │       │   ├── trains/       # 火车组件
+│       │   │   ├── TrainForm.tsx         # 火车表单
+│       │   │   └── TrainSystemList.tsx   # 系统人员配置
 │       │   └── AuthGuard.tsx # 路由守卫
 │       ├── services/         # API 调用层
+│       │   ├── api.ts        # axios 实例
+│       │   ├── train.ts      # 火车/班次 API
+│       │   ├── system.ts     # 系统 API
+│       │   └── requirement.ts# 需求 API
 │       ├── stores/           # 状态管理 (Zustand)
 │       └── ...
 ├── packages/shared/src/      # 共享类型/常量
 │   ├── types/                # 类型定义
+│   │   └── train.ts          # TrainScheduleDetail 含 sitDate/uatDate
 │   └── constants/            # 常量定义
-└── prisma/schema.prisma      # 数据库模型
+└── apps/server/prisma/
+    └── schema.prisma         # 数据库模型 (TrainSchedule 含 sitDate/uatDate)
 ```
 
 ---
@@ -168,12 +204,28 @@ release-train/
 | 层级 | 文件 | 说明 |
 |------|------|------|
 | 页面 | `apps/web/src/pages/trains/index.tsx` → 模态框 | 列表页创建班次模态框 |
+| 页面 | `apps/web/src/pages/trains/schedule-detail.tsx` | 班次详情页（含编辑班次模态框） |
 | API | `apps/web/src/pages/trains/index.tsx` → `handleCreateSubmit()` | 前端 API 调用 |
-| 路由 | `apps/server/src/modules/trains/routes/schedule.ts` → `POST /api/trains/:trainId/schedules` | 后端路由 |
-| 业务 | `apps/server/src/modules/trains/services/train.service.ts` → `createTrainSchedule()` | 后端业务逻辑（含自动生成班次名称逻辑） |
+| API | `apps/web/src/pages/trains/schedule-detail.tsx` → `handleEditSubmit()` | 班次编辑提交 |
+| 路由 | `apps/server/src/modules/trains/routes/schedule.ts` → `POST /api/trains/:trainId/schedules` | 创建班次 |
+| 路由 | `apps/server/src/modules/trains/routes/schedule.ts` → `PUT /api/trains/:trainId/schedules/:scheduleId` | 编辑班次 |
+| 业务 | `apps/server/src/modules/trains/services/train.service.ts` → `createTrainSchedule()` | 创建业务逻辑（含自动生成班次名称/关键日期） |
+| 业务 | `apps/server/src/modules/trains/services/train.service.ts` → `updateTrainSchedule()` | 更新业务逻辑 |
 | 工具 | `apps/server/src/modules/trains/utils/key-dates.ts` | 关键日期计算工具 |
-| 类型 | `packages/shared/src/types/train.ts` | 班次类型定义 |
-| 测试 | `apps/server/src/__tests__/t2-us2.2-train-schedule-create.test.ts` | 后端测试（11个用例：创建/编辑/查询/名称/容量快照） |
+| 类型 | `packages/shared/src/types/train.ts` | 班次类型定义（含 sitDate/uatDate） |
+| 数据 | `apps/server/prisma/schema.prisma` → `TrainSchedule` | 含 boardingDate/sitDate/uatDate/lockdownDate/releaseDate |
+| 测试 | `apps/server/src/__tests__/t2-us2.2-train-schedule-create.test.ts` | 后端测试（11个用例） |
+
+**关键日期节点顺序**：纳版 → 开始 → SIT提测 → UAT提测 → 封板 → 投产 → 结束
+
+**关键日期计算规则**（[key-dates.ts](file:///Users/laiyang/Library/Application%20Support/TRAE%20SOLO%20CN/ModularData/ai-agent/work-mode-projects/版本火车/release-train/apps/server/src/modules/trains/utils/key-dates.ts)）：
+| 节点 | 计算 |
+|------|------|
+| 纳版 | 开始 - 3天 |
+| SIT提测 | 开始后 (开始→封板 × 50%) |
+| UAT提测 | SIT → 封板中点 |
+| 封板 | 投产 - 3天 |
+| 投产 | 结束日期 |
 
 ### US2.2.1 火车班次状态变更
 
@@ -197,9 +249,11 @@ release-train/
 
 | 层级 | 文件 | 说明 |
 |------|------|------|
+| 前端预览 | `apps/web/src/pages/trains/schedule-detail.tsx` → `handlePreviewDates()` | 编辑班次时调用 POST /api/trains/schedules/preview |
 | 路由 | `apps/server/src/modules/trains/routes/schedule.ts` → `POST /api/trains/schedules/preview` | 预览关键日期 |
-| 业务 | `apps/server/src/modules/trains/services/train.service.ts` → `previewKeyDates()` | 计算 boardingDate/lockdownDate/releaseDate |
+| 业务 | `apps/server/src/modules/trains/services/train.service.ts` → `previewKeyDates()` | 计算 boardingDate/sitDate/uatDate/lockdownDate/releaseDate |
 | 工具 | `apps/server/src/modules/trains/utils/key-dates.ts` → `calculateKeyDates()` | 关键日期计算算法 |
+| 测试 | `apps/server/src/__tests__/t2-us2.2x-schedule-ext.test.ts` | US2.2.3 关键日期预览测试 |
 
 ### US2.3 版本火车列表
 
@@ -261,6 +315,30 @@ release-train/
 
 ---
 
+## 路由与导航映射
+
+| 路径 | 页面文件 | 说明 |
+|------|---------|------|
+| `/dashboard` | `apps/web/src/pages/dashboard/` | 仪表盘（首页）⭐ |
+| `/login` | `apps/web/src/pages/login/` | 登录页 |
+| `/requirements` | `apps/web/src/pages/requirements/` | 需求列表 |
+| `/schedules` | `apps/web/src/pages/schedules/` | 班次列表 |
+| `/trains` | `apps/web/src/pages/trains/index.tsx` | 火车列表 |
+| `/trains/new` | `apps/web/src/pages/trains/create.tsx` | 创建火车 |
+| `/trains/:id` | `apps/web/src/pages/trains/[id].tsx` | 火车详情 |
+| `/trains/:id/edit` | `apps/web/src/pages/trains/[id]/edit.tsx` | 编辑火车 |
+| `/trains/:trainId/schedules/:scheduleId` | `apps/web/src/pages/trains/schedule-detail.tsx` | 班次详情 |
+| `/systems` | `apps/web/src/pages/systems/` | 系统管理 |
+
+| 导航入口 | 目标 | 代码位置 |
+|----------|------|----------|
+| 左侧菜单"仪表盘" | `/dashboard` | `MainLayout.tsx:menuItems` |
+| 左侧菜单"版本火车" | `/schedules` | `MainLayout.tsx:menuItems` |
+| 登录后自动跳转 | `/dashboard` | `login/index.tsx` / `AuthGuard.tsx` |
+| 路由兜底 | → `/dashboard` | `App.tsx:<Route path="*">` |
+
+---
+
 ## 通用模块映射
 
 | 模块 | 文件 | 涉及 US |
@@ -302,6 +380,11 @@ release-train/
 | 班次详情问题 | US2.4/US2.2 | `trains/schedule-detail.tsx` → `train.service.ts:getTrainScheduleById()` |
 | 班次状态变更失败 | US2.2.1 | `train.service.ts:updateTrainScheduleStatus()` → `validTransitions` 状态机校验 |
 | 状态联动异常 | US2.2.1 | `train.service.ts:updateTrainScheduleStatus()` 内 `ONBOARDED` → `FROZEN`/`RELEASED` 逻辑 |
-| 关键日期计算错误 | US2.2.3 | `key-dates.ts:calculateKeyDates()` |
-| 预览关键日期 API | US2.2.3 | `train.service.ts:previewKeyDates()` |
+| 关键日期计算错误 | US2.2.3 | `key-dates.ts:calculateKeyDates()`（纳版=开始-3天/SIT=开始→封板×50%/UAT=SIT→封板中点/封板=投产-3天） |
+| 预览关键日期 API | US2.2.3 | `train.service.ts:previewKeyDates()` → `POST /api/trains/schedules/preview` |
+| 班次详情编辑 SIT/UAT | US2.2 | `schedule-detail.tsx:handleEditSubmit()` → `PUT` 含 sitDate/uatDate |
+| 月历视图无默认火车 | Dashboard | `CalendarView.tsx:loadData()` → 加载火车列表后需调用 `getScheduleProgress` |
+| 单班次月历不显示 SIT/UAT | US2.2 | `ScheduleCalendar.tsx:getEventsForDate()` → 检查 sitDate/uatDate |
+| 服务启动/重启 | 运维 | `dev.sh start|stop|restart|status` |
+| 路由跳转错误 | 路由 | 路由表：`/schedules`=班次列表 `/trains`=火车列表 `/dashboard`=首页 |
 | 取消班次需求回滚 | US2.2.2 | `train.service.ts:cancelTrainSchedule()` → `ONBOARDED` → `READY` |

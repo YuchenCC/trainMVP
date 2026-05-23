@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, Calendar, Typography, Tag, Space, Button, Row, Col, Tooltip, Select } from 'antd';
 import { ScheduleProgressItem } from '@release-train/shared';
 import trainService from '../../services/train';
+import { systemService, SystemOption } from '../../services/system';
 import dayjs, { Dayjs } from 'dayjs';
 
 const { Text, Title } = Typography;
@@ -73,10 +74,14 @@ const CalendarView: React.FC<CalendarViewProps> = ({ schedules: propSchedules })
   const [allSchedules, setAllSchedules] = useState<ScheduleProgressItem[]>([]);
   // 可用的火车列表（id + name）
   const [trains, setTrains] = useState<{ id: string; name: string }[]>([]);
+  // 可用的系统列表
+  const [systems, setSystems] = useState<SystemOption[]>([]);
   // 数据加载状态
   const [loading, setLoading] = useState(true);
   // 当前选中的火车 ID
   const [activeTrainId, setActiveTrainId] = useState<string | null>(null);
+  // 当前选中的系统 ID
+  const [selectedSystemId, setSelectedSystemId] = useState<string>('');
   // 双月视图的起始月份
   const [viewDate, setViewDate] = useState<Dayjs>(dayjs());
 
@@ -106,19 +111,47 @@ const CalendarView: React.FC<CalendarViewProps> = ({ schedules: propSchedules })
   }, [propSchedules]);
 
   /**
-   * 初始化加载火车列表，并自动选中第一个火车加载其班次数据
+   * 初始化加载火车列表和系统列表，并加载第一个火车的班次数据
    */
   const loadData = async () => {
     try {
-      const trainsRes = await trainService.list({ pageSize: 100 });
+      const [trainsRes, systemsRes] = await Promise.all([
+        trainService.list({ pageSize: 100 }),
+        systemService.list()
+      ]);
+      
+      let firstTrainId: string | null = null;
+      let firstSystemId: string | null = null;
+      
       if (trainsRes.success && trainsRes.data?.list) {
         const trainList = trainsRes.data.list.map((t: { id: string; name: string }) => ({ id: t.id, name: t.name }));
         setTrains(trainList);
-        if (trainList.length > 0 && !activeTrainId) {
-          await switchTrain(trainList[0].id);
-          return;
+        if (trainList.length > 0) {
+          firstTrainId = trainList[0].id;
+          setActiveTrainId(firstTrainId);
         }
       }
+      
+      if (systemsRes) {
+        setSystems(systemsRes);
+        if (systemsRes.length > 0) {
+          firstSystemId = systemsRes[0].id;
+          setSelectedSystemId(firstSystemId);
+        }
+      }
+      
+      // 加载默认火车的班次进度数据
+      if (firstTrainId) {
+        const params: Record<string, string> = { trainId: firstTrainId };
+        if (firstSystemId) {
+          params.systemId = firstSystemId;
+        }
+        const res = await trainService.getScheduleProgress(params);
+        if (res.success && res.data) {
+          setAllSchedules(res.data);
+        }
+      }
+      
       setLoading(false);
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -127,13 +160,17 @@ const CalendarView: React.FC<CalendarViewProps> = ({ schedules: propSchedules })
   };
 
   /**
-   * 切换火车：根据火车 ID 重新请求该火车的班次进度数据
+   * 切换火车：根据火车 ID 和系统 ID 重新请求班次进度数据
    */
   const switchTrain = useCallback(async (trainId: string) => {
     setActiveTrainId(trainId);
     setLoading(true);
     try {
-      const res = await trainService.getScheduleProgress({ trainId });
+      const params: Record<string, string> = { trainId };
+      if (selectedSystemId) {
+        params.systemId = selectedSystemId;
+      }
+      const res = await trainService.getScheduleProgress(params);
       if (res.success && res.data) {
         setAllSchedules(res.data);
       }
@@ -142,7 +179,17 @@ const CalendarView: React.FC<CalendarViewProps> = ({ schedules: propSchedules })
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedSystemId]);
+
+  /**
+   * 切换系统：重新加载当前选中火车的班次进度数据
+   */
+  const switchSystem = useCallback(async (systemId: string) => {
+    setSelectedSystemId(systemId);
+    if (activeTrainId) {
+      await switchTrain(activeTrainId);
+    }
+  }, [activeTrainId, switchTrain]);
 
   /**
    * 计算班次条的渲染数据
@@ -429,15 +476,24 @@ const CalendarView: React.FC<CalendarViewProps> = ({ schedules: propSchedules })
           <Row justify="space-between" align="middle">
             <Col>
               <Space size={8}>
+                <Text type="secondary" style={{ fontSize: 13 }}>选择系统：</Text>
+                <Select
+                  value={selectedSystemId}
+                  onChange={(value) => switchSystem(value)}
+                  style={{ width: 150 }}
+                  options={[
+                    ...systems.map(system => ({ label: system.name, value: system.id })),
+                  ]}
+                />
                 <Text type="secondary" style={{ fontSize: 13 }}>选择火车：</Text>
                 <Select
-  value={activeTrainId || ''}
-  onChange={(value) => switchTrain(value)}
-  style={{ width: 180 }}
-  options={[
-    ...trains.map(train => ({ label: train.name, value: train.id })),
-  ]}
-/>
+                  value={activeTrainId || ''}
+                  onChange={(value) => switchTrain(value)}
+                  style={{ width: 180 }}
+                  options={[
+                    ...trains.map(train => ({ label: train.name, value: train.id })),
+                  ]}
+                />
               </Space>
             </Col>
             <Col>

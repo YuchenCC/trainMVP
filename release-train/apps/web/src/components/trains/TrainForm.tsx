@@ -94,16 +94,18 @@ const TrainForm: React.FC<TrainFormProps> = ({ mode, initialData, onCancel, onSu
 
   // ========== 加载系统成员列表 ==========
   // 加载指定系统的成员，用于下拉选择 BA/PM/TECH_MGR/TEST_MGR/DEV
-  const loadSystemUsers = useCallback(async (systemId: string) => {
-    if (systemUsers[systemId]) return; // 已加载则跳过
+  const loadSystemUsers = useCallback(async (systemId: string): Promise<SystemUserOption[]> => {
+    if (systemUsers[systemId]) return systemUsers[systemId]; // 已加载则返回
 
     setUsersLoading((prev) => ({ ...prev, [systemId]: true }));
     try {
       const users = await systemService.getUsers(systemId);
       setSystemUsers((prev) => ({ ...prev, [systemId]: users }));
+      return users;
     } catch {
       message.error('加载系统成员失败');
       setSystemUsers((prev) => ({ ...prev, [systemId]: [] }));
+      return [];
     } finally {
       setUsersLoading((prev) => ({ ...prev, [systemId]: false }));
     }
@@ -144,7 +146,7 @@ const TrainForm: React.FC<TrainFormProps> = ({ mode, initialData, onCancel, onSu
   }, [mode, initialData, form, loadAvailableSystems, loadSystemUsers, initialized]);
 
   // ========== 添加搭载系统 ==========
-  const handleAddSystem = (system: AvailableSystem) => {
+  const handleAddSystem = async (system: AvailableSystem) => {
     // 校验冲突
     if (system.conflictTrain) {
       message.warning(`系统【${system.name}】已在火车【${system.conflictTrain.name}】中，无法重复添加`);
@@ -157,14 +159,27 @@ const TrainForm: React.FC<TrainFormProps> = ({ mode, initialData, onCancel, onSu
       return;
     }
 
+    // 加载系统成员并自动填充
+    const users = await loadSystemUsers(system.id);
+    
+    const baUser = users.find((u) => u.role === 'BA');
+    const pmUser = users.find((u) => u.role === 'PM');
+    const techMgrUser = users.find((u) => u.role === 'TECH_MGR');
+    const testMgrUser = users.find((u) => u.role === 'TEST_MGR');
+    const devUsers = users.filter((u) => u.role === 'DEV');
+
     const newSystem: TrainSystemFormItem = {
       systemId: system.id,
       systemName: system.name,
-      capacityPoints: 100, // 默认 100 点
+      capacityPoints: 100,
+      baUserId: baUser?.id,
+      pmUserId: pmUser?.id,
+      techMgrUserId: techMgrUser?.id,
+      testMgrUserId: testMgrUser?.id,
+      devTeamUserIds: devUsers.map((u) => u.id),
     };
 
     setSystems([...systems, newSystem]);
-    loadSystemUsers(system.id);
   };
 
   // ========== 移除搭载系统 ==========
@@ -257,7 +272,7 @@ const TrainForm: React.FC<TrainFormProps> = ({ mode, initialData, onCancel, onSu
   const getRoleOptions = (systemId: string, role: string) => {
     const users = systemUsers[systemId] || [];
     return users
-      .filter((u) => u.role === role || (role === 'DEV' && ['DEV', 'PM'].includes(u.role)))
+      .filter((u) => u.role === role)
       .map((u) => ({ value: u.id, label: u.displayName }));
   };
 

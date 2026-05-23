@@ -122,11 +122,17 @@ describe('T2 US2.2 火车班次创建', () => {
       // 统一投产日 = 结束日期
       expect(body.data.releaseDate).toBe('2026-06-26');
 
-      // 统一纳版日 = 周期过半前的最后一个周五
-      expect(body.data.boardingDate).toBeDefined();
+      // 统一封板日 = 投产前3天
+      expect(body.data.lockdownDate).toBe('2026-06-23');
 
-      // 统一封板日 = 投产前一周的周五
-      expect(body.data.lockdownDate).toBe('2026-06-19');
+      // 统一纳版日 = 开始前3天
+      expect(body.data.boardingDate).toBe('2026-05-29');
+
+      // SIT提测日 = 开始后11天（开始到封板22天 × 50%）
+      expect(body.data.sitDate).toBe('2026-06-12');
+
+      // UAT提测日 = SIT后5天（SIT到封板11天中点）
+      expect(body.data.uatDate).toBe('2026-06-17');
     });
 
     it('创建班次成功 - 容量快照已创建', async () => {
