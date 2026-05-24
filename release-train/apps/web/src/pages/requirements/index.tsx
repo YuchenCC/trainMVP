@@ -12,17 +12,15 @@ import {
   SendOutlined,
   CheckOutlined,
   CloseOutlined,
-  RocketOutlined,
   RedoOutlined,
 } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { requirementService } from '../../services/requirement';
 import { systemService, SystemOption } from '../../services/system';
 import { useAuthStore } from '../../stores/auth';
 import {
   RequirementListItem,
-  RequirementListQuery,
   ReqStatus,
   ReqSubStatus,
   REQ_STATUS_LABELS,
@@ -73,7 +71,6 @@ const PRIORITY_COLOR_MAP: Record<string, string> = {
  * @param onSubmitReview - 发起评审回调
  * @param onApprove - 通过评审回调
  * @param onReject - 驳回回调
- * @param onOnboard - 纳版回调
  * @param onResubmit - 重新提交回调
  */
 function getActionButtons(
@@ -85,7 +82,6 @@ function getActionButtons(
   onSubmitReview: (id: string) => void,
   onApprove: (id: string) => void,
   onReject: (id: string) => void,
-  onOnboard: (id: string) => void,
   onResubmit: (id: string) => void,
   onChangeSubStatus: (id: string) => void,
   onChangeRequirement: (id: string) => void,
@@ -126,13 +122,6 @@ function getActionButtons(
       }
       break;
     case ReqStatus.READY:
-      if (checkPermission(Operation.MANAGE_TRAIN)) {
-        buttons.push(
-          <Button key="onboard" type="link" size="small" icon={<RocketOutlined />} onClick={(e) => { e.stopPropagation(); onOnboard(record.id); }}>
-            纳版
-          </Button>,
-        );
-      }
       // 需求变更：BA(归属人)/TRAIN_ADMIN/SUPER_ADMIN
       if (isOwner || currentUser?.role === Role.TRAIN_ADMIN || currentUser?.role === Role.SUPER_ADMIN) {
         buttons.push(
@@ -190,6 +179,7 @@ function getActionButtons(
  */
 const RequirementsPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   // ========== 列表数据状态 ==========
   const [loading, setLoading] = useState(false);
@@ -199,8 +189,20 @@ const RequirementsPage: React.FC = () => {
   const [pageSize, setPageSize] = useState(20);
 
   // ========== 筛选条件状态 ==========
-  const [systemFilter, setSystemFilter] = useState<string | undefined>(undefined);
-  const [statusFilter, setStatusFilter] = useState<ReqStatus[]>([]);
+  // 从 URL 参数初始化筛选条件
+  const [systemFilter, setSystemFilter] = useState<string | undefined>(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const systemParam = searchParams.get('systemId');
+    return systemParam || undefined;
+  });
+  const [statusFilter, setStatusFilter] = useState<ReqStatus[]>(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const statusParam = searchParams.get('status');
+    if (statusParam && Object.values(ReqStatus).includes(statusParam as ReqStatus)) {
+      return [statusParam as ReqStatus];
+    }
+    return [];
+  });
   const [keyword, setKeyword] = useState('');
 
   // ========== 排序状态 ==========
@@ -218,7 +220,7 @@ const RequirementsPage: React.FC = () => {
   }, []);
 
   // 加载需求列表
-  const fetchList = useCallback(async (params: RequirementListQuery) => {
+  const fetchList = useCallback(async (params: any) => {
     setLoading(true);
     try {
       const res = await requirementService.list(params);
@@ -235,18 +237,54 @@ const RequirementsPage: React.FC = () => {
     }
   }, []);
 
-  // 初始加载
+  // 初始加载和 URL 参数变化时重新加载
   useEffect(() => {
-    fetchList({
+    const searchParams = new URLSearchParams(location.search);
+    
+    // 直接从 URL 读取所有筛选参数（避免状态同步延迟问题）
+    const urlSystemId = searchParams.get('systemId') || undefined;
+    const urlStatusValues = searchParams.getAll('status').filter(s => 
+      Object.values(ReqStatus).includes(s as ReqStatus)
+    );
+    const urlKeyword = searchParams.get('keyword') || '';
+    const urlSortBy = searchParams.get('sortBy') as 'createdAt' | 'priority' | 'storyPoints' | 'status' | undefined;
+    const urlSortOrder = searchParams.get('sortOrder') as 'asc' | 'desc' | undefined;
+    
+    // 同步 URL 参数到 UI 状态（用于表单显示）
+    setSystemFilter(urlSystemId);
+    if (urlStatusValues.length > 0) {
+      setStatusFilter(urlStatusValues as ReqStatus[]);
+    } else {
+      setStatusFilter([]);
+    }
+    setKeyword(urlKeyword);
+    if (urlSortBy) setSortBy(urlSortBy);
+    if (urlSortOrder) setSortOrder(urlSortOrder);
+    
+    // 直接调用 API，使用 URL 参数
+    setLoading(true);
+    requirementService.list({
       page,
       pageSize,
-      systemId: systemFilter,
-      status: statusFilter.length > 0 ? statusFilter : undefined,
-      keyword: keyword || undefined,
-      sortBy,
-      sortOrder,
+      systemId: urlSystemId,
+      // 将数组转换为逗号分隔字符串，避免 Fastify 不支持 status[]=value 格式
+      status: urlStatusValues.length > 0 ? urlStatusValues.join(',') as any : undefined,
+      keyword: urlKeyword || undefined,
+      sortBy: urlSortBy,
+      sortOrder: urlSortOrder,
+    }).then(res => {
+      if (res.data) {
+        setData(res.data.list);
+        setTotal(res.data.total);
+        setPage(res.data.page);
+        setPageSize(res.data.pageSize);
+      }
+    }).catch(() => {
+      // 错误已由 Axios 拦截器统一处理
+    }).finally(() => {
+      setLoading(false);
     });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.search]); // 监听 URL 参数变化
 
   // ========== 事件处理 ==========
 
@@ -257,7 +295,7 @@ const RequirementsPage: React.FC = () => {
       page: 1,
       pageSize,
       systemId: systemFilter,
-      status: statusFilter.length > 0 ? statusFilter : undefined,
+      status: statusFilter.length > 0 ? statusFilter.join(',') as any : undefined,
       keyword: keyword || undefined,
       sortBy,
       sortOrder,
@@ -381,8 +419,6 @@ const RequirementsPage: React.FC = () => {
       },
     });
   };
-
-  const handleOnboard = (_id: string) => { /* TODO: T2 纳版 */ };
 
   const handleResubmit = async (id: string) => {
     try {
@@ -554,7 +590,6 @@ const RequirementsPage: React.FC = () => {
           handleSubmitReview,
           handleApprove,
           handleReject,
-          handleOnboard,
           handleResubmit,
           handleOpenChangeSubStatus,
           handleOpenChangeRequirement,

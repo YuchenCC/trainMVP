@@ -5,8 +5,7 @@ import zhCN from 'antd/locale/zh_CN';
 import MainLayout from './layouts/MainLayout';
 import LoginPage from './pages/login';
 import DashboardPage from './pages/dashboard';
-import BADashboard from './pages/dashboard/ba';
-import PMDashboard from './pages/dashboard/pm';
+// 已删除：BADashboard 和 PMDashboard 已合并到统一的 DashboardPage
 import CalendarPage from './pages/calendar';
 import RequirementsPage from './pages/requirements';
 import RequirementCreatePage from './pages/requirements/create';
@@ -65,8 +64,7 @@ const App: React.FC = () => {
             {/* 其他模块 */}
             <Route path="/systems" element={<SystemsPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/dashboard/ba" element={<BADashboard />} />
-            <Route path="/dashboard/pm" element={<PMDashboard />} />
+            {/* 已删除：/dashboard/ba 和 /dashboard/pm 已合并到统一的 /dashboard */}
             <Route path="/calendar" element={<CalendarPage />} />
           </Route>
 

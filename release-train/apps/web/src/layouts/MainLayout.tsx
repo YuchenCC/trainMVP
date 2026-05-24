@@ -29,8 +29,7 @@ const BREADCRUMB_MAP: Record<string, string> = {
   '/schedules': '班次列表',
   '/systems': '系统管理',
   '/dashboard': '仪表盘',
-  '/dashboard/ba': 'BA 仪表盘',
-  '/dashboard/pm': '项目经理仪表盘',
+  // 已删除：/dashboard/ba 和 /dashboard/pm 已合并到统一的 /dashboard
   '/calendar': '月历视图',
 };
 
@@ -122,16 +121,6 @@ const MainLayout: React.FC = () => {
       key: '/dashboard',
       icon: <DashboardOutlined />,
       label: '仪表盘',
-      children: [
-        {
-          key: '/dashboard/ba',
-          label: 'BA 仪表盘',
-        },
-        {
-          key: '/dashboard/pm',
-          label: '项目经理仪表盘',
-        },
-      ],
     },
     {
       key: '/calendar',
