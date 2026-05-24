@@ -6,11 +6,9 @@ import {
   Col, 
   Statistic, 
   Tag, 
-  List, 
   Button, 
   Space, 
   Typography,
-  Divider,
   Empty,
 } from 'antd';
 import {
@@ -18,7 +16,7 @@ import {
   ClockCircleOutlined,
   WarningOutlined,
   CheckCircleOutlined,
-  EyeOutlined
+  EyeOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/auth';
@@ -93,22 +91,23 @@ const DashboardPage: React.FC = () => {
     if (!schedules || schedules.length === 0) return [];
     
     const now = new Date();
-    const thirtyDaysLater = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const fourteenDaysLater = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
     const items: any[] = [];
 
     schedules.forEach(schedule => {
-      const scheduleName = `${schedule.trainName} v${schedule.version}`;
-
+      const scheduleName = schedule.scheduleName || schedule.trainName;
       // 纳版截止
       if (schedule.boardingDate) {
         const date = new Date(schedule.boardingDate);
-        if (date >= now && date <= thirtyDaysLater) {
+        if (date >= now && date <= fourteenDaysLater) {
           items.push({
             type: 'boarding',
             label: '纳版截止',
             date: date.toLocaleDateString(),
             daysLeft: Math.ceil((date.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)),
             scheduleName,
+            trainId: schedule.trainId,
+            scheduleId: schedule.scheduleId,
             color: '#faad14',
             icon: <ClockCircleOutlined />
           });
@@ -118,13 +117,15 @@ const DashboardPage: React.FC = () => {
       // SIT开始
       if (schedule.sitDate) {
         const date = new Date(schedule.sitDate);
-        if (date >= now && date <= thirtyDaysLater) {
+        if (date >= now && date <= fourteenDaysLater) {
           items.push({
             type: 'sit',
             label: 'SIT测试开始',
             date: date.toLocaleDateString(),
             daysLeft: Math.ceil((date.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)),
             scheduleName,
+            trainId: schedule.trainId,
+            scheduleId: schedule.scheduleId,
             color: '#1890ff',
             icon: <CalendarOutlined />
           });
@@ -134,13 +135,15 @@ const DashboardPage: React.FC = () => {
       // UAT开始
       if (schedule.uatDate) {
         const date = new Date(schedule.uatDate);
-        if (date >= now && date <= thirtyDaysLater) {
+        if (date >= now && date <= fourteenDaysLater) {
           items.push({
             type: 'uat',
             label: 'UAT测试开始',
             date: date.toLocaleDateString(),
             daysLeft: Math.ceil((date.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)),
             scheduleName,
+            trainId: schedule.trainId,
+            scheduleId: schedule.scheduleId,
             color: '#722ed1',
             icon: <CheckCircleOutlined />
           });
@@ -150,13 +153,15 @@ const DashboardPage: React.FC = () => {
       // 封板
       if (schedule.lockdownDate) {
         const date = new Date(schedule.lockdownDate);
-        if (date >= now && date <= thirtyDaysLater) {
+        if (date >= now && date <= fourteenDaysLater) {
           items.push({
             type: 'lockdown',
             label: '封板',
             date: date.toLocaleDateString(),
             daysLeft: Math.ceil((date.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)),
             scheduleName,
+            trainId: schedule.trainId,
+            scheduleId: schedule.scheduleId,
             color: '#f5222d',
             icon: <WarningOutlined />
           });
@@ -166,13 +171,15 @@ const DashboardPage: React.FC = () => {
       // 投产
       if (schedule.releaseDate) {
         const date = new Date(schedule.releaseDate);
-        if (date >= now && date <= thirtyDaysLater) {
+        if (date >= now && date <= fourteenDaysLater) {
           items.push({
             type: 'release',
             label: '投产',
             date: date.toLocaleDateString(),
             daysLeft: Math.ceil((date.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)),
             scheduleName,
+            trainId: schedule.trainId,
+            scheduleId: schedule.scheduleId,
             color: '#52c41a',
             icon: <CheckCircleOutlined />
           });
@@ -246,7 +253,7 @@ const DashboardPage: React.FC = () => {
         break;
 
       case Role.TECH_MGR:
-        // TECH_MGR 待办：待评审需求
+        // TECH_MGR 待办：待评审需求 + 待开发完成
         if (todos.pendingReviewList && todos.pendingReviewList.length > 0) {
           sections.push({
             key: 'pendingReview',
@@ -256,10 +263,19 @@ const DashboardPage: React.FC = () => {
             type: 'requirement'
           });
         }
+        if (todos.pendingDevComplete && todos.pendingDevComplete.length > 0) {
+          sections.push({
+            key: 'pendingDevComplete',
+            title: '待开发完成',
+            description: '开发中的需求，可标记开发完成',
+            data: todos.pendingDevComplete,
+            type: 'requirement'
+          });
+        }
         break;
 
       case Role.TEST_MGR:
-        // TEST_MGR 待办：紧急变更待审批
+        // TEST_MGR 待办：紧急变更待审批 + 待 SIT 通过
         if (todos.emergencyPendingApproval && todos.emergencyPendingApproval.length > 0) {
           sections.push({
             key: 'emergency',
@@ -267,6 +283,15 @@ const DashboardPage: React.FC = () => {
             description: '需要您审批的紧急变更申请',
             data: todos.emergencyPendingApproval,
             type: 'emergency'
+          });
+        }
+        if (todos.pendingSitPass && todos.pendingSitPass.length > 0) {
+          sections.push({
+            key: 'pendingSitPass',
+            title: '待 SIT 通过',
+            description: 'SIT 测试中的需求，可标记测试通过',
+            data: todos.pendingSitPass,
+            type: 'requirement'
           });
         }
         break;
@@ -362,151 +387,151 @@ const DashboardPage: React.FC = () => {
                 </Space>
               }
               style={{ marginBottom: '24px', borderRadius: '12px' }}
-              styles={{ body: { padding: '24px' } }}
+              styles={{ body: { padding: '16px' } }}
             >
-              <Row gutter={[24, 16]}>
+              <Row gutter={[16, 12]}>
                 {stats && stats.byStatus && (
                   <>
                     {/* 草稿 */}
-                    <Col xs={24} sm={12} lg={8} xl={6}>
+                    <Col xs={12} sm={8} md={6} lg={4}>
                       <div 
                         className="stat-card"
                         onClick={() => navigate(`/requirements?status=${ReqStatus.DRAFT}${selectedSystemId ? `&systemId=${selectedSystemId}` : ''}`)}
                         style={{ 
                           backgroundColor: '#e6f7ff', 
-                          borderLeft: `4px solid #1890ff`,
-                          padding: '16px',
+                          borderLeft: `3px solid #1890ff`,
+                          padding: '12px',
                           borderRadius: '8px',
                           cursor: 'pointer',
                           transition: 'all 0.3s ease',
                         }}
                       >
-                        <div style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: '8px' }}>
+                        <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '4px' }}>
                           草稿 · 待完善
                         </div>
                         <Statistic 
                           value={stats.byStatus[ReqStatus.DRAFT] || 0} 
-                          valueStyle={{ color: '#1890ff', fontSize: '32px', fontWeight: 600 }}
+                          valueStyle={{ color: '#1890ff', fontSize: '22px', fontWeight: 600 }}
                         />
                       </div>
                     </Col>
 
                     {/* 待评审 */}
-                    <Col xs={24} sm={12} lg={8} xl={6}>
+                    <Col xs={12} sm={8} md={6} lg={4}>
                       <div 
                         className="stat-card"
                         onClick={() => navigate(`/requirements?status=${ReqStatus.PENDING_REVIEW}${selectedSystemId ? `&systemId=${selectedSystemId}` : ''}`)}
                         style={{ 
                           backgroundColor: '#fff7e6', 
-                          borderLeft: `4px solid #faad14`,
-                          padding: '16px',
+                          borderLeft: `3px solid #faad14`,
+                          padding: '12px',
                           borderRadius: '8px',
                           cursor: 'pointer',
                           transition: 'all 0.3s ease'
                         }}
                       >
-                        <div style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: '8px' }}>
+                        <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '4px' }}>
                           待评审 · 待确认
                         </div>
                         <Statistic 
                           value={stats.byStatus[ReqStatus.PENDING_REVIEW] || 0} 
-                          valueStyle={{ color: '#faad14', fontSize: '32px', fontWeight: 600 }}
+                          valueStyle={{ color: '#faad14', fontSize: '22px', fontWeight: 600 }}
                         />
                       </div>
                     </Col>
 
                     {/* 已就绪 */}
-                    <Col xs={24} sm={12} lg={8} xl={6}>
+                    <Col xs={12} sm={8} md={6} lg={4}>
                       <div 
                         className="stat-card"
                         onClick={() => navigate(`/requirements?status=${ReqStatus.READY}${selectedSystemId ? `&systemId=${selectedSystemId}` : ''}`)}
                         style={{ 
                           backgroundColor: '#f6ffed', 
-                          borderLeft: `4px solid #52c41a`,
-                          padding: '16px',
+                          borderLeft: `3px solid #52c41a`,
+                          padding: '12px',
                           borderRadius: '8px',
                           cursor: 'pointer',
                           transition: 'all 0.3s ease'
                         }}
                       >
-                        <div style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: '8px' }}>
+                        <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '4px' }}>
                           已就绪 · 待纳版
                         </div>
                         <Statistic 
                           value={stats.byStatus[ReqStatus.READY] || 0} 
-                          valueStyle={{ color: '#52c41a', fontSize: '32px', fontWeight: 600 }}
+                          valueStyle={{ color: '#52c41a', fontSize: '22px', fontWeight: 600 }}
                         />
                       </div>
                     </Col>
 
                     {/* 已纳版 */}
-                    <Col xs={24} sm={12} lg={8} xl={6}>
+                    <Col xs={12} sm={8} md={6} lg={4}>
                       <div 
                         className="stat-card"
                         onClick={() => navigate(`/requirements?status=${ReqStatus.ONBOARDED}${selectedSystemId ? `&systemId=${selectedSystemId}` : ''}`)}
                         style={{ 
                           backgroundColor: '#f9f0ff', 
-                          borderLeft: `4px solid #722ed1`,
-                          padding: '16px',
+                          borderLeft: `3px solid #722ed1`,
+                          padding: '12px',
                           borderRadius: '8px',
                           cursor: 'pointer',
                           transition: 'all 0.3s ease'
                         }}
                       >
-                        <div style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: '8px' }}>
+                        <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '4px' }}>
                           已纳版 · 开发中
                         </div>
                         <Statistic 
                           value={stats.byStatus[ReqStatus.ONBOARDED] || 0} 
-                          valueStyle={{ color: '#722ed1', fontSize: '32px', fontWeight: 600 }}
+                          valueStyle={{ color: '#722ed1', fontSize: '22px', fontWeight: 600 }}
                         />
                       </div>
                     </Col>
 
                     {/* 已投产 */}
-                    <Col xs={24} sm={12} lg={8} xl={6}>
+                    <Col xs={12} sm={8} md={6} lg={4}>
                       <div 
                         className="stat-card"
                         onClick={() => navigate(`/requirements?status=${ReqStatus.RELEASED}${selectedSystemId ? `&systemId=${selectedSystemId}` : ''}`)}
                         style={{ 
                           backgroundColor: '#e6fffb', 
-                          borderLeft: `4px solid #13c2c2`,
-                          padding: '16px',
+                          borderLeft: `3px solid #13c2c2`,
+                          padding: '12px',
                           borderRadius: '8px',
                           cursor: 'pointer',
                           transition: 'all 0.3s ease'
                         }}
                       >
-                        <div style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: '8px' }}>
+                        <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '4px' }}>
                           已投产 · 已上线
                         </div>
                         <Statistic 
                           value={stats.byStatus[ReqStatus.RELEASED] || 0} 
-                          valueStyle={{ color: '#13c2c2', fontSize: '32px', fontWeight: 600 }}
+                          valueStyle={{ color: '#13c2c2', fontSize: '22px', fontWeight: 600 }}
                         />
                       </div>
                     </Col>
 
                     {/* 已拒绝 */}
-                    <Col xs={24} sm={12} lg={8} xl={6}>
+                    <Col xs={12} sm={8} md={6} lg={4}>
                       <div 
                         className="stat-card"
                         onClick={() => navigate(`/requirements?status=${ReqStatus.REJECTED}${selectedSystemId ? `&systemId=${selectedSystemId}` : ''}`)}
                         style={{ 
                           backgroundColor: '#fff2f0', 
-                          borderLeft: `4px solid #f5222d`,
-                          padding: '16px',
+                          borderLeft: `3px solid #f5222d`,
+                          padding: '12px',
                           borderRadius: '8px',
                           cursor: 'pointer',
                           transition: 'all 0.3s ease'
                         }}
                       >
-                        <div style={{ fontSize: '12px', color: '#8c8c8c', marginBottom: '8px' }}>
+                        <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '4px' }}>
                           已拒绝 · 需修改
                         </div>
                         <Statistic 
                           value={stats.byStatus[ReqStatus.REJECTED] || 0} 
-                          valueStyle={{ color: '#f5222d', fontSize: '32px', fontWeight: 600 }}
+                          valueStyle={{ color: '#f5222d', fontSize: '22px', fontWeight: 600 }}
                         />
                       </div>
                     </Col>
@@ -520,52 +545,63 @@ const DashboardPage: React.FC = () => {
               title={
                 <Space>
                   <span>关键时间节点</span>
-                  <Tag color="orange">未来30天</Tag>
+                  <Tag color="orange">未来14天</Tag>
                 </Space>
               }
               style={{ marginBottom: '24px', borderRadius: '12px' }}
               styles={{ body: { padding: '16px' } }}
             >
               {getKeyDates().length > 0 ? (
-                <List
-                  dataSource={getKeyDates()}
-                  renderItem={(item: any) => (
-                    <List.Item 
-                      key={`${item.type}-${item.date}`}
-                      style={{ 
+                <Row gutter={[12, 12]}>
+                  {getKeyDates().map((item: any) => (
+                    <Col key={`${item.type}-${item.date}`} xs={24} sm={12}>
+                      <div
+                        onClick={() => navigate(`/trains/${item.trainId}/schedules/${item.scheduleId}`)}
+                        style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 12,
                         padding: '12px 16px',
                         borderRadius: '8px',
                         backgroundColor: '#fafafa',
-                        marginBottom: '8px',
-                        transition: 'all 0.3s ease',
+                        border: '1px solid #f0f0f0',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
                       }}
-                    >
-                      <Space direction="horizontal" size="large" style={{ width: '100%', alignItems: 'center' }}>
-                        <div style={{ fontSize: '20px', color: item.color }}>
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = '#d9d9d9';
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = '#f0f0f0';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
+                      >
+                        <div style={{ fontSize: '20px', color: item.color, flexShrink: 0 }}>
                           {item.icon}
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 500, color: '#1f1f1f' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 500, color: '#1f1f1f', fontSize: 13 }}>
                             {item.label}
                           </div>
-                          <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                          <div style={{ fontSize: '12px', color: '#8c8c8c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {item.scheduleName}
                           </div>
                         </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: '18px', fontWeight: 600, color: item.color }}>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <div style={{ fontSize: '16px', fontWeight: 600, color: item.color }}>
                             {item.daysLeft} 天
                           </div>
-                          <div style={{ fontSize: '12px', color: '#8c8c8c' }}>
+                          <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
                             {item.date}
                           </div>
                         </div>
-                      </Space>
-                    </List.Item>
-                  )}
-                />
+                      </div>
+                    </Col>
+                  ))}
+                </Row>
               ) : (
-                <Empty description="未来30天内无关键节点" />
+                <Empty description="未来14天内无关键节点" />
               )}
             </Card>
 
@@ -583,104 +619,112 @@ const DashboardPage: React.FC = () => {
               styles={{ body: { padding: 0 } }}
             >
               {getTodoSections().length > 0 ? (
-                <div>
+                <div style={{ padding: '4px 0' }}>
                   {getTodoSections().map((section) => (
                     <div key={section.key}>
-                      <Divider style={{ margin: 0, backgroundColor: '#f0f0f0' }} />
-                      <div style={{ padding: '16px' }}>
-                        <div style={{ marginBottom: '12px' }}>
-                          <Title level={5} style={{ margin: 0, color: '#1f1f1f' }}>
+                      <div style={{ padding: '16px 20px 4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                          <Text strong style={{ fontSize: 14, color: '#262626' }}>
                             {section.title}
-                          </Title>
-                          <Paragraph style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#8c8c8c' }}>
+                          </Text>
+                          <Text style={{ fontSize: 12, color: '#8c8c8c' }}>
                             {section.description}
-                          </Paragraph>
+                          </Text>
                         </div>
+                      </div>
+                      <div style={{ padding: '12px 20px 16px' }}>
 
-                        <List
-                          dataSource={section.data}
-                          renderItem={(item: any) => (
-                            <List.Item
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          {section.data.map((item: any) => (
+                            <div
                               key={item.id}
                               onClick={() => handleTodoClick(item, section.type)}
                               style={{ 
-                                padding: '12px 16px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '14px 16px',
                                 borderRadius: '8px',
                                 backgroundColor: '#fff',
-                                marginBottom: '8px',
                                 border: '1px solid #f0f0f0',
                                 cursor: 'pointer',
-                                transition: 'all 0.3s ease',
+                                transition: 'all 0.2s ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = '#d9d9d9';
+                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = '#f0f0f0';
+                                e.currentTarget.style.boxShadow = 'none';
                               }}
                             >
-                              <Space direction="horizontal" size="large" style={{ width: '100%', alignItems: 'center' }}>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <Text strong style={{ color: '#1f1f1f' }}>
-                                      {item.reqCode}
-                                    </Text>
-                                    <Tag color={priorityColors[item.priority] || '#d9d9d9'}>
-                                      {item.priority}
-                                    </Tag>
-                                    <Tag color={statusColors[item.status] || '#d9d9d9'}>
-                                      {statusLabels[item.status] || item.status}
-                                    </Tag>
-                                  </div>
-                                  <div style={{ marginTop: '4px', color: '#595959' }}>
-                                    {item.title}
-                                  </div>
+                              <div style={{ flex: 1, minWidth: 0, marginRight: 16 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 4 }}>
+                                  <Text strong style={{ color: '#1f1f1f', fontSize: 13, whiteSpace: 'nowrap' }}>
+                                    {item.reqCode}
+                                  </Text>
+                                  <Tag color={priorityColors[item.priority] || '#d9d9d9'} style={{ margin: 0, fontSize: 11, lineHeight: '18px' }}>
+                                    {item.priority}
+                                  </Tag>
+                                  <Tag color={statusColors[item.status] || '#d9d9d9'} style={{ margin: 0, fontSize: 11, lineHeight: '18px' }}>
+                                    {statusLabels[item.status] || item.status}
+                                  </Tag>
                                   {item.system && (
-                                    <div style={{ marginTop: '4px', fontSize: '12px', color: '#8c8c8c' }}>
+                                    <Tag style={{ margin: 0, fontSize: 11, lineHeight: '18px', border: '1px solid #e8e8e8', color: '#8c8c8c', backgroundColor: '#fafafa' }}>
                                       {item.system.name}
-                                    </div>
+                                    </Tag>
                                   )}
                                 </div>
-
-                                <div>
-                                  <Space>
-                                    {section.type === 'requirement' && (
-                                        <Button 
-                                          type="primary" 
-                                          size="small"
-                                          icon={<EyeOutlined />}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            navigate(`/requirements/${item.id}`);
-                                          }}
-                                        >
-                                          去处理
-                                        </Button>
-                                    )}
-                                    {section.type === 'emergency' && (
-                                      <>
-                                        <Button 
-                                          type="primary" 
-                                          icon={<CheckCircleOutlined />}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleApprove(item);
-                                          }}
-                                        >
-                                          通过
-                                        </Button>
-                                        <Button 
-                                          danger 
-                                          icon={<WarningOutlined />}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleReject(item);
-                                          }}
-                                        >
-                                          拒绝
-                                        </Button>
-                                      </>
-                                    )}
-                                  </Space>
+                                <div style={{ color: '#595959', fontSize: 13, lineHeight: '20px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {item.title}
                                 </div>
-                              </Space>
-                            </List.Item>
-                          )}
-                        />
+                              </div>
+
+                              <div style={{ flexShrink: 0 }}>
+                                {section.type === 'requirement' && (
+                                  <Button 
+                                    type="primary"
+                                    size="small"
+                                    icon={<EyeOutlined />}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigate(`/requirements/${item.id}`);
+                                    }}
+                                  >
+                                    去处理
+                                  </Button>
+                                )}
+                                {section.type === 'emergency' && (
+                                  <Space size={8}>
+                                    <Button 
+                                      type="primary"
+                                      size="small"
+                                      icon={<CheckCircleOutlined />}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleApprove(item);
+                                      }}
+                                    >
+                                      通过
+                                    </Button>
+                                    <Button 
+                                      size="small"
+                                      danger
+                                      icon={<WarningOutlined />}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleReject(item);
+                                      }}
+                                    >
+                                      拒绝
+                                    </Button>
+                                  </Space>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   ))}

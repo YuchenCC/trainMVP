@@ -2176,6 +2176,115 @@ export async function getMyTodos(user: {
 
       return { pendingOnboard, pendingRelease };
     }
+    case Role.TEST_MGR: {
+      // 待审批的紧急变更（测试经理可审批紧急变更）
+      const emergencyPendingApproval = await prisma.emergencyChange.findMany({
+        where: { status: ApprovalStatus.PENDING },
+        include: {
+          requirement: { select: { reqCode: true, title: true, system: { select: { id: true, name: true } } } }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }).then(list => list.map(item => ({
+        id: item.id,
+        requirementId: item.requirementId,
+        reqCode: item.requirement.reqCode,
+        title: item.requirement.title,
+        system: item.requirement.system,
+        urgency: item.urgency,
+        reason: item.reason,
+        status: item.status,
+        approvalStep: item.approvalStep,
+        approverId: item.approverId,
+        createdAt: item.createdAt.toISOString(),
+      })));
+
+      // 待 SIT 测试通过的需求（测试经理可操作 PASS_SIT）
+      const pendingSitPass = await prisma.requirement.findMany({
+        where: {
+          status: ReqStatus.ONBOARDED,
+          subStatus: ReqSubStatus.SIT_TESTING,
+        },
+        include: { 
+          system: { select: { id: true, name: true } },
+          ba: { select: { id: true, displayName: true } },
+          creator: { select: { id: true, displayName: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 50,
+      }).then(reqs => reqs.map(item => ({
+        id: item.id,
+        reqCode: item.reqCode,
+        title: item.title,
+        status: item.status as unknown as RequirementListItem['status'],
+        subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
+        priority: item.priority as unknown as RequirementListItem['priority'],
+        storyPoints: item.storyPoints,
+        system: item.system,
+        ba: item.ba,
+        creator: item.creator,
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })));
+
+      return { emergencyPendingApproval, pendingSitPass };
+    }
+    case Role.TECH_MGR: {
+      // 待评审需求（技术经理可参与评审）
+      const pendingReviewList = await prisma.requirement.findMany({
+        where: { status: ReqStatus.PENDING_REVIEW },
+        include: { 
+          system: { select: { id: true, name: true } },
+          ba: { select: { id: true, displayName: true } },
+          creator: { select: { id: true, displayName: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }).then(reqs => reqs.map(item => ({
+        id: item.id,
+        reqCode: item.reqCode,
+        title: item.title,
+        status: item.status as unknown as RequirementListItem['status'],
+        subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
+        priority: item.priority as unknown as RequirementListItem['priority'],
+        storyPoints: item.storyPoints,
+        system: item.system,
+        ba: item.ba,
+        creator: item.creator,
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })));
+
+      // 待开发完成的需求（技术经理可操作 COMPLETE_DEV）
+      const pendingDevComplete = await prisma.requirement.findMany({
+        where: {
+          status: ReqStatus.ONBOARDED,
+          subStatus: ReqSubStatus.DEV_IN_PROGRESS,
+        },
+        include: { 
+          system: { select: { id: true, name: true } },
+          ba: { select: { id: true, displayName: true } },
+          creator: { select: { id: true, displayName: true } },
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 50,
+      }).then(reqs => reqs.map(item => ({
+        id: item.id,
+        reqCode: item.reqCode,
+        title: item.title,
+        status: item.status as unknown as RequirementListItem['status'],
+        subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
+        priority: item.priority as unknown as RequirementListItem['priority'],
+        storyPoints: item.storyPoints,
+        system: item.system,
+        ba: item.ba,
+        creator: item.creator,
+        createdAt: item.createdAt.toISOString(),
+        updatedAt: item.updatedAt.toISOString(),
+      })));
+
+      return { pendingReviewList, pendingDevComplete };
+    }
     default:
       return {};
   }

@@ -2044,6 +2044,7 @@ export async function getScheduleProgress(params: {
     return {
       id: schedule.id,
       scheduleId: schedule.id,
+      trainId: schedule.train.id,
       scheduleName: schedule.name,
       trainName: schedule.train.name,
       version: String(schedule.version),

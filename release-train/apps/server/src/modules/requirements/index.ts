@@ -3,6 +3,7 @@
 // 路由文件（index.ts）负责接收请求参数、调用 service 层逻辑、返回响应
 import { FastifyInstance, FastifyRequest } from 'fastify'; // Fastify 类型
 import { rbacMiddleware } from '../../common/middleware/index.js'; // RBAC 权限中间件工厂
+import { prisma } from '../../prisma/index.js'; // Prisma 客户端（查询用户系统归属）
 import {
   Operation,                         // 操作权限枚举（CREATE_REQ/EDIT_REQ 等）
   CreateRequirementRequest,          // 创建需求请求体类型
@@ -149,10 +150,20 @@ export async function requirementRoutes(fastify: FastifyInstance): Promise<void>
     },
     async (request, reply) => {
       const user = request.user as JwtPayload;
+      // 从数据库查询用户的 systemMembers（JWT 不包含此信息）
+      const userWithSystems = await prisma.user.findUnique({
+        where: { id: user.sub },
+        select: {
+          systemMembers: {
+            select: { systemId: true },
+          },
+        },
+      });
+      const systemIds = userWithSystems?.systemMembers.map(m => m.systemId) || [];
       const result = await getMyTodos({
         id: user.sub,
         role: user.role,
-        systemIds: user.systemIds,
+        systemIds,
       });
       return reply.send({ success: true, data: result });
     },

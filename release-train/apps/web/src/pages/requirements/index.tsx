@@ -12,7 +12,6 @@ import {
   SendOutlined,
   CheckOutlined,
   CloseOutlined,
-  RocketOutlined,
   RedoOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -72,7 +71,6 @@ const PRIORITY_COLOR_MAP: Record<string, string> = {
  * @param onSubmitReview - 发起评审回调
  * @param onApprove - 通过评审回调
  * @param onReject - 驳回回调
- * @param onOnboard - 纳版回调
  * @param onResubmit - 重新提交回调
  */
 function getActionButtons(
@@ -84,7 +82,6 @@ function getActionButtons(
   onSubmitReview: (id: string) => void,
   onApprove: (id: string) => void,
   onReject: (id: string) => void,
-  onOnboard: (id: string) => void,
   onResubmit: (id: string) => void,
   onChangeSubStatus: (id: string) => void,
   onChangeRequirement: (id: string) => void,
@@ -125,13 +122,6 @@ function getActionButtons(
       }
       break;
     case ReqStatus.READY:
-      if (checkPermission(Operation.MANAGE_TRAIN)) {
-        buttons.push(
-          <Button key="onboard" type="link" size="small" icon={<RocketOutlined />} onClick={(e) => { e.stopPropagation(); onOnboard(record.id); }}>
-            纳版
-          </Button>,
-        );
-      }
       // 需求变更：BA(归属人)/TRAIN_ADMIN/SUPER_ADMIN
       if (isOwner || currentUser?.role === Role.TRAIN_ADMIN || currentUser?.role === Role.SUPER_ADMIN) {
         buttons.push(
@@ -430,8 +420,6 @@ const RequirementsPage: React.FC = () => {
     });
   };
 
-  const handleOnboard = (_id: string) => { /* TODO: T2 纳版 */ };
-
   const handleResubmit = async (id: string) => {
     try {
       await requirementService.reEdit(id);
@@ -602,7 +590,6 @@ const RequirementsPage: React.FC = () => {
           handleSubmitReview,
           handleApprove,
           handleReject,
-          handleOnboard,
           handleResubmit,
           handleOpenChangeSubStatus,
           handleOpenChangeRequirement,

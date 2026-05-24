@@ -38,12 +38,15 @@ export interface MyTodosResponse {
   pendingDev?: RequirementListItem[];
   pendingToSubmitTest?: RequirementListItem[];
   pendingTest?: RequirementListItem[];
+  pendingSitPass?: RequirementListItem[];
+  pendingDevComplete?: RequirementListItem[];
 }
 
 // ========== API-04: 班次进度项 ==========
 export interface ScheduleProgressItem {
   id: string;
   scheduleId: string;
+  trainId: string;
   scheduleName: string;
   trainName: string;
   version: string;
