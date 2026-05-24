@@ -7,7 +7,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card, Descriptions, Button, Spin, Result, Typography, Row, Col, message, Table, Badge, Modal, Form, Input, DatePicker, Checkbox, Space, Divider, List, Progress, Tag, Alert,
 } from 'antd';
-import { ArrowLeftOutlined, EditOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EditOutlined, RocketOutlined, WarningOutlined } from '@ant-design/icons';
 import {
   PrecheckOnboardResponse,
   RequirementListItem,
@@ -17,13 +17,18 @@ import {
   ReqStatus,
   TRAIN_SCHEDULE_STATUS_LABELS,
   TRAIN_SCHEDULE_STATUS_OPTIONS,
+  SmartOnboardSuggestResponse,
+  OnboardWarning,
+  OnboardSuggestion,
 } from '@release-train/shared';
 import ScheduleCalendar from '../../components/schedules/ScheduleCalendar';
+import SmartOnboardSuggestion from '../../components/smart-onboard/SmartOnboardSuggestion';
 import api from '../../services/api';
 import { trainService } from '../../services/train';
+import { smartOnboardService } from '../../services/smart-onboard';
 import dayjs from 'dayjs';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
 interface CustomKeyDate {
   id?: string;
@@ -652,6 +657,8 @@ const OnboardTab = ({ scheduleId, systems, scheduleStatus, onRefresh, navigate }
   const [dataLoading, setDataLoading] = useState(true);
   const [readyRequirements, setReadyRequirements] = useState<RequirementListItem[]>([]);
   const [onboardedRequirements, setOnboardedRequirements] = useState<RequirementListItem[]>([]);
+  const [smartSuggestionResult, setSmartSuggestionResult] = useState<SmartOnboardSuggestResponse | null>(null);
+  const [showSmartSuggestionModal, setShowSmartSuggestionModal] = useState(false);
 
   const isLockedDown = scheduleStatus === 'LOCKED_DOWN';
 
@@ -837,6 +844,55 @@ const OnboardTab = ({ scheduleId, systems, scheduleStatus, onRefresh, navigate }
     }
   };
 
+  // 生成智能纳版建议
+  const handleGenerateSmartSuggestion = async () => {
+    if (readyRequirements.length === 0) {
+      message.warning('没有就绪的需求可用于智能纳版');
+      return;
+    }
+
+    setSmartSuggestionResult(null);
+    setShowSmartSuggestionModal(true);
+    setLoading(true);
+    try {
+      const result = await smartOnboardService.generateSuggest({
+        scheduleId,
+        requirementIds: readyRequirements.map(r => r.id),
+      });
+
+      if (result.success) {
+        setSmartSuggestionResult(result.data);
+      } else {
+        message.error(result.message || '生成建议失败');
+        setShowSmartSuggestionModal(false);
+      }
+    } catch (err: any) {
+      message.error(err?.message || '生成建议失败');
+      setShowSmartSuggestionModal(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 确认智能纳版
+  const handleConfirmSmartOnboard = async () => {
+    if (!smartSuggestionResult) return;
+    try {
+      const requirementIds = smartSuggestionResult.suggestions.map((s) => s.id);
+      await smartOnboardService.confirmOnboard({
+        scheduleId,
+        requirementIds,
+      });
+      message.success('智能纳版成功');
+      setShowSmartSuggestionModal(false);
+      setSmartSuggestionResult(null);
+      loadData();
+      onRefresh?.();
+    } catch (err: any) {
+      message.error(err?.message || '纳版失败');
+    }
+  };
+
   return (
     <div>
       {/* 团队容量概览 */}
@@ -929,6 +985,10 @@ const OnboardTab = ({ scheduleId, systems, scheduleStatus, onRefresh, navigate }
         title={`待纳版需求（已就绪，共 ${readyRequirements.length} 条）`}
         extra={
           <Space>
+            <SmartOnboardSuggestion
+              onClick={handleGenerateSmartSuggestion}
+              loading={loading}
+            />
             <Button type="primary" onClick={handlePrecheck} loading={loading}>
               确认纳版（已选 {selectedRequirements.length}）
             </Button>
@@ -1038,6 +1098,206 @@ const OnboardTab = ({ scheduleId, systems, scheduleStatus, onRefresh, navigate }
                 ? `将纳版 ${precheckResult.summary.canOnboardCount} 条需求，请确认`
                 : '没有可纳版的需求'}
             </Typography.Text>
+          </div>
+        )}
+      </Modal>
+
+      {/* 智能纳版建议模态框 */}
+      <Modal
+        title={
+          <Space>
+            <RocketOutlined />
+            {smartSuggestionResult ? 'AI 智能纳版建议' : 'AI 正在分析...'}
+          </Space>
+        }
+        open={showSmartSuggestionModal}
+        onCancel={() => {
+          if (loading) return;
+          setShowSmartSuggestionModal(false);
+        }}
+        maskClosable={!loading}
+        closable={!loading}
+        width={900}
+        footer={
+          smartSuggestionResult ? (
+            <Space>
+              <Button onClick={() => setShowSmartSuggestionModal(false)}>
+                取消
+              </Button>
+              <Button
+                type="primary"
+                onClick={handleConfirmSmartOnboard}
+                loading={loading}
+              >
+                确认纳版
+              </Button>
+            </Space>
+          ) : null
+        }
+      >
+        {!smartSuggestionResult ? (
+          <div style={{ textAlign: 'center', padding: '60px 40px' }}>
+            <style>{`
+              @keyframes aiPulse {
+                0%, 100% { opacity: 0.4; transform: scale(1); }
+                50% { opacity: 1; transform: scale(1.1); }
+              }
+              @keyframes aiDot1 { 0%, 20% { opacity: 0.2; } 50% { opacity: 1; } 100% { opacity: 0.2; } }
+              @keyframes aiDot2 { 0%, 40% { opacity: 0.2; } 70% { opacity: 1; } 100% { opacity: 0.2; } }
+              @keyframes aiDot3 { 0%, 60% { opacity: 0.2; } 90% { opacity: 1; } 100% { opacity: 0.2; } }
+              @keyframes aiSlide {
+                0% { transform: translateY(12px); opacity: 0; }
+                100% { transform: translateY(0); opacity: 1; }
+              }
+              .ai-thinking-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #1677ff; margin: 0 4px; }
+              .ai-thinking-dot:nth-child(1) { animation: aiDot1 1.4s infinite; }
+              .ai-thinking-dot:nth-child(2) { animation: aiDot2 1.4s infinite; }
+              .ai-thinking-dot:nth-child(3) { animation: aiDot3 1.4s infinite; }
+            `}</style>
+            <div style={{ animation: 'aiPulse 2s ease-in-out infinite', fontSize: 64, marginBottom: 24 }}>
+              🚂
+            </div>
+            <Title level={4} style={{ marginBottom: 8 }}>
+              <span style={{ color: '#1677ff' }}>AI 智能纳版顾问</span> 正在分析...
+            </Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
+              正在评估容量、优先级和依赖关系
+              <span className="ai-thinking-dot" />
+              <span className="ai-thinking-dot" />
+              <span className="ai-thinking-dot" />
+            </Text>
+            <div style={{ maxWidth: 400, margin: '0 auto', background: '#f6f8fa', borderRadius: 12, padding: '16px 20px', textAlign: 'left' }}>
+              {[
+                { label: '容量检查', desc: '评估班次容量是否充足', delay: 0 },
+                { label: '优先级排序', desc: 'P0 → P1 → P2 → P3 智能排列', delay: 0.3 },
+                { label: '依赖分析', desc: '检测需求间依赖关系是否正确', delay: 0.6 },
+                { label: '生成建议', desc: '综合以上因素给出最优纳版方案', delay: 0.9 },
+              ].map((step, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '8px 0', animation: `aiSlide 0.5s ease-out ${step.delay}s both`, borderBottom: i < 3 ? '1px solid #e8e8e8' : 'none' }}>
+                  <Spin size="small" style={{ marginRight: 12 }} />
+                  <div>
+                    <Text strong style={{ fontSize: 13 }}>{step.label}</Text>
+                    <br />
+                    <Text type="secondary" style={{ fontSize: 12 }}>{step.desc}</Text>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div>
+            {/* 分析总结 */}
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Space wrap>
+                <div>
+                  <Text type="secondary">选择需求：</Text>
+                  <Text strong style={{ fontSize: 16 }}>
+                    {smartSuggestionResult.analysis.totalSelected} 条
+                  </Text>
+                </div>
+                <div>
+                  <Text type="secondary">总故事点：</Text>
+                  <Text strong style={{ fontSize: 16 }}>
+                    {smartSuggestionResult.analysis.totalStoryPoints} 点
+                  </Text>
+                </div>
+                <div>
+                  <Text type="secondary">剩余容量：</Text>
+                  <Text strong style={{ fontSize: 16 }}>
+                    {smartSuggestionResult.analysis.remainingCapacity} 点
+                  </Text>
+                </div>
+              </Space>
+
+              <div style={{ marginTop: 12 }}>
+                <Text type="secondary">{smartSuggestionResult.summary}</Text>
+              </div>
+            </Card>
+
+            {/* 警告信息 */}
+            {smartSuggestionResult.warnings && smartSuggestionResult.warnings.length > 0 && (
+              <Alert
+                type="warning"
+                showIcon
+                icon={<WarningOutlined />}
+                message="注意事项"
+                description={
+                  <div style={{ marginTop: 8 }}>
+                    {smartSuggestionResult.warnings.map((warning, index) => (
+                      <div key={index} style={{ marginBottom: 8 }}>
+                        <Tag color={warning.type === 'capacity_exceeded' ? 'orange' : 'red'}>
+                          {warning.type === 'capacity_exceeded' ? '容量超限' : warning.type}
+                        </Tag>
+                        {warning.reqCode && <Text strong> [{warning.reqCode}]</Text>}
+                        {warning.message}
+                      </div>
+                    ))}
+                  </div>
+                }
+                style={{ marginBottom: 16 }}
+              />
+            )}
+
+            {/* 纳版建议列表 */}
+            <Typography.Title level={5} style={{ marginTop: 16, marginBottom: 8 }}>
+              纳版建议顺序
+            </Typography.Title>
+            <Table
+              columns={[
+                {
+                  title: '顺序',
+                  dataIndex: 'order',
+                  key: 'order',
+                  width: 70,
+                  render: (order: number) => (
+                    <Tag color="blue">{order}</Tag>
+                  ),
+                },
+                {
+                  title: '需求编号',
+                  dataIndex: 'reqCode',
+                  key: 'reqCode',
+                },
+                {
+                  title: '需求标题',
+                  dataIndex: 'title',
+                  key: 'title',
+                },
+                {
+                  title: '优先级',
+                  dataIndex: 'priority',
+                  key: 'priority',
+                  width: 100,
+                },
+                {
+                  title: '故事点',
+                  dataIndex: 'storyPoints',
+                  key: 'storyPoints',
+                  width: 90,
+                },
+                {
+                  title: '系统',
+                  dataIndex: 'system',
+                  key: 'system',
+                  width: 120,
+                },
+                {
+                  title: '状态',
+                  dataIndex: 'status',
+                  key: 'status',
+                  width: 100,
+                },
+                {
+                  title: '建议理由',
+                  dataIndex: 'reason',
+                  key: 'reason',
+                },
+              ]}
+              dataSource={smartSuggestionResult.suggestions}
+              rowKey="id"
+              pagination={false}
+              size="small"
+            />
           </div>
         )}
       </Modal>
