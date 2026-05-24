@@ -1695,15 +1695,20 @@ export async function listRequirements(
     where.systemId = params.systemId;
   }
 
-  // 按状态筛选（US1.3 增强：支持单选和多选）
+  // 按状态筛选（US1.3 增强：支持单选、多选和逗号分隔）
   if (params.status) {
+    let statusValues: ReqStatus[];
     if (Array.isArray(params.status)) {
-      // 多选：使用 Prisma in 操作符
-      where.status = { in: params.status };
+      // 多选数组
+      statusValues = params.status;
+    } else if (typeof params.status === 'string' && params.status.includes(',')) {
+      // 逗号分隔的字符串
+      statusValues = params.status.split(',').filter(s => s.trim()) as ReqStatus[];
     } else {
-      // 单选：直接匹配
-      where.status = params.status;
+      // 单选
+      statusValues = [params.status as ReqStatus];
     }
+    where.status = { in: statusValues };
   }
 
   // 按关键词模糊搜索（编号或标题）
@@ -1976,22 +1981,34 @@ export async function getEmergencyChanges(params: {
 export async function getMyTodos(user: {
   id: string;
   role: Role;
-  systemIds: string[];
+  systemIds?: string[];
 }): Promise<MyTodosResponse> {
   const role = user.role;
+  // systemIds 如果未提供，默认为空数组（用于 PROJECT_MGR 等无系统限制的角色）
+  const systemIds = user.systemIds || [];
 
   switch (role) {
     case Role.BA: {
       const pendingReviewRejected = await prisma.requirement.findMany({
-        where: { status: ReqStatus.REJECTED, systemId: { in: user.systemIds } },
-        include: { system: { select: { id: true, name: true } } },
+        where: { status: ReqStatus.REJECTED, systemId: { in: systemIds } },
+        include: { 
+          system: { select: { id: true, name: true } },
+          ba: { select: { id: true, displayName: true } },
+          creator: { select: { id: true, displayName: true } },
+        },
         orderBy: { updatedAt: 'desc' },
         take: 50,
       }).then(reqs => reqs.map(item => ({
-        ...item,
+        id: item.id,
+        reqCode: item.reqCode,
+        title: item.title,
         status: item.status as unknown as RequirementListItem['status'],
         subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
         priority: item.priority as unknown as RequirementListItem['priority'],
+        storyPoints: item.storyPoints,
+        system: item.system,
+        ba: item.ba,
+        creator: item.creator,
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
       })));
@@ -1999,21 +2016,31 @@ export async function getMyTodos(user: {
       const changedDraftIds = await prisma.statusLog.findMany({
         where: {
           operationType: OperationType.CHANGE_REQUIREMENT,
-          requirement: { status: ReqStatus.DRAFT, systemId: { in: user.systemIds } },
+          requirement: { status: ReqStatus.DRAFT, systemId: { in: systemIds } },
         },
         select: { requirementId: true },
         distinct: ['requirementId'],
       });
       const changeApprovedNeedsResubmit = await prisma.requirement.findMany({
         where: { id: { in: changedDraftIds.map(l => l.requirementId) } },
-        include: { system: { select: { id: true, name: true } } },
+        include: { 
+          system: { select: { id: true, name: true } },
+          ba: { select: { id: true, displayName: true } },
+          creator: { select: { id: true, displayName: true } },
+        },
         orderBy: { updatedAt: 'desc' },
         take: 50,
       }).then(reqs => reqs.map(item => ({
-        ...item,
+        id: item.id,
+        reqCode: item.reqCode,
+        title: item.title,
         status: item.status as unknown as RequirementListItem['status'],
         subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
         priority: item.priority as unknown as RequirementListItem['priority'],
+        storyPoints: item.storyPoints,
+        system: item.system,
+        ba: item.ba,
+        creator: item.creator,
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
       })));
@@ -2023,14 +2050,24 @@ export async function getMyTodos(user: {
     case Role.PM: {
       const pendingReviewList = await prisma.requirement.findMany({
         where: { status: ReqStatus.PENDING_REVIEW },
-        include: { system: { select: { id: true, name: true } } },
+        include: { 
+          system: { select: { id: true, name: true } },
+          ba: { select: { id: true, displayName: true } },
+          creator: { select: { id: true, displayName: true } },
+        },
         orderBy: { createdAt: 'desc' },
         take: 50,
       }).then(reqs => reqs.map(item => ({
-        ...item,
+        id: item.id,
+        reqCode: item.reqCode,
+        title: item.title,
         status: item.status as unknown as RequirementListItem['status'],
         subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
         priority: item.priority as unknown as RequirementListItem['priority'],
+        storyPoints: item.storyPoints,
+        system: item.system,
+        ba: item.ba,
+        creator: item.creator,
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
       })));
@@ -2040,14 +2077,24 @@ export async function getMyTodos(user: {
     case Role.PROJECT_MGR: {
       const pendingReviewList = await prisma.requirement.findMany({
         where: { status: ReqStatus.PENDING_REVIEW },
-        include: { system: { select: { id: true, name: true } } },
+        include: { 
+          system: { select: { id: true, name: true } },
+          ba: { select: { id: true, displayName: true } },
+          creator: { select: { id: true, displayName: true } },
+        },
         orderBy: { createdAt: 'desc' },
         take: 50,
       }).then(reqs => reqs.map(item => ({
-        ...item,
+        id: item.id,
+        reqCode: item.reqCode,
+        title: item.title,
         status: item.status as unknown as RequirementListItem['status'],
         subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
         priority: item.priority as unknown as RequirementListItem['priority'],
+        storyPoints: item.storyPoints,
+        system: item.system,
+        ba: item.ba,
+        creator: item.creator,
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
       })));
@@ -2078,14 +2125,24 @@ export async function getMyTodos(user: {
     case Role.TRAIN_ADMIN: {
       const pendingOnboard = await prisma.requirement.findMany({
         where: { status: ReqStatus.READY },
-        include: { system: { select: { id: true, name: true } } },
+        include: { 
+          system: { select: { id: true, name: true } },
+          ba: { select: { id: true, displayName: true } },
+          creator: { select: { id: true, displayName: true } },
+        },
         orderBy: { createdAt: 'desc' },
         take: 50,
       }).then(reqs => reqs.map(item => ({
-        ...item,
+        id: item.id,
+        reqCode: item.reqCode,
+        title: item.title,
         status: item.status as unknown as RequirementListItem['status'],
         subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
         priority: item.priority as unknown as RequirementListItem['priority'],
+        storyPoints: item.storyPoints,
+        system: item.system,
+        ba: item.ba,
+        creator: item.creator,
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
       })));
@@ -2095,14 +2152,24 @@ export async function getMyTodos(user: {
           status: ReqStatus.ONBOARDED,
           subStatus: { in: [ReqSubStatus.SIT_TESTING, ReqSubStatus.UAT_TESTING] },
         },
-        include: { system: { select: { id: true, name: true } } },
+        include: { 
+          system: { select: { id: true, name: true } },
+          ba: { select: { id: true, displayName: true } },
+          creator: { select: { id: true, displayName: true } },
+        },
         orderBy: { createdAt: 'desc' },
         take: 50,
       }).then(reqs => reqs.map(item => ({
-        ...item,
+        id: item.id,
+        reqCode: item.reqCode,
+        title: item.title,
         status: item.status as unknown as RequirementListItem['status'],
         subStatus: (item.subStatus ?? null) as RequirementListItem['subStatus'],
         priority: item.priority as unknown as RequirementListItem['priority'],
+        storyPoints: item.storyPoints,
+        system: item.system,
+        ba: item.ba,
+        creator: item.creator,
         createdAt: item.createdAt.toISOString(),
         updatedAt: item.updatedAt.toISOString(),
       })));

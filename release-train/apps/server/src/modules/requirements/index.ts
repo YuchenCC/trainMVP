@@ -14,6 +14,7 @@ import {
   RequirementListQuery,              // 需求列表查询参数类型
   JwtPayload,                        // JWT Token 载荷类型（sub/username/role）
   ReqSubStatus,                      // 需求子状态枚举（用于子状态变更）
+  ApprovalStatus,                    // 审批状态枚举（待审批/已通过/已驳回）
 } from '@release-train/shared';
 import {
   createRequirement,                // 创建需求 service
@@ -67,6 +68,25 @@ export async function requirementRoutes(fastify: FastifyInstance): Promise<void>
     '/api/requirements',                                 // GET /api/requirements?page=1&pageSize=20&status=DRAFT&keyword=
     {
       onRequest: [fastify.authenticate],                  // 需要登录
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: {
+            page: { type: 'integer', minimum: 1 },
+            pageSize: { type: 'integer', minimum: 1, maximum: 100 },
+            systemId: { type: 'string' },
+            status: { 
+              anyOf: [
+                { type: 'string' },
+                { type: 'array', items: { type: 'string' } }
+              ]
+            },
+            keyword: { type: 'string' },
+            sortBy: { type: 'string', enum: ['createdAt', 'priority', 'storyPoints', 'status'] },
+            sortOrder: { type: 'string', enum: ['asc', 'desc'] },
+          },
+        },
+      },
     },
     async (request, reply) => {
       const result = await listRequirements(request.query); // 调用 service 分页查询
@@ -106,7 +126,7 @@ export async function requirementRoutes(fastify: FastifyInstance): Promise<void>
 
   // ======================== 紧急变更列表 ========================
   fastify.get<{
-    Querystring: { status?: string; approverId?: string };
+    Querystring: { status?: ApprovalStatus; approverId?: string };
     Reply: ApiResponse<any>;
   }>(
     '/api/emergency-changes',                            // GET /api/emergency-changes

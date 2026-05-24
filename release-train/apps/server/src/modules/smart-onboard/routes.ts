@@ -3,6 +3,7 @@ import { FastifyInstance } from 'fastify';
 import {
   SmartOnboardSuggestRequest,
   ConfirmOnboardRequest,
+  JwtPayload,
 } from '@release-train/shared';
 import { generateOnboardSuggestions, confirmOnboard } from './service';
 
@@ -63,7 +64,7 @@ export async function smartOnboardRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const data = request.body as ConfirmOnboardRequest;
-      const userId = request.user.id;
+      const userId = (request.user as JwtPayload).sub;
       const result = await confirmOnboard(data, userId);
       reply.send({ success: true, data: result });
     },

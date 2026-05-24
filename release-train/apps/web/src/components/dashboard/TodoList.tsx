@@ -134,15 +134,15 @@ const TodoList: React.FC<TodoListProps> = ({ todos }) => {
 
   return (
     <div>
-      {renderSection('被驳回的需求（请重新编辑）', todos.pendingReviewRejected, renderRequirementItem)}
-      {renderSection('变更通过的需求（请重新提交评审）', todos.changeApprovedNeedsResubmit, renderRequirementItem)}
-      {renderSection('待评审需求', todos.pendingReviewList, renderRequirementItem)}
-      {renderSection('紧急变更待审批', todos.emergencyPendingApproval, renderEmergencyItem)}
-      {renderSection('待纳版需求', todos.pendingOnboard, renderRequirementItem)}
-      {renderSection('待投产需求', todos.pendingRelease, renderRequirementItem)}
-      {renderSection('待开发需求', todos.pendingDev, renderRequirementItem)}
-      {renderSection('待提交测试', todos.pendingToSubmitTest, renderRequirementItem)}
-      {renderSection('待测试需求', todos.pendingTest, renderRequirementItem)}
+      {renderSection('被驳回的需求（请重新编辑）', todos.pendingReviewRejected || [], renderRequirementItem)}
+      {renderSection('变更通过的需求（请重新提交评审）', todos.changeApprovedNeedsResubmit || [], renderRequirementItem)}
+      {renderSection('待评审需求', todos.pendingReviewList || [], renderRequirementItem)}
+      {renderSection('紧急变更待审批', todos.emergencyPendingApproval || [], renderEmergencyItem)}
+      {renderSection('待纳版需求', todos.pendingOnboard || [], renderRequirementItem)}
+      {renderSection('待投产需求', todos.pendingRelease || [], renderRequirementItem)}
+      {renderSection('待开发需求', todos.pendingDev || [], renderRequirementItem)}
+      {renderSection('待提交测试', todos.pendingToSubmitTest || [], renderRequirementItem)}
+      {renderSection('待测试需求', todos.pendingTest || [], renderRequirementItem)}
 
       {/* 驳回确认弹窗 */}
       <Modal

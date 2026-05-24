@@ -2059,6 +2059,8 @@ export async function getScheduleProgress(params: {
       startDate: schedule.startDate ? schedule.startDate.toISOString() : new Date().toISOString(),
       endDate: schedule.endDate ? schedule.endDate.toISOString() : null,
       boardingDate: schedule.boardingDate ? schedule.boardingDate.toISOString() : null,
+      sitDate: schedule.sitDate ? schedule.sitDate.toISOString() : null,
+      uatDate: schedule.uatDate ? schedule.uatDate.toISOString() : null,
       uatEndDate: null,
       lockdownDate: schedule.lockdownDate ? schedule.lockdownDate.toISOString() : null,
       releaseDate: schedule.releaseDate ? schedule.releaseDate.toISOString() : null,

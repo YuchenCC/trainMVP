@@ -59,6 +59,8 @@ export interface ScheduleProgressItem {
   startDate: string;
   endDate: string | null;
   boardingDate: string | null;
+  sitDate: string | null;
+  uatDate: string | null;
   uatEndDate: string | null;
   lockdownDate: string | null;
   releaseDate: string | null;

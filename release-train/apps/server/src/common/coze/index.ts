@@ -68,44 +68,49 @@ export class CozeClient {
           console.log(`🔄 收到事件: ${part.event}`);
           
           // 对于 Message 事件，显示节点标题
-          if (part.event === 'Message' && part.data) {
-            const nodeTitle = part.data?.node_title || part.data?.nodeId || 'Unknown';
+          if (part.event === 'Message' && part.data && typeof part.data === 'object') {
+            const msgData = part.data as any;
+            const nodeTitle = msgData?.node_title || msgData?.nodeId || 'Unknown';
             console.log(`   📥 节点: ${nodeTitle}`);
           }
         }
         
         // 关键：提取 Message 事件中的 content 字段
-        if (part.event === 'Message' && part.data?.content) {
-          const content = part.data.content;
-          console.log('📝 收到消息内容');
-          
-          // content 是一个 JSON 字符串，需要解析
-          if (typeof content === 'string') {
-            try {
-              const parsed = JSON.parse(content);
-              console.log('✅ 成功解析 content JSON');
-              
-              // 从 parsed 中提取 output 字段
-              if (parsed?.output) {
-                result = parsed.output;
-                console.log('✅ 提取到 output 数据');
-              } else {
-                // 如果没有嵌套的 output，直接使用 parsed
-                result = parsed;
-                console.log('✅ 使用 parsed 作为结果');
+        if (part.event === 'Message' && part.data && typeof part.data === 'object') {
+          const msgData = part.data as any;
+          const content = msgData?.content;
+          if (content) {
+            console.log('📝 收到消息内容');
+            
+            // content 是一个 JSON 字符串，需要解析
+            if (typeof content === 'string') {
+              try {
+                const parsed = JSON.parse(content);
+                console.log('✅ 成功解析 content JSON');
+                
+                // 从 parsed 中提取 output 字段
+                if (parsed?.output) {
+                  result = parsed.output;
+                  console.log('✅ 提取到 output 数据');
+                } else {
+                  // 如果没有嵌套的 output，直接使用 parsed
+                  result = parsed;
+                  console.log('✅ 使用 parsed 作为结果');
+                }
+              } catch (e) {
+                console.log('⚠️ content 不是有效 JSON，保留原样');
+                result = content;
               }
-            } catch (e) {
-              console.log('⚠️ content 不是有效 JSON，保留原样');
-              result = content;
             }
           }
         }
         
         // Done 事件表示工作流结束
-        if (part.event === 'Done') {
+        if (part.event === 'Done' && part.data && typeof part.data === 'object') {
+          const doneData = part.data as any;
           console.log('✅ 工作流执行完成');
-          if (part.data?.debug_url) {
-            console.log('🔗 调试链接:', part.data.debug_url);
+          if (doneData?.debug_url) {
+            console.log('🔗 调试链接:', doneData.debug_url);
           }
           break;
         }
