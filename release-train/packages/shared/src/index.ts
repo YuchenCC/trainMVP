@@ -12,3 +12,4 @@ export * from './types/requirement';
 export * from './types/train';
 export * from './types/system';
 export * from './types/dashboard';
+export * from './types/smart-onboard';

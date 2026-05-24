@@ -23,10 +23,12 @@ dotenv.config({ path: path.join(monorepoRoot, '.env') });
 import { authMiddleware, rbacMiddleware } from './common/middleware/index.js';
 import { handleError } from './common/errors/index.js';
 import { correlationMiddleware, initializeMetrics, setGlobalLogger, Logger } from './common/logger/index.js';
+import { initCozeClient } from './common/coze/index.js';
 import { loginRoute, meRoute, seedRoute } from './modules/auth/index.js';
 import { requirementRoutes } from './modules/requirements/index.js';
 import { systemRoutes } from './modules/systems/index.js';
 import { trainRoutes } from './modules/trains/index.js';
+import { smartOnboardRoutes } from './modules/smart-onboard/index.js';
 // import { userRoutes } from './modules/users/index.js';
 import { Operation } from '@release-train/shared';
 
@@ -37,6 +39,17 @@ dotenv.config();
 export async function createApp() {
   const LOG_DIR = process.env.LOG_DIR || './logs';
   const isTest = process.env.NODE_ENV === 'test';
+
+  // ========== 初始化 Coze 客户端 ==========
+  const cozeApiKey = process.env.COZE_API_KEY;
+  const cozeWorkflowId = process.env.COZE_WORKFLOW_ID;
+
+  if (cozeApiKey && cozeWorkflowId) {
+    initCozeClient({
+      apiKey: cozeApiKey,
+      workflowId: cozeWorkflowId,
+    });
+  }
   
   const app = Fastify({
     logger: {
@@ -210,6 +223,7 @@ export async function createApp() {
   await app.register(systemRoutes);
   await app.register(requirementRoutes);
   await app.register(trainRoutes);
+  await app.register(smartOnboardRoutes);
   // await app.register(userRoutes);
 
   // ========== 健康检查 ==========
