@@ -52,13 +52,19 @@ function detectCycleDependencies(requirements: RequirementForAI[]): OnboardWarni
 }
 
 /**
- * 从数据库获取班次容量信息
+ * 从数据库获取班次容量信息（含各系统详情）
  */
 async function getScheduleCapacity(scheduleId: string) {
   const schedule = await prisma.trainSchedule.findUnique({
     where: { id: scheduleId },
     include: {
-      snapshots: { select: { capacityPoints: true, usedPoints: true } },
+      snapshots: { 
+        select: { 
+          capacityPoints: true, 
+          usedPoints: true,
+          system: { select: { id: true, name: true } },
+        } 
+      },
     },
   });
 
@@ -76,11 +82,21 @@ async function getScheduleCapacity(scheduleId: string) {
   );
   const remainingCapacity = totalCapacity - usedCapacity;
 
+  // 构建各系统容量详情
+  const systems = schedule.snapshots.map((snap) => ({
+    systemId: snap.system.id,
+    systemName: snap.system.name,
+    capacityPoints: snap.capacityPoints,
+    usedPoints: snap.usedPoints,
+    remainingPoints: snap.capacityPoints - snap.usedPoints,
+  }));
+
   return {
     name: schedule.name,
     totalCapacity,
     usedCapacity,
     remainingCapacity,
+    systems,
   };
 }
 
@@ -139,18 +155,20 @@ async function getRequirementsForAI(
  */
 function buildCozeInput(
   scheduleName: string,
-  totalCapacity: number,
-  usedCapacity: number,
-  remainingCapacity: number,
+  systems: Array<{
+    systemId: string;
+    systemName: string;
+    capacityPoints: number;
+    usedPoints: number;
+    remainingPoints: number;
+  }>,
   requirements: RequirementForAI[],
 ) {
   // Coze 工作流参数名直接是 trainSchedule 和 selectedRequirements
   return {
     trainSchedule: {
       name: scheduleName,
-      totalCapacity,
-      usedCapacity,
-      remainingCapacity,
+      systems,
     },
     selectedRequirements: requirements,
   };
@@ -180,14 +198,20 @@ export async function generateOnboardSuggestions(
   // 构建工作流输入数据
   const cozeInput = buildCozeInput(
     schedule.name,
-    schedule.totalCapacity,
-    schedule.usedCapacity,
-    schedule.remainingCapacity,
+    schedule.systems,
     requirements,
   );
 
+  // 打印发送给 Coze 的数据（调试用）
+  console.log('📤 发送给 Coze 的数据:', JSON.stringify(cozeInput, null, 2));
+
   // 调用 Coze 工作流
   const result = await coze.runWorkflowAndParse<SmartOnboardSuggestResponse>(cozeInput);
+
+  // Coze 返回 null 时返回错误
+  if (!result) {
+    throw new Error('Coze 工作流执行失败，未返回有效结果');
+  }
 
   // 合并 AI 和 后端 的警告
   const mergedWarnings = [
@@ -197,10 +221,10 @@ export async function generateOnboardSuggestions(
 
   // 构建响应：canAccommodate 使用后端精确计算值，不信任 AI 的判断
   return {
-    success: result.success,
+    success: result.success ?? true,
     analysis: {
-      totalSelected: result.analysis?.totalSelected || requirements.length,
-      totalStoryPoints: result.analysis?.totalStoryPoints || totalStoryPoints,
+      totalSelected: result.analysis?.totalSelected ?? requirements.length,
+      totalStoryPoints: result.analysis?.totalStoryPoints ?? totalStoryPoints,
       remainingCapacity: schedule.remainingCapacity,
       canAccommodate: realCanAccommodate,
       exceededBy: realCanAccommodate ? 0 : (totalStoryPoints - schedule.remainingCapacity),
@@ -285,16 +309,18 @@ export async function confirmOnboard(
         },
       });
 
-      // 记录操作日志
-      await tx.statusLog.create({
-        data: {
-          requirementId: reqId,
-          operationType: 'ONBOARD',
-          fromStatus: req.status,
-          toStatus: 'ONBOARDED',
-          operatorId: userId,
-        },
-      });
+      // 记录操作日志（仅在 userId 有效时记录）
+      if (userId) {
+        await tx.statusLog.create({
+          data: {
+            requirement: { connect: { id: reqId } },
+            operationType: 'ONBOARD',
+            fromStatus: req.status,
+            toStatus: 'ONBOARDED',
+            operator: { connect: { id: userId } },
+          },
+        });
+      }
 
       onboardedCount++;
     }

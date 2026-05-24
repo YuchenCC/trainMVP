@@ -8,9 +8,9 @@ import type {
 } from '@release-train/shared';
 
 export const smartOnboardService = {
-  // 生成智能纳版建议（Coze 工作流耗时较长，超时设为60秒）
+  // 生成智能纳版建议（Coze 工作流耗时较长，日志显示实际耗时约76秒，超时设为180秒）
   generateSuggest: async (data: SmartOnboardSuggestRequest) => {
-    const res = await api.post('/smart-onboard/suggest', data, { timeout: 60000 });
+    const res = await api.post('/smart-onboard/suggest', data, { timeout: 180000 });
     return res.data as { success: boolean; data: SmartOnboardSuggestResponse; message?: string };
   },
 

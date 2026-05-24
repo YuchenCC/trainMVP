@@ -874,18 +874,33 @@ const OnboardTab = ({ scheduleId, systems, scheduleStatus, onRefresh, navigate }
     }
   };
 
+  // 智能纳版选中的需求ID
+  const [selectedSuggestionIds, setSelectedSuggestionIds] = useState<string[]>([]);
+
+  // 智能纳版结果变化时，自动勾选推荐的需求
+  useEffect(() => {
+    if (smartSuggestionResult) {
+      const recommendedIds = smartSuggestionResult.suggestions
+        .filter((s) => s.suggestion === 'recommended')
+        .map((s) => s.id);
+      setSelectedSuggestionIds(recommendedIds);
+    } else {
+      setSelectedSuggestionIds([]);
+    }
+  }, [smartSuggestionResult]);
+
   // 确认智能纳版
   const handleConfirmSmartOnboard = async () => {
-    if (!smartSuggestionResult) return;
+    if (!smartSuggestionResult || selectedSuggestionIds.length === 0) return;
     try {
-      const requirementIds = smartSuggestionResult.suggestions.map((s) => s.id);
       await smartOnboardService.confirmOnboard({
         scheduleId,
-        requirementIds,
+        requirementIds: selectedSuggestionIds,
       });
       message.success('智能纳版成功');
       setShowSmartSuggestionModal(false);
       setSmartSuggestionResult(null);
+      setSelectedSuggestionIds([]);
       loadData();
       onRefresh?.();
     } catch (err: any) {
@@ -1128,8 +1143,9 @@ const OnboardTab = ({ scheduleId, systems, scheduleStatus, onRefresh, navigate }
                 type="primary"
                 onClick={handleConfirmSmartOnboard}
                 loading={loading}
+                disabled={selectedSuggestionIds.length === 0}
               >
-                确认纳版
+                确认纳版（已选 {selectedSuggestionIds.length}）
               </Button>
             </Space>
           ) : null
@@ -1245,12 +1261,40 @@ const OnboardTab = ({ scheduleId, systems, scheduleStatus, onRefresh, navigate }
             <Table
               columns={[
                 {
+                  title: '选择',
+                  key: 'selection',
+                  width: 60,
+                  render: (_: any, record: any) => (
+                    <Checkbox
+                      checked={selectedSuggestionIds.includes(record.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedSuggestionIds([...selectedSuggestionIds, record.id]);
+                        } else {
+                          setSelectedSuggestionIds(selectedSuggestionIds.filter((id) => id !== record.id));
+                        }
+                      }}
+                    />
+                  ),
+                },
+                {
                   title: '顺序',
                   dataIndex: 'order',
                   key: 'order',
                   width: 70,
                   render: (order: number) => (
                     <Tag color="blue">{order}</Tag>
+                  ),
+                },
+                {
+                  title: '建议',
+                  dataIndex: 'suggestion',
+                  key: 'suggestion',
+                  width: 100,
+                  render: (suggestion: string) => (
+                    <Tag color={suggestion === 'recommended' ? 'green' : 'red'}>
+                      {suggestion === 'recommended' ? '推荐纳版' : '不建议纳版'}
+                    </Tag>
                   ),
                 },
                 {

@@ -490,8 +490,8 @@ const SchedulesPage: React.FC = () => {
           <Button icon={<SyncOutlined spin={loading} />} onClick={handleRefresh}>
             刷新
           </Button>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/trains')}>
-            返回火车列表
+          <Button onClick={() => navigate('/trains')}>
+            火车列表
           </Button>
         </Space>
       </div>
