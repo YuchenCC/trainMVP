@@ -73,8 +73,8 @@ export async function requirementRoutes(fastify: FastifyInstance): Promise<void>
         querystring: {
           type: 'object',
           properties: {
-            page: { type: 'integer', minimum: 1 },
-            pageSize: { type: 'integer', minimum: 1, maximum: 100 },
+            page: { type: 'integer', minimum: 0 },
+pageSize: { type: 'integer', minimum: 0, maximum: 100 },
             systemId: { type: 'string' },
             status: { 
               anyOf: [
