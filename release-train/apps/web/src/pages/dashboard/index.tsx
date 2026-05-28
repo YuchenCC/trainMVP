@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import { 
-  Layout, 
   Card, 
   Row, 
   Col, 
-  Statistic, 
   Tag, 
   Button, 
   Space, 
@@ -23,41 +21,9 @@ import { useAuthStore } from '../../stores/auth';
 import { useDashboardData } from '../../hooks/useDashboardData';
 import { Role, ReqStatus } from '@release-train/shared';
 import SystemSelector from '../../components/dashboard/SystemSelector';
+import { AppPageHeader, DataCard, MetricCard, StatusTag } from '../../components/common';
 
-const { Header, Content } = Layout;
-const { Title, Text, Paragraph } = Typography;
-
-// 状态颜色映射
-const statusColors: Record<string, string> = {
-  [ReqStatus.DRAFT]: '#d9d9d9',
-  [ReqStatus.PENDING_REVIEW]: '#1890ff',
-  [ReqStatus.READY]: '#52c41a',
-  [ReqStatus.ONBOARDED]: '#722ed1',
-  [ReqStatus.RELEASED]: '#13c2c2',
-  [ReqStatus.REJECTED]: '#f5222d',
-  PENDING: '#faad14',
-  APPROVED: '#52c41a',
-};
-
-// 状态标签映射
-const statusLabels: Record<string, string> = {
-  [ReqStatus.DRAFT]: '草稿',
-  [ReqStatus.PENDING_REVIEW]: '待评审',
-  [ReqStatus.READY]: '已就绪',
-  [ReqStatus.ONBOARDED]: '已纳版',
-  [ReqStatus.RELEASED]: '已投产',
-  [ReqStatus.REJECTED]: '已拒绝',
-  PENDING: '待审批',
-  APPROVED: '已通过',
-};
-
-// 优先级颜色映射
-const priorityColors: Record<string, string> = {
-  P0: '#f5222d',
-  P1: '#fa8c16',
-  P2: '#faad14',
-  P3: '#a0d911',
-};
+const { Text } = Typography;
 
 interface TodoSection {
   key: string;
@@ -346,47 +312,32 @@ const DashboardPage: React.FC = () => {
   };
 
   return (
-    <Layout className="dashboard-layout" style={{ minHeight: '100vh' }}>
-      {/* 顶部标题栏 */}
-      <Header style={{ 
-        background: '#fff', 
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
-        padding: '0 24px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <div>
-          <Title level={5} style={{ margin: 0, color: '#1f1f1f' }}>
-            🚄 版本火车仪表盘
-          </Title>
-          <Paragraph style={{ margin: 0, fontSize: '12px', color: '#8c8c8c' }}>
-            {user?.username} | {role}
-          </Paragraph>
-        </div>
-        <Space>
-          <SystemSelector value={selectedSystemId} onChange={setSelectedSystemId} />
-          <Button onClick={refresh} loading={loading}>
-            刷新数据
-          </Button>
-        </Space>
-      </Header>
-
-      {/* 主内容区 */}
-      <Content style={{ padding: '24px', backgroundColor: '#f5f5f5' }}>
+    <div className="rt-page">
+      <AppPageHeader
+        title="工作台"
+        description="聚合当前角色的需求状态、关键节点和待处理事项。"
+        meta={<Text type="secondary" style={{ fontSize: 12 }}>{user?.username} | {role}</Text>}
+        actions={
+          <>
+            <SystemSelector value={selectedSystemId} onChange={setSelectedSystemId} />
+            <Button onClick={refresh} loading={loading}>
+              刷新数据
+            </Button>
+          </>
+        }
+      />
         {loading ? (
           <Card loading style={{ width: '100%' }} />
         ) : (
           <div className="dashboard-content">
             {/* 第一部分：统计卡片 */}
-            <Card 
+            <DataCard
               title={
                 <Space>
                   <span>需求统计概览</span>
-                  <Tag color="blue">实时数据</Tag>
+                  <StatusTag type="custom" value="实时数据" label="实时数据" />
                 </Space>
               }
-              style={{ marginBottom: '24px', borderRadius: '12px' }}
               styles={{ body: { padding: '16px' } }}
             >
               <Row gutter={[16, 12]}>
@@ -394,161 +345,76 @@ const DashboardPage: React.FC = () => {
                   <>
                     {/* 草稿 */}
                     <Col xs={12} sm={8} md={6} lg={4}>
-                      <div 
-                        className="stat-card"
+                      <MetricCard
+                        label="草稿 · 待完善"
+                        value={stats.byStatus[ReqStatus.DRAFT] || 0}
+                        color="#2563eb"
                         onClick={() => navigate(`/requirements?status=${ReqStatus.DRAFT}${selectedSystemId ? `&systemId=${selectedSystemId}` : ''}`)}
-                        style={{ 
-                          backgroundColor: '#e6f7ff', 
-                          borderLeft: `3px solid #1890ff`,
-                          padding: '12px',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          transition: 'all 0.3s ease',
-                        }}
-                      >
-                        <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '4px' }}>
-                          草稿 · 待完善
-                        </div>
-                        <Statistic 
-                          value={stats.byStatus[ReqStatus.DRAFT] || 0} 
-                          valueStyle={{ color: '#1890ff', fontSize: '22px', fontWeight: 600 }}
-                        />
-                      </div>
+                      />
                     </Col>
 
                     {/* 待评审 */}
                     <Col xs={12} sm={8} md={6} lg={4}>
-                      <div 
-                        className="stat-card"
+                      <MetricCard
+                        label="待评审 · 待确认"
+                        value={stats.byStatus[ReqStatus.PENDING_REVIEW] || 0}
+                        color="#f59e0b"
                         onClick={() => navigate(`/requirements?status=${ReqStatus.PENDING_REVIEW}${selectedSystemId ? `&systemId=${selectedSystemId}` : ''}`)}
-                        style={{ 
-                          backgroundColor: '#fff7e6', 
-                          borderLeft: `3px solid #faad14`,
-                          padding: '12px',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          transition: 'all 0.3s ease'
-                        }}
-                      >
-                        <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '4px' }}>
-                          待评审 · 待确认
-                        </div>
-                        <Statistic 
-                          value={stats.byStatus[ReqStatus.PENDING_REVIEW] || 0} 
-                          valueStyle={{ color: '#faad14', fontSize: '22px', fontWeight: 600 }}
-                        />
-                      </div>
+                      />
                     </Col>
 
                     {/* 已就绪 */}
                     <Col xs={12} sm={8} md={6} lg={4}>
-                      <div 
-                        className="stat-card"
+                      <MetricCard
+                        label="已就绪 · 待纳版"
+                        value={stats.byStatus[ReqStatus.READY] || 0}
+                        color="#16a34a"
                         onClick={() => navigate(`/requirements?status=${ReqStatus.READY}${selectedSystemId ? `&systemId=${selectedSystemId}` : ''}`)}
-                        style={{ 
-                          backgroundColor: '#f6ffed', 
-                          borderLeft: `3px solid #52c41a`,
-                          padding: '12px',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          transition: 'all 0.3s ease'
-                        }}
-                      >
-                        <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '4px' }}>
-                          已就绪 · 待纳版
-                        </div>
-                        <Statistic 
-                          value={stats.byStatus[ReqStatus.READY] || 0} 
-                          valueStyle={{ color: '#52c41a', fontSize: '22px', fontWeight: 600 }}
-                        />
-                      </div>
+                      />
                     </Col>
 
                     {/* 已纳版 */}
                     <Col xs={12} sm={8} md={6} lg={4}>
-                      <div 
-                        className="stat-card"
+                      <MetricCard
+                        label="已纳版 · 开发中"
+                        value={stats.byStatus[ReqStatus.ONBOARDED] || 0}
+                        color="#7c3aed"
                         onClick={() => navigate(`/requirements?status=${ReqStatus.ONBOARDED}${selectedSystemId ? `&systemId=${selectedSystemId}` : ''}`)}
-                        style={{ 
-                          backgroundColor: '#f9f0ff', 
-                          borderLeft: `3px solid #722ed1`,
-                          padding: '12px',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          transition: 'all 0.3s ease'
-                        }}
-                      >
-                        <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '4px' }}>
-                          已纳版 · 开发中
-                        </div>
-                        <Statistic 
-                          value={stats.byStatus[ReqStatus.ONBOARDED] || 0} 
-                          valueStyle={{ color: '#722ed1', fontSize: '22px', fontWeight: 600 }}
-                        />
-                      </div>
+                      />
                     </Col>
 
                     {/* 已投产 */}
                     <Col xs={12} sm={8} md={6} lg={4}>
-                      <div 
-                        className="stat-card"
+                      <MetricCard
+                        label="已投产 · 已上线"
+                        value={stats.byStatus[ReqStatus.RELEASED] || 0}
+                        color="#16a34a"
                         onClick={() => navigate(`/requirements?status=${ReqStatus.RELEASED}${selectedSystemId ? `&systemId=${selectedSystemId}` : ''}`)}
-                        style={{ 
-                          backgroundColor: '#e6fffb', 
-                          borderLeft: `3px solid #13c2c2`,
-                          padding: '12px',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          transition: 'all 0.3s ease'
-                        }}
-                      >
-                        <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '4px' }}>
-                          已投产 · 已上线
-                        </div>
-                        <Statistic 
-                          value={stats.byStatus[ReqStatus.RELEASED] || 0} 
-                          valueStyle={{ color: '#13c2c2', fontSize: '22px', fontWeight: 600 }}
-                        />
-                      </div>
+                      />
                     </Col>
 
                     {/* 已拒绝 */}
                     <Col xs={12} sm={8} md={6} lg={4}>
-                      <div 
-                        className="stat-card"
+                      <MetricCard
+                        label="已拒绝 · 需修改"
+                        value={stats.byStatus[ReqStatus.REJECTED] || 0}
+                        color="#dc2626"
                         onClick={() => navigate(`/requirements?status=${ReqStatus.REJECTED}${selectedSystemId ? `&systemId=${selectedSystemId}` : ''}`)}
-                        style={{ 
-                          backgroundColor: '#fff2f0', 
-                          borderLeft: `3px solid #f5222d`,
-                          padding: '12px',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          transition: 'all 0.3s ease'
-                        }}
-                      >
-                        <div style={{ fontSize: '11px', color: '#8c8c8c', marginBottom: '4px' }}>
-                          已拒绝 · 需修改
-                        </div>
-                        <Statistic 
-                          value={stats.byStatus[ReqStatus.REJECTED] || 0} 
-                          valueStyle={{ color: '#f5222d', fontSize: '22px', fontWeight: 600 }}
-                        />
-                      </div>
+                      />
                     </Col>
                   </>
                 )}
               </Row>
-            </Card>
+            </DataCard>
 
             {/* 第二部分：关键时间倒计时 */}
-            <Card 
+            <DataCard
               title={
                 <Space>
                   <span>关键时间节点</span>
-                  <Tag color="orange">未来14天</Tag>
+                  <StatusTag type="custom" value="未来14天" label="未来14天" />
                 </Space>
               }
-              style={{ marginBottom: '24px', borderRadius: '12px' }}
               styles={{ body: { padding: '16px' } }}
             >
               {getKeyDates().length > 0 ? (
@@ -563,17 +429,17 @@ const DashboardPage: React.FC = () => {
                         gap: 12,
                         padding: '12px 16px',
                         borderRadius: '8px',
-                        backgroundColor: '#fafafa',
-                        border: '1px solid #f0f0f0',
+                        backgroundColor: '#fff',
+                        border: '1px solid #eef1f5',
                         cursor: 'pointer',
                         transition: 'all 0.2s ease',
                       }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = '#d9d9d9';
-                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
+                          e.currentTarget.style.borderColor = '#bfdbfe';
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(16,24,40,0.08)';
                         }}
                         onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = '#f0f0f0';
+                          e.currentTarget.style.borderColor = '#eef1f5';
                           e.currentTarget.style.boxShadow = 'none';
                         }}
                       >
@@ -603,19 +469,16 @@ const DashboardPage: React.FC = () => {
               ) : (
                 <Empty description="未来14天内无关键节点" />
               )}
-            </Card>
+            </DataCard>
 
             {/* 第三部分：待办事项列表 */}
-            <Card 
+            <DataCard
               title={
                 <Space>
                   <span>我的待办</span>
-                  <Tag color="purple">
-                    {getTodoSections().reduce((sum, s) => sum + s.data.length, 0)} 项
-                  </Tag>
+                  <StatusTag type="custom" value="待办数量" label={`${getTodoSections().reduce((sum, s) => sum + s.data.length, 0)} 项`} />
                 </Space>
               }
-              style={{ borderRadius: '12px' }}
               styles={{ body: { padding: 0 } }}
             >
               {getTodoSections().length > 0 ? (
@@ -639,24 +502,13 @@ const DashboardPage: React.FC = () => {
                             <div
                               key={item.id}
                               onClick={() => handleTodoClick(item, section.type)}
+                              className="rt-list-row"
                               style={{ 
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
                                 padding: '14px 16px',
-                                borderRadius: '8px',
-                                backgroundColor: '#fff',
-                                border: '1px solid #f0f0f0',
                                 cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = '#d9d9d9';
-                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = '#f0f0f0';
-                                e.currentTarget.style.boxShadow = 'none';
                               }}
                             >
                               <div style={{ flex: 1, minWidth: 0, marginRight: 16 }}>
@@ -664,12 +516,8 @@ const DashboardPage: React.FC = () => {
                                   <Text strong style={{ color: '#1f1f1f', fontSize: 13, whiteSpace: 'nowrap' }}>
                                     {item.reqCode}
                                   </Text>
-                                  <Tag color={priorityColors[item.priority] || '#d9d9d9'} style={{ margin: 0, fontSize: 11, lineHeight: '18px' }}>
-                                    {item.priority}
-                                  </Tag>
-                                  <Tag color={statusColors[item.status] || '#d9d9d9'} style={{ margin: 0, fontSize: 11, lineHeight: '18px' }}>
-                                    {statusLabels[item.status] || item.status}
-                                  </Tag>
+                                  <StatusTag type="priority" value={item.priority} label={item.priority} />
+                                  <StatusTag type="requirement" value={item.status} />
                                   {item.system && (
                                     <Tag style={{ margin: 0, fontSize: 11, lineHeight: '18px', border: '1px solid #e8e8e8', color: '#8c8c8c', backgroundColor: '#fafafa' }}>
                                       {item.system.name}
@@ -734,11 +582,10 @@ const DashboardPage: React.FC = () => {
                   <Empty description="暂无待办事项" />
                 </div>
               )}
-            </Card>
+            </DataCard>
           </div>
         )}
-      </Content>
-    </Layout>
+    </div>
   );
 };
 

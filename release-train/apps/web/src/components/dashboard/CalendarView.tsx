@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Card, Calendar, Typography, Tag, Space, Button, Row, Col, Tooltip, Select } from 'antd';
+import { Calendar, Typography, Tag, Space, Button, Row, Col, Tooltip, Select } from 'antd';
 import { ScheduleProgressItem } from '@release-train/shared';
 import trainService from '../../services/train';
 import { systemService, SystemOption } from '../../services/system';
 import dayjs, { Dayjs } from 'dayjs';
+import { AppPageHeader, DataCard, FilterBar, StatusTag } from '../common';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 /**
  * 月历视图组件 - 双月显示版本火车的班次进度
@@ -430,11 +431,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({ schedules: propSchedules })
   };
 
   if (loading) {
-    return <Card loading style={{ minHeight: 400 }} />;
+    return <DataCard loading style={{ minHeight: 400 }} />;
   }
 
   return (
-    <div>
+    <div className="rt-page">
       <style>{`
         .calendar-schedule-view .ant-picker-cell-inner,
               .calendar-schedule-view .ant-picker-calendar-date {
@@ -447,35 +448,31 @@ const CalendarView: React.FC<CalendarViewProps> = ({ schedules: propSchedules })
                 display: none !important;
               }
       `}</style>
-      <Card
-        title={
-          <Row justify="space-between" align="middle">
-            <Col>
-              <Title level={5} style={{ margin: 0 }}>版本火车月历视图</Title>
-            </Col>
-            <Col>
-              <Space size={12}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#666' }}>
-                  <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#1677ff' }} />
-                  纳版
-                </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#666' }}>
-                  <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#fa8c16' }} />
-                  封板
-                </span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#666' }}>
-                  <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#52c41a' }} />
-                  投产
-                </span>
-              </Space>
-            </Col>
-          </Row>
+      <AppPageHeader
+        title="月历视图"
+        description="按月份查看班次周期、纳版、封板和投产节点。"
+        meta={
+          <Space size={12}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#667085' }}>
+              <span className="rt-calendar-dot" style={{ background: '#2563eb' }} />
+              纳版
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#667085' }}>
+              <span className="rt-calendar-dot" style={{ background: '#f59e0b' }} />
+              封板
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#667085' }}>
+              <span className="rt-calendar-dot" style={{ background: '#16a34a' }} />
+              投产
+            </span>
+            <StatusTag type="custom" value="班次数量" label={`${allSchedules.length} 个班次`} />
+          </Space>
         }
-      >
-        <div style={{ marginBottom: 16 }}>
-          <Row justify="space-between" align="middle">
-            <Col>
-              <Space size={8}>
+      />
+
+      <FilterBar
+        fields={
+          <>
                 <Text type="secondary" style={{ fontSize: 13 }}>选择系统：</Text>
                 <Select
                   value={selectedSystemId}
@@ -494,16 +491,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({ schedules: propSchedules })
                     ...trains.map(train => ({ label: train.name, value: train.id })),
                   ]}
                 />
-              </Space>
-            </Col>
-            <Col>
-              <Text type="secondary" style={{ fontSize: 13 }}>
-                {allSchedules.length} 个班次
-              </Text>
-            </Col>
-          </Row>
-        </div>
+          </>
+        }
+      />
 
+      <DataCard>
         <div className="calendar-schedule-view">
           <div style={{ marginBottom: 12 }}>
             <Row justify="space-between" align="middle">
@@ -528,11 +520,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({ schedules: propSchedules })
             </Col>
           </Row>
         </div>
-      </Card>
+      </DataCard>
 
       <div style={{ marginTop: 16, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         {allSchedules.map(schedule => (
-          <Card
+          <DataCard
             key={schedule.id}
             size="small"
             style={{ flex: 1, minWidth: 320 }}
@@ -558,12 +550,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({ schedules: propSchedules })
               </div>
               <div>需求数：{schedule.totalRequirements}</div>
             </div>
-          </Card>
+          </DataCard>
         ))}
         {allSchedules.length === 0 && (
-          <Card size="small" style={{ flex: 1 }}>
+          <DataCard size="small" style={{ flex: 1 }}>
             <Text type="secondary">暂无班次数据</Text>
-          </Card>
+          </DataCard>
         )}
       </div>
     </div>

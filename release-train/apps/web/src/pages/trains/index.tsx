@@ -1,16 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Typography,
   Button,
   Table,
   Space,
-  Card,
-  Select,
   Spin,
   message,
   Empty,
-  Tag,
   Pagination,
 } from 'antd';
 import {
@@ -26,10 +22,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { trainService } from '../../services/train';
 import { useAuthStore } from '../../stores/auth';
 import { Role } from '@release-train/shared';
-import dayjs from 'dayjs';
-
-const { Title, Text } = Typography;
-const { Option } = Select;
+import { AppPageHeader, DataCard } from '../../components/common';
 
 interface TrainListItem {
   id: string;
@@ -172,10 +165,12 @@ const TrainsPage: React.FC = () => {
   ];
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>版本火车</Title>
-        <Space>
+    <div className="rt-page">
+      <AppPageHeader
+        title="版本火车"
+        description="管理发布火车、搭载系统、容量和班次入口。"
+        actions={
+          <>
           <Button icon={<SyncOutlined spin={loading} />} onClick={handleRefresh}>
             刷新
           </Button>
@@ -187,10 +182,11 @@ const TrainsPage: React.FC = () => {
               创建火车
             </Button>
           )}
-        </Space>
-      </div>
+          </>
+        }
+      />
 
-      <Card bodyStyle={{ padding: 0 }} style={{ marginBottom: 24 }}>
+      <DataCard tableCard>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60 }}>
             <Spin size="large" />
@@ -229,7 +225,7 @@ const TrainsPage: React.FC = () => {
             </div>
           </>
         )}
-      </Card>
+      </DataCard>
     </div>
   );
 };

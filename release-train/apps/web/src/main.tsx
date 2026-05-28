@@ -3,6 +3,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import './styles/app.css';
 
 // 使用 StrictMode 在开发阶段进行额外检查
 ReactDOM.createRoot(document.getElementById('root')!).render(

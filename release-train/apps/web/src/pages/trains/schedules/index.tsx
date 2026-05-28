@@ -5,11 +5,9 @@ import {
   Button,
   Table,
   Space,
-  Card,
   Spin,
   message,
   Empty,
-  Tag,
   Pagination,
   Modal,
   Form,
@@ -29,8 +27,9 @@ import type { ColumnsType } from 'antd/es/table';
 import api from '../../../services/api';
 import { TrainScheduleStatus, TRAIN_SCHEDULE_STATUS_LABELS } from '@release-train/shared';
 import dayjs from 'dayjs';
+import { AppPageHeader, DataCard, FilterBar, StatusTag } from '../../../components/common';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 const { Option } = Select;
 
 interface ScheduleItem {
@@ -191,20 +190,6 @@ const SchedulesPage: React.FC = () => {
     }
   };
 
-  const getStatusColor = (status: TrainScheduleStatus) => {
-    const colorMap: Record<string, string> = {
-      PLANNING: 'blue',
-      IN_PROGRESS: 'processing',
-      LOCKED_DOWN: 'orange',
-      RELEASED: 'green',
-    };
-    return colorMap[status] || 'default';
-  };
-
-  const getStatusText = (status: TrainScheduleStatus) => {
-    return TRAIN_SCHEDULE_STATUS_LABELS[status] || status;
-  };
-
   const handleEditSchedule = async (record: ScheduleItem) => {
     try {
       const res = await api.get(`/trains/${record.trainId}/schedules/${record.id}`);
@@ -314,7 +299,7 @@ const SchedulesPage: React.FC = () => {
       key: 'status',
       width: 100,
       render: (status: TrainScheduleStatus) => (
-        <Tag color={getStatusColor(status)}>{getStatusText(status)}</Tag>
+        <StatusTag type="schedule" value={status} label={TRAIN_SCHEDULE_STATUS_LABELS[status] || status} />
       ),
     },
     {
@@ -483,22 +468,25 @@ const SchedulesPage: React.FC = () => {
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <Title level={4} style={{ margin: 0 }}>班次列表</Title>
-        <Space>
+    <div className="rt-page">
+      <AppPageHeader
+        title="班次列表"
+        description="查看和维护版本火车的班次、关键日期和当前状态。"
+        actions={
+          <>
           <Button icon={<SyncOutlined spin={loading} />} onClick={handleRefresh}>
             刷新
           </Button>
           <Button onClick={() => navigate('/trains')}>
             火车列表
           </Button>
-        </Space>
-      </div>
+          </>
+        }
+      />
 
-      <Card style={{ marginBottom: 16 }}>
-        <Space size="large">
-          <Space>
+      <FilterBar
+        fields={
+          <>
             <Text type="secondary">所属火车：</Text>
             <Select
               value={selectedTrainId}
@@ -517,11 +505,11 @@ const SchedulesPage: React.FC = () => {
             }}>
               新增班次
             </Button>
-          </Space>
-        </Space>
-      </Card>
+          </>
+        }
+      />
 
-      <Card bodyStyle={{ padding: 0 }}>
+      <DataCard tableCard>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60 }}>
             <Spin size="large" />
@@ -558,7 +546,7 @@ const SchedulesPage: React.FC = () => {
             </div>
           </>
         )}
-      </Card>
+      </DataCard>
 
       <Modal
         title="编辑班次"

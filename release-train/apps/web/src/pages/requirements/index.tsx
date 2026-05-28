@@ -26,10 +26,10 @@ import {
   REQ_STATUS_LABELS,
   REQ_SUB_STATUS_LABELS,
   REQ_SUB_STATUS_COLORS,
-  PRIORITY_LABELS,
   Operation,
   Role,
 } from '@release-train/shared';
+import { AppPageHeader, DataCard, FilterBar, StatusTag } from '../../components/common';
 
 // ========== 常量定义 ==========
 
@@ -38,25 +38,6 @@ const STATUS_OPTIONS = Object.values(ReqStatus).map((s) => ({
   label: REQ_STATUS_LABELS[s],
   value: s,
 }));
-
-// 状态 Tag 颜色映射
-const STATUS_COLOR_MAP: Record<string, string> = {
-  [ReqStatus.DRAFT]: 'default',
-  [ReqStatus.PENDING_REVIEW]: 'processing',
-  [ReqStatus.READY]: 'success',
-  [ReqStatus.REJECTED]: 'error',
-  [ReqStatus.ONBOARDED]: 'blue',
-  [ReqStatus.RELEASED]: 'green',
-  [ReqStatus.CANCELLED]: 'default',
-};
-
-// 优先级 Tag 颜色映射
-const PRIORITY_COLOR_MAP: Record<string, string> = {
-  P0: 'red',
-  P1: 'orange',
-  P2: 'blue',
-  P3: 'default',
-};
 
 // ========== 操作按钮配置 ==========
 
@@ -522,13 +503,9 @@ const RequirementsPage: React.FC = () => {
       sorter: true,
       render: (status: string, record: RequirementListItem) => (
         <Space size={4} wrap>
-          <Tag color={STATUS_COLOR_MAP[status] || 'default'}>
-            {REQ_STATUS_LABELS[status as ReqStatus] || status}
-          </Tag>
+          <StatusTag type="requirement" value={status} />
           {status === ReqStatus.ONBOARDED && record.subStatus && (
-            <Tag color={REQ_SUB_STATUS_COLORS[record.subStatus] || 'default'}>
-              {REQ_SUB_STATUS_LABELS[record.subStatus] || record.subStatus}
-            </Tag>
+            <StatusTag type="subStatus" value={record.subStatus} />
           )}
         </Space>
       ),
@@ -540,9 +517,7 @@ const RequirementsPage: React.FC = () => {
       width: 90,
       sorter: true,
       render: (priority: string) => (
-        <Tag color={PRIORITY_COLOR_MAP[priority] || 'default'}>
-          {PRIORITY_LABELS[priority as keyof typeof PRIORITY_LABELS] || priority}
-        </Tag>
+        <StatusTag type="priority" value={priority} />
       ),
     },
     {
@@ -600,10 +575,25 @@ const RequirementsPage: React.FC = () => {
 
   // ========== 渲染 ==========
   return (
-    <div>
+    <div className="rt-page">
+      <AppPageHeader
+        title="需求池"
+        description="集中查询、评审和跟踪所有需求的状态、优先级与纳版进展。"
+        actions={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => navigate('/requirements/new')}
+          >
+            新增需求
+          </Button>
+        }
+      />
+
       {/* 筛选栏：系统筛选 + 状态多选 + 关键字搜索 + 查询/重置按钮 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-        <Space wrap>
+      <FilterBar
+        fields={
+          <>
           <Select
             placeholder="归属系统"
             value={systemFilter}
@@ -637,50 +627,46 @@ const RequirementsPage: React.FC = () => {
           <Button icon={<ReloadOutlined />} onClick={handleReset}>
             重置
           </Button>
-        </Space>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigate('/requirements/new')}
-        >
-          新增需求
-        </Button>
-      </div>
+          </>
+        }
+      />
 
       {/* 需求列表表格（分页 + 排序） */}
-      <Table<RequirementListItem>
-        rowKey="id"
-        columns={columns}
-        dataSource={data}
-        loading={loading}
-        onChange={handleTableChange}
-        onRow={(record) => ({
-          onClick: () => navigate(`/requirements/${record.id}`),
-          style: { cursor: 'pointer' },
-        })}
-        pagination={{
-          current: page,
-          pageSize,
-          total,
-          showSizeChanger: true,
-          pageSizeOptions: ['10', '20', '50', '100'],
-          showTotal: (t) => `共 ${t} 条`,
-          onChange: (p, ps) => {
-            setPage(p);
-            setPageSize(ps);
-            fetchList({
-              page: p,
-              pageSize: ps,
-              systemId: systemFilter,
-              status: statusFilter.length > 0 ? statusFilter : undefined,
-              keyword: keyword || undefined,
-              sortBy,
-              sortOrder,
-            });
-          },
-        }}
-        locale={{ emptyText: '暂无需求，点击「新增需求」创建' }}
-      />
+      <DataCard tableCard>
+        <Table<RequirementListItem>
+          rowKey="id"
+          columns={columns}
+          dataSource={data}
+          loading={loading}
+          onChange={handleTableChange}
+          onRow={(record) => ({
+            onClick: () => navigate(`/requirements/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '50', '100'],
+            showTotal: (t) => `共 ${t} 条`,
+            onChange: (p, ps) => {
+              setPage(p);
+              setPageSize(ps);
+              fetchList({
+                page: p,
+                pageSize: ps,
+                systemId: systemFilter,
+                status: statusFilter.length > 0 ? statusFilter : undefined,
+                keyword: keyword || undefined,
+                sortBy,
+                sortOrder,
+              });
+            },
+          }}
+          locale={{ emptyText: '暂无需求，点击「新增需求」创建' }}
+        />
+      </DataCard>
 
       {/* 子状态变更弹窗 */}
       <Modal

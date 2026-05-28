@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import MainLayout from './layouts/MainLayout';
+import { appTheme } from './theme';
 import LoginPage from './pages/login';
 import DashboardPage from './pages/dashboard';
 // 已删除：BADashboard 和 PMDashboard 已合并到统一的 DashboardPage
@@ -23,7 +24,7 @@ import { AuthGuard, GuestGuard } from './components/AuthGuard';
 // ========== App根组件 ==========
 const App: React.FC = () => {
   return (
-    <ConfigProvider locale={zhCN}>
+    <ConfigProvider locale={zhCN} theme={appTheme}>
       <BrowserRouter>
         <Routes>
           {/* 登录页：已登录则跳转首页 */}

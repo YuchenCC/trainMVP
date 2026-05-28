@@ -150,8 +150,8 @@ const MainLayout: React.FC = () => {
     if (p.startsWith('/dashboard')) return p;
     if (p.startsWith('/calendar')) return '/calendar';
     if (p.startsWith('/requirements')) return '/requirements';
-    if (p.startsWith('/trains')) return '/trains';
-    if (p === '/schedules') return '/trains';
+    if (p.startsWith('/trains')) return '/schedules';
+    if (p === '/schedules') return '/schedules';
     if (p.startsWith('/systems')) return '/systems';
     return p;
   })();
@@ -177,13 +177,14 @@ const MainLayout: React.FC = () => {
   ];
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      {/* ===== 侧边栏：深色铁路控制台风格 ===== */}
+    <Layout style={{ minHeight: '100vh', background: '#f7f9fc' }}>
+      {/* ===== 侧边栏：白底调度工作台导航 ===== */}
       <Sider
         width={220}
+        className="rt-sider"
         style={{
-          background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)',
-          borderRight: '1px solid rgba(255,255,255,0.06)',
+          background: '#fff',
+          borderRight: '1px solid #e4e7ec',
         }}
       >
         {/* Logo 区域 */}
@@ -193,31 +194,16 @@ const MainLayout: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             padding: '0 20px',
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            borderBottom: '1px solid #eef1f5',
             gap: 10,
           }}
         >
-          {/* 火车图标 */}
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 16,
-              flexShrink: 0,
-            }}
-          >
-            🚄
-          </div>
+          <div className="rt-layout-logo-mark">RT</div>
           <div>
-            <div style={{ color: '#f1f5f9', fontSize: 14, fontWeight: 700, lineHeight: '20px' }}>
+            <div style={{ color: '#172033', fontSize: 14, fontWeight: 700, lineHeight: '20px' }}>
               版本火车
             </div>
-            <div style={{ color: '#64748b', fontSize: 10, lineHeight: '14px' }}>
+            <div style={{ color: '#98a2b3', fontSize: 10, lineHeight: '14px' }}>
               Release Train
             </div>
           </div>
@@ -235,12 +221,12 @@ const MainLayout: React.FC = () => {
             marginTop: 8,
             padding: '0 8px',
           }}
-          theme="dark"
+          theme="light"
         />
       </Sider>
 
       {/* ===== 右侧主区域 ===== */}
-      <Layout style={{ background: '#f1f5f9' }}>
+      <Layout style={{ background: '#f7f9fc' }}>
         {/* 顶部栏：面包屑 + 用户 */}
         <Header
           style={{
@@ -250,8 +236,8 @@ const MainLayout: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderBottom: '1px solid #e2e8f0',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+            borderBottom: '1px solid #e4e7ec',
+            boxShadow: '0 1px 0 #eef1f5',
             position: 'sticky',
             top: 0,
             zIndex: 10,
@@ -270,20 +256,20 @@ const MainLayout: React.FC = () => {
                   width: 28,
                   height: 28,
                   borderRadius: 6,
-                  color: '#64748b',
+                  color: '#667085',
                   fontSize: 14,
                   transition: 'all 0.15s',
                   marginRight: 4,
                 }}
                 onMouseEnter={(e) => {
                   const el = e.currentTarget as HTMLElement;
-                  el.style.background = '#f1f5f9';
-                  el.style.color = '#3b82f6';
+                  el.style.background = '#eff6ff';
+                  el.style.color = '#2563eb';
                 }}
                 onMouseLeave={(e) => {
                   const el = e.currentTarget as HTMLElement;
                   el.style.background = 'transparent';
-                  el.style.color = '#64748b';
+                  el.style.color = '#667085';
                 }}
               >
                 <ArrowLeftOutlined />
@@ -294,7 +280,7 @@ const MainLayout: React.FC = () => {
                   title: item.path ? (
                     <a
                       onClick={() => navigate(item.path!)}
-                      style={{ color: '#3b82f6' }}
+                      style={{ color: '#2563eb' }}
                     >
                       {item.title}
                     </a>
@@ -316,7 +302,7 @@ const MainLayout: React.FC = () => {
                 transition: 'background 0.2s',
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background = '#f1f5f9';
+                (e.currentTarget as HTMLElement).style.background = '#eff6ff';
               }}
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLElement).style.background = 'transparent';
@@ -324,10 +310,10 @@ const MainLayout: React.FC = () => {
             >
               <Avatar
                 size={28}
-                style={{ background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', flexShrink: 0 }}
+                style={{ background: '#2563eb', flexShrink: 0 }}
                 icon={<UserOutlined />}
               />
-              <span style={{ fontSize: 13, color: '#334155', fontWeight: 500 }}>
+              <span style={{ fontSize: 13, color: '#172033', fontWeight: 500 }}>
                 {user?.displayName}
               </span>
             </Space>
@@ -335,16 +321,8 @@ const MainLayout: React.FC = () => {
         </Header>
 
         {/* 内容区域 */}
-        <Content style={{ margin: 20 }}>
-          <div
-            style={{
-              background: '#fff',
-              borderRadius: 12,
-              padding: 24,
-              minHeight: 'calc(100vh - 108px)',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)',
-            }}
-          >
+        <Content style={{ padding: 20, minHeight: 'calc(100vh - 48px)' }}>
+          <div style={{ minHeight: 'calc(100vh - 88px)' }}>
             <Outlet />
           </div>
         </Content>

@@ -25,21 +25,16 @@ const LoginPage: React.FC = () => {
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        background: '#f5f5f5',
-      }}
-    >
-      <Card style={{ width: 400, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+    <div className="rt-login-shell">
+      <Card className="rt-login-card">
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <Title level={3} style={{ marginBottom: 4 }}>
-            🚄 版本火车需求管理系统
+          <div className="rt-layout-logo-mark" style={{ margin: '0 auto 12px' }}>RT</div>
+          <Title level={3} style={{ marginBottom: 6, color: '#172033' }}>
+            版本火车需求管理系统
           </Title>
-          <Typography.Text type="secondary">请登录您的账号</Typography.Text>
+          <Typography.Text type="secondary">
+            统一管理需求评审、纳版、班次与投产
+          </Typography.Text>
         </div>
 
         <Form

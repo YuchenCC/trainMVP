@@ -28,6 +28,7 @@ Desktop.ini
 *.tmp
 *.temp
 .cache/
+.scratch/
 
 # ========== 依赖 ==========
 node_modules/
