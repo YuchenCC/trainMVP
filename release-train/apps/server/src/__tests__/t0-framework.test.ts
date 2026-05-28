@@ -47,6 +47,14 @@ describe('T0 基础框架', () => {
 
   afterAll(async () => {
     await app.close();
+    // 先删除需要级联清理的数据
+    await prisma.statusLog.deleteMany({
+      where: {
+        operator: {
+          username: { in: [TEST_ADMIN.username, TEST_BA.username, TEST_PM.username, TEST_TECH_MGR.username] },
+        },
+      },
+    });
     await prisma.user.deleteMany({
       where: {
         username: {

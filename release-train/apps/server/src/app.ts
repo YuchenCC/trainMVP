@@ -29,6 +29,7 @@ import { requirementRoutes } from './modules/requirements/index.js';
 import { systemRoutes } from './modules/systems/index.js';
 import { trainRoutes } from './modules/trains/index.js';
 import { smartOnboardRoutes } from './modules/smart-onboard/index.js';
+import { pluginRoutes } from './modules/plugin/routes.js';
 // import { userRoutes } from './modules/users/index.js';
 import { Operation } from '@release-train/shared';
 
@@ -224,6 +225,7 @@ export async function createApp() {
   await app.register(requirementRoutes);
   await app.register(trainRoutes);
   await app.register(smartOnboardRoutes);
+  await app.register(pluginRoutes);
   // await app.register(userRoutes);
 
   // ========== 健康检查 ==========

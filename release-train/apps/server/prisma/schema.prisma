@@ -51,6 +51,7 @@ model System {
   trainSystems TrainSystem[]                        // 系统参与的火车
   snapshots    TrainSystemSnapshot[]               // 系统参与的班次快照
   members      SystemMember[]                      // 系统成员
+  changeRequests ChangeRequest[]                   // 需求变更记录（T5）
 }
 
 // ========== 系统成员 ==========
@@ -111,6 +112,7 @@ model Requirement {
   // 审计与变更
   statusLogs      StatusLog[]                               // 状态变更日志，操作审计
   emergencyChanges  EmergencyChange[]                       // 紧急变更记录
+  changeRequests  ChangeRequest[]                          // 需求变更记录（T5）
 
   // 业务查询索引
   @@index([status, subStatus])   // 按主状态+子状态筛选（看板分组）
@@ -358,4 +360,30 @@ enum ApprovalStatus {
   PENDING         // 待审批
   APPROVED        // 已通过
   REJECTED        // 已驳回
+}
+
+// ========== 需求变更记录（T5） ==========
+model ChangeRequest {
+  id               String        @id @default(cuid())       // 变更单 ID
+  changeCode       String        @unique                      // 变更编号 CR-2026-0001
+  requirementId    String                                    // 关联需求 ID
+  systemId         String                                    // 冗余系统 ID（加速查询）
+  conversation     String?       @db.Text                     // 对话原文
+  changeSummary    String?       @db.Text                     // 变更摘要（Markdown）
+  workloadImpact   String?                                    // 工作量影响
+  scheduleImpact   String?                                    // 进度影响
+  riskLevel        String?       @default("低")               // 风险等级：高/中/低
+  riskDescription  String?       @db.Text                     // 风险描述
+  status           String        @default("PENDING")          // PENDING/CONFIRMED/EXECUTED/REJECTED
+  source           String        @default("coze")             // 来源：coze/manual
+  confirmedBy      String?                                    // 确认人 ID
+  confirmedAt      DateTime?                                  // 确认时间
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  requirement      Requirement   @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  system           System        @relation(fields: [systemId], references: [id])
+
+  @@index([requirementId, createdAt(sort: Desc)])
+  @@index([systemId])
 }

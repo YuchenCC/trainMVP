@@ -37,6 +37,7 @@ import {
   getEmergencyChanges,              // 紧急变更列表
   getMyTodos,                       // 用户待办聚合
   RequirementSearchItem,            // 搜索单项类型
+  getChangeRequests,               // 需求变更记录列表（T5）
 } from './service.js';
 
 // ========== 从 JWT Token 提取当前用户 ID ==========
@@ -495,6 +496,18 @@ pageSize: { type: 'integer', minimum: 0, maximum: 100 },
       const user = request.user as JwtPayload;
       await rejectEmergencyChange(request.params.id, user.sub, request.body.reason);
       return reply.send({ success: true });
+    },
+  );
+
+  // ======================== 需求变更记录列表（T5） ========================
+  fastify.get<{ Params: { id: string }; Reply: ApiResponse<{ list: any[]; total: number }> }>(
+    '/api/requirements/:id/change-requests',
+    {
+      onRequest: [fastify.authenticate],                   // 需要登录
+    },
+    async (request, reply) => {
+      const { list, total } = await getChangeRequests(request.params.id);
+      return reply.send({ success: true, data: { list, total } });
     },
   );
 }

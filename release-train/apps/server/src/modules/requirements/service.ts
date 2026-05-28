@@ -2289,3 +2289,42 @@ export async function getMyTodos(user: {
       return {};
   }
 }
+
+// ========== 需求变更记录列表（T5） ==========
+/**
+ * 查询指定需求的变更记录列表，按创建时间倒序
+ * 
+ * @param requirementId - 需求 ID
+ * @returns list: 变更记录数组，total: 总数
+ */
+export async function getChangeRequests(requirementId: string) {
+  const [list, total] = await Promise.all([
+    prisma.changeRequest.findMany({
+      where: { requirementId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        changeCode: true,
+        changeSummary: true,
+        workloadImpact: true,
+        scheduleImpact: true,
+        riskLevel: true,
+        riskDescription: true,
+        status: true,
+        source: true,
+        createdAt: true,
+        confirmedAt: true,
+      },
+    }),
+    prisma.changeRequest.count({ where: { requirementId } }),
+  ]);
+
+  return {
+    list: list.map((cr) => ({
+      ...cr,
+      createdAt: cr.createdAt.toISOString(),
+      confirmedAt: cr.confirmedAt?.toISOString() || null,
+    })),
+    total,
+  };
+}

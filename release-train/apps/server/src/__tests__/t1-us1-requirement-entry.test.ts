@@ -1133,7 +1133,7 @@ describe('T1 US1.1 需求录入', () => {
     let us15Timestamp: string;
 
     beforeAll(async () => {
-      us15Timestamp = Date.now().toString() + '_us15';
+      us15Timestamp = Date.now().toString() + '_' + Math.random().toString(36).slice(2, 8) + '_us15';
 
       // 使用 /api/auth/seed 创建用户，确保密码哈希一致
       const trainAdminSeed = await app.inject({
