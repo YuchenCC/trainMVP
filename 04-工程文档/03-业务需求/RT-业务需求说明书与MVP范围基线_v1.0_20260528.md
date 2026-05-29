@@ -1,9 +1,9 @@
 # 业务需求说明书与MVP范围基线
 
-**版本号**: v1.0  
-**日期**: 2026-05-28  
-**对应 Issue**: ISSUE-003  
-**需求基线**: 总 PRD v2.11 + Task1/2/3/4 当前文档与代码实现
+**版本号**: v2.0
+**日期**: 2026-05-29
+**对应 Issue**: ISSUE-003
+**需求基线**: 总 PRD v2.11 + Task1/2/3/4/5/6 当前文档与代码实现
 
 ---
 
@@ -76,6 +76,32 @@ Task4 将早期按角色拆分的仪表盘合并为统一 `/dashboard`：
 - 展示需求状态统计、待办事项、关键时间倒计时和班次进度。
 - 统计卡片支持跳转到需求列表筛选结果。
 
+### 4.5 AI需求审查（T6）
+
+AI需求审查用于帮助BA在提交评审前自助检查需求质量：
+
+- 入口：需求创建/编辑页面「AI审查」按钮。
+- 检查维度：标题规范、描述完整性、用户故事格式、优先级设置、工作量评估、系统归属、BA分配（本地规则7项）。
+- AI增强：通过 Coze 工作流进行智能分析，返回评分、问题列表、优化标题/描述、验收条件。
+- 评分公式：本地规则得分 × 70% + AI得分 × 30%，及格线60分。
+- 结果展示：Modal 内 Tabs 布局（评分头部卡片 + 问题/建议/验收条件）。
+- 降级策略：Coze AI 不可用时自动回退到纯本地规则评分，不阻塞使用。
+
+该能力是本项目的第二个 AI 集成点，通过 Coze 工作流实现需求质量的自动化评分和优化建议。
+
+### 4.6 需求变更智能体（T5）
+
+需求变更智能体将需求变更分析能力延伸到飞书群聊场景：
+
+- 渠道：飞书群聊，用户 @需求变更助手 发起对话。
+- 智能检测：从对话中提取系统名称、需求关键词、变更内容。
+- 插件集成：通过 Coze 插件 API（/api/plugin/*）查询系统和需求存量数据。
+- 影响分析：综合对话和存量数据，生成工作量影响、进度影响、风险等级评估。
+- 变更单同步：调用插件 API 创建 ChangeRequest 记录并同步到版本火车系统。
+- 飞书卡片：发送交互式确认卡片，支持一键确认/拒绝变更。
+
+> ⚠️ 已知风险：Coze 插件接口需 HTTPS 才能被 Coze 平台回调访问，本地开发环境无证书，部署时需配置 Nginx + SSL。
+
 ## 五、明确排除清单
 
 | 排除项 | 说明 |
@@ -88,6 +114,8 @@ Task4 将早期按角色拆分的仪表盘合并为统一 `/dashboard`：
 | 完整历史版本回放 | 仅保留结构化审计摘要，不做对象快照恢复 |
 | 通知中心 | 飞书、邮件、站内红点暂不纳入当前 MVP |
 | 自定义仪表盘布局 | Task4 仅实现统一仪表盘和角色数据分发 |
+| AI审查替代人工评审 | AI审查是BA自助质量检查工具，不参与评审决策 |
+| 审查记录存储到独立表 | 复用需求操作日志记录审查行为 |
 
 ## 六、核心业务流程
 
@@ -130,6 +158,8 @@ Task4 将早期按角色拆分的仪表盘合并为统一 `/dashboard`：
 | 火车与班次 | `modules/trains` | `pages/trains`、`components/trains`、`components/schedules` | `types/train.ts` |
 | 智能纳版 | `modules/smart-onboard` | `components/smart-onboard`、`services/smart-onboard.ts` | `types/smart-onboard.ts` |
 | 仪表盘 | `requirements` 聚合 API、`trains` 聚合 API | `pages/dashboard`、`components/dashboard`、`hooks/useDashboardData.ts` | `types/dashboard.ts` |
+| AI需求审查（T6） | `modules/requirement-review` | `RequirementForm.tsx`（AI审查 Modal） | `types/review.ts` |
+| 需求变更智能体（T5） | `modules/requirements`（ChangeRequest 子模块）、`modules/plugin` | `detail.tsx`（变更记录 Timeline） | `types/requirement.ts`（ChangeRequest） |
 
 ## 八、版本来源
 
@@ -140,6 +170,8 @@ Task4 将早期按角色拆分的仪表盘合并为统一 `/dashboard`：
 | Task2 PRD v2.0 | 多班次架构和火车管理规则 |
 | Task3 测试案例 v1.0 | 智能纳版规则和验证场景 |
 | Task4 PRD v2.2 | 统一仪表盘重构范围 |
+| Task5 设计方案 v1.0 | 需求变更智能体架构和 Coze 插件设计 |
+| Task6 PRD + 设计方案 v1.0 | AI需求审查业务规则和实现方案 |
 | 当前代码 main 分支 | 实际实现状态基线 |
 
 ## 九、版本记录
@@ -147,3 +179,4 @@ Task4 将早期按角色拆分的仪表盘合并为统一 `/dashboard`：
 | 版本 | 日期 | 变更内容 |
 |------|------|----------|
 | v1.0 | 2026-05-28 | 初始版本，整合 MVP 业务需求和范围基线 |
+| v2.0 | 2026-05-29 | 新增 4.5 AI需求审查（T6）、4.6 需求变更智能体（T5），更新排除清单、模块映射、版本来源 |
