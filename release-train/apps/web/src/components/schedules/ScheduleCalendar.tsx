@@ -10,14 +10,15 @@ const { Text } = Typography;
 interface ScheduleCalendarData {
   id: string;
   name: string;
-  scheduleName?: string; // 兼容 ScheduleProgressItem
+  scheduleName?: string;
   startDate: string | null;
   endDate: string | null;
-  boardingDate: string | null;  // 纳版日（第一节点）
-  sitDate: string | null;       // SIT提测日（第三节点）
-  uatDate: string | null;       // UAT提测日（第四节点）
-  lockdownDate: string | null;  // 封板日（第五节点）
-  releaseDate: string | null;   // 投产日（第六节点）
+  boardingDate: string | null;
+  sitDate: string | null;
+  uatDate: string | null;
+  lockdownDate: string | null;
+  releaseDate: string | null;
+  customKeyDates?: Array<{ id?: string; name: string; date: string | null }>;
 }
 
 /**
@@ -32,11 +33,12 @@ interface ScheduleCalendarProps {
  * 事件类型对应的颜色
  */
 const EVENT_COLORS: Record<string, string> = {
-  boarding: '#faad14',   // 纳版 - 黄色
-  sit: '#722ed1',        // SIT提测 - 紫色
-  uat: '#eb2f96',        // UAT提测 - 粉红
-  lockdown: '#1890ff',   // 封板 - 蓝色
-  release: '#52c41a',    // 投产 - 绿色
+  boarding: '#faad14',
+  sit: '#722ed1',
+  uat: '#eb2f96',
+  lockdown: '#1890ff',
+  release: '#52c41a',
+  custom: '#13c2c2',
 };
 
 /**
@@ -97,9 +99,17 @@ const ScheduleCalendar: React.FC<ScheduleCalendarProps> = ({ schedule }) => {
     if (schedule.lockdownDate && schedule.lockdownDate.startsWith(dateStr)) {
       events.push({ type: 'lockdown', label: '封板' });
     }
-    // 检查投产日（第六节点）
+    // 检查投产日
     if (schedule.releaseDate && schedule.releaseDate.startsWith(dateStr)) {
       events.push({ type: 'release', label: '投产' });
+    }
+    // 检查自定义关键日期
+    if (schedule.customKeyDates) {
+      for (const kd of schedule.customKeyDates) {
+        if (kd.date && kd.date.startsWith(dateStr)) {
+          events.push({ type: 'custom', label: kd.name });
+        }
+      }
     }
 
     return events;

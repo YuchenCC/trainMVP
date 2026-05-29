@@ -234,6 +234,36 @@ export const requirementService = {
     const response = await api.get('/requirements/my-todos'); // GET /api/requirements/my-todos
     return response.data;
   },
+
+  /**
+   * AI 需求审查（不保存，仅审查）
+   * 
+   * 调用 Coze AI 审查需求数据，检查用户故事格式、验收条件等
+   * 
+   * @param data - 需求数据（标题、描述、优先级、故事点数等）
+   * @returns 审查结果 { issues, suggestions, score, passed }
+   */
+  reviewData: async (data: {
+    title?: string;
+    description?: string;
+    priority?: string;
+    storyPoints?: number;
+    reqType?: string;
+    sourceChannel?: string;
+    systemId?: string;
+    baId?: string;
+  }): Promise<ApiResponse<{
+    issues: { type: string; message: string; suggestion: string; severity: string }[];
+    suggestions: string[];
+    score: number;
+    passed: boolean;
+    optimizedTitle?: string;
+    optimizedDescription?: string;
+    acceptanceCriteria?: string[];
+  }>> => {
+    const response = await api.post('/requirements/review', data, { timeout: 180000 }); // POST /api/requirements/review，超时3分钟
+    return response.data;
+  },
 };
 
 export default requirementService;

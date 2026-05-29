@@ -4,7 +4,7 @@
 // 文件名：RequirementForm.tsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Form, Input, Select, InputNumber, Button, Card, Tag, Space, Typography, Divider, message, Spin, Modal,
+  Form, Input, Select, InputNumber, Button, Card, Tag, Space, Typography, Divider, message, Spin, Modal, Alert, Tabs,
 } from 'antd';  // Ant Design 组件库
 import {
   PlusOutlined,            // 添加依赖按钮图标
@@ -12,9 +12,11 @@ import {
   InfoCircleOutlined,      // 实时预览卡片标题图标
   CheckCircleOutlined,     // 依赖满足 ✅ 图标
   WarningOutlined,         // 依赖未满足 ⚠️ 图标
-  SaveOutlined,            // 保存草稿按钮图标
-  SendOutlined,            // 提交按钮图标
+  SaveOutlined,           // 保存草稿按钮图标
+  SendOutlined,           // 提交按钮图标
   SearchOutlined,           // 依赖搜索框前缀图标
+  RobotOutlined,           // AI 审查按钮图标
+  CopyOutlined,            // 一键复制按钮图标
 } from '@ant-design/icons';
 import {
   Priority, PRIORITY_LABELS,       // 优先级枚举 + 中文标签
@@ -81,6 +83,7 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
 
   // ========== 远程数据状态 ==========
   const [systems, setSystems] = useState<SystemOption[]>([]);       // 系统搜索结果列表（远程搜索，非全量）
+  const [allSystems, setAllSystems] = useState<SystemOption[]>([]); // 所有系统列表（用于初始化和确保选中的系统始终在选项中）
   const [systemsLoading, setSystemsLoading] = useState(false);       // 系统搜索加载中
   const [selectedSystemName, setSelectedSystemName] = useState<string>(''); // 当前选中系统名称（用于右侧预览，远程搜索模式下 systems 数组不包含全量数据）
   const [users, setUsers] = useState<SystemUserOption[]>([]);       // 当前系统的成员列表
@@ -94,6 +97,19 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
   const [depSearchLoading, setDepSearchLoading] = useState(false);    // 搜索加载中
   const depSearchTimer = useRef<ReturnType<typeof setTimeout>>();     // 依赖搜索防抖定时器引用
   const systemSearchTimer = useRef<ReturnType<typeof setTimeout>>();  // 系统搜索防抖定时器引用
+
+  // ========== AI 需求审查状态 ==========
+  const [reviewLoading, setReviewLoading] = useState(false);           // AI 审查加载中
+  const [reviewResult, setReviewResult] = useState<{
+    issues: { type: string; message: string; suggestion: string; severity: string }[];
+    suggestions: string[];
+    score: number;
+    passed: boolean;
+    optimizedTitle?: string;
+    optimizedDescription?: string;
+    acceptanceCriteria?: string[];
+  } | null>(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);       // 审查 Modal 显示状态
 
   /**
    * 系统远程搜索处理（300ms 防抖）
@@ -152,6 +168,11 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
    * 同时加载该系统的成员列表用于下拉框。
    */
   useEffect(() => {
+    // 加载所有系统，用于初始化和确保选中的系统始终在选项中
+    systemService.list().then((systems) => {
+      setAllSystems(systems);
+    }).catch(() => {});
+    
     if (mode === 'edit' && initialData) {
       form.setFieldsValue({
         ...initialData,
@@ -170,6 +191,7 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
       const userSystemIds = user?.systemIds || [];
       if (userSystemIds.length > 0) {
         systemService.list().then((allSystems) => {
+          setAllSystems(allSystems);
           const firstUserSystem = allSystems.find((s) => userSystemIds.includes(s.id));
           if (firstUserSystem) {
             setSelectedSystem(firstUserSystem.id);
@@ -348,9 +370,52 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
   };
 
   /**
-   * 保存草稿处理
+   * AI 需求审查
    * 
-   * 先校验必填字段，再调用创建/编辑 API。
+   * 调用 Coze AI 审查当前表单填写的需求数据，检查用户故事格式、验收条件等
+   */
+  const handleAIReview = async () => {
+    try {
+      await form.validateFields(['title', 'description', 'systemId', 'priority', 'storyPoints']); // 校验必填字段
+    } catch {
+      message.warning('请先填写必填项后再进行 AI 审查');
+      return;
+    }
+
+    const values = form.getFieldsValue();
+    setReviewResult(null);
+    setShowReviewModal(true);
+    setReviewLoading(true);
+
+    try {
+      const result = await requirementService.reviewData({
+        title: values.title,
+        description: values.description,
+        priority: values.priority,
+        storyPoints: values.storyPoints,
+        reqType: values.reqType,
+        sourceChannel: values.sourceChannel,
+        systemId: values.systemId,
+        baId: values.baId,
+      });
+
+      if (result.success && result.data) {
+        setReviewResult(result.data);
+      } else {
+        message.error(result.message || 'AI 审查失败');
+        setShowReviewModal(false);
+      }
+    } catch (err: any) {
+      message.error(err?.message || 'AI 审查失败');
+      setShowReviewModal(false);
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  /**
+   * 保存草稿（不触发评审流程）
+   * 
    * 与 handleFinish 的区别：无 loading 状态（不阻止重复点击）。
    */
   const handleSaveDraft = async () => {
@@ -410,7 +475,32 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
               <Select
                 placeholder="输入系统名称搜索"
                 loading={systemsLoading}                         // 搜索加载中
-                options={systems.map((s) => ({ value: s.id, label: s.name }))} // 数据源：远程搜索结果
+                options={(() => {
+                  // 合并搜索结果和当前选中的系统，确保选中的系统始终在选项中
+                  const optionMap = new Map();
+                  
+                  // 先添加搜索结果
+                  systems.forEach((s) => {
+                    optionMap.set(s.id, s);
+                  });
+                  
+                  // 如果没有搜索结果，使用所有系统作为默认选项
+                  if (systems.length === 0) {
+                    allSystems.forEach((s) => {
+                      optionMap.set(s.id, s);
+                    });
+                  }
+                  
+                  // 确保当前选中的系统在选项中
+                  if (selectedSystem) {
+                    const selectedSys = allSystems.find((s) => s.id === selectedSystem);
+                    if (selectedSys) {
+                      optionMap.set(selectedSys.id, selectedSys);
+                    }
+                  }
+                  
+                  return Array.from(optionMap.values()).map((s) => ({ value: s.id, label: s.name }));
+                })()}
                 onChange={handleSystemChange}                    // 切换系统时联动清空 BA/PM + 记录名称
                 onSearch={handleSystemSearch}                    // 远程搜索：输入关键词后 300ms 防抖请求
                 showSearch                                       // 支持搜索输入
@@ -539,6 +629,7 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
             {onCancel && <Button onClick={onCancel}>取消</Button>}
             <Button type="default" icon={<SaveOutlined />} onClick={handleSaveDraft}>保存草稿</Button>
+            <Button type="default" icon={<RobotOutlined />} onClick={handleAIReview} loading={reviewLoading}>AI 审查</Button>
             <Button type="primary" icon={<SendOutlined />} htmlType="submit" loading={isSubmitting}>
               {mode === 'create' ? '保存并发起评审' : '发起评审'}
             </Button>
@@ -615,6 +706,257 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
           </Card>
         </div>
       </div>
+
+      {/* AI 需求审查 Modal */}
+      <Modal
+        title={
+          <Space>
+            <RobotOutlined style={{ color: '#7c3aed' }} />
+            <span style={{ fontWeight: 600, fontSize: 16 }}>
+              {reviewResult ? 'AI 审查报告' : 'AI 正在审查...'}
+            </span>
+          </Space>
+        }
+        open={showReviewModal}
+        onCancel={() => {
+          if (reviewLoading) return;
+          setShowReviewModal(false);
+        }}
+        maskClosable={!reviewLoading}
+        closable={!reviewLoading}
+        width={720}
+        styles={{ body: { padding: reviewLoading ? '40px 24px' : '0' } }}
+        footer={
+          reviewResult ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {reviewResult.acceptanceCriteria && reviewResult.acceptanceCriteria.length > 0 && (
+                  <Button
+                    size="small"
+                    icon={<CopyOutlined />}
+                    onClick={() => {
+                      const parts: string[] = [];
+                      if (reviewResult.suggestions.length > 0) {
+                        parts.push('【优化建议】\n' + reviewResult.suggestions.map((s, i) => `${i + 1}. ${s}`).join('\n'));
+                      }
+                      if (reviewResult.acceptanceCriteria && reviewResult.acceptanceCriteria.length > 0) {
+                        parts.push('【验收条件】\n' + reviewResult.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n'));
+                      }
+                      navigator.clipboard.writeText(parts.join('\n\n'));
+                      message.success('建议和验收条件已复制');
+                    }}
+                  >
+                    复制建议和验收条件
+                  </Button>
+                )}
+              </div>
+              <Button type="primary" onClick={() => setShowReviewModal(false)}>
+                我知道了
+              </Button>
+            </div>
+          ) : null
+        }
+      >
+        {!reviewResult ? (
+          <div style={{ textAlign: 'center', padding: '60px 40px' }}>
+            <style>{`
+              @keyframes aiPulse {
+                0%, 100% { opacity: 0.4; transform: scale(1); }
+                50% { opacity: 1; transform: scale(1.1); }
+              }
+              @keyframes aiDot1 { 0%, 20% { opacity: 0.2; } 50% { opacity: 1; } 100% { opacity: 0.2; } }
+              @keyframes aiDot2 { 0%, 40% { opacity: 0.2; } 70% { opacity: 1; } 100% { opacity: 0.2; } }
+              @keyframes aiDot3 { 0%, 60% { opacity: 0.2; } 90% { opacity: 1; } 100% { opacity: 0.2; } }
+              @keyframes aiSlide {
+                0% { transform: translateY(12px); opacity: 0; }
+                100% { transform: translateY(0); opacity: 1; }
+              }
+              .ai-thinking-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #1677ff; margin: 0 4px; }
+              .ai-thinking-dot:nth-child(1) { animation: aiDot1 1.4s infinite; }
+              .ai-thinking-dot:nth-child(2) { animation: aiDot2 1.4s infinite; }
+              .ai-thinking-dot:nth-child(3) { animation: aiDot3 1.4s infinite; }
+            `}</style>
+            <div style={{ animation: 'aiPulse 2s ease-in-out infinite', fontSize: 64, marginBottom: 24 }}>
+              🔍
+            </div>
+            <Title level={4} style={{ marginBottom: 8 }}>
+              <span style={{ color: '#1677ff' }}>AI 需求审查</span> 正在分析...
+            </Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
+              正在检查需求完整性和规范性
+              <span className="ai-thinking-dot" />
+              <span className="ai-thinking-dot" />
+              <span className="ai-thinking-dot" />
+            </Text>
+            <div style={{ maxWidth: 400, margin: '0 auto', background: '#f6f8fa', borderRadius: 12, padding: '16px 20px', textAlign: 'left' }}>
+              {[
+                { label: '标题检查', desc: '检查标题是否简洁清晰', delay: 0 },
+                { label: '用户故事格式', desc: '验证描述是否符合标准格式', delay: 0.3 },
+                { label: '验收条件', desc: '检查是否包含明确的验收标准', delay: 0.6 },
+                { label: '优先级与工作量', desc: '评估优先级和故事点是否合理', delay: 0.9 },
+              ].map((step, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '8px 0', animation: `aiSlide 0.5s ease-out ${step.delay}s both`, borderBottom: i < 3 ? '1px solid #e8e8e8' : 'none' }}>
+                  <Spin size="small" style={{ marginRight: 12 }} />
+                  <div>
+                    <Text strong style={{ fontSize: 13 }}>{step.label}</Text>
+                    <br />
+                    <Text type="secondary" style={{ fontSize: 12 }}>{step.desc}</Text>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div>
+            {/* 评分头部卡片 */}
+            <div style={{
+              background: reviewResult.passed
+                ? 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)'
+                : reviewResult.score >= 60
+                  ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)'
+                  : 'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)',
+              borderBottom: `3px solid ${reviewResult.passed ? '#10b981' : reviewResult.score >= 60 ? '#f59e0b' : '#ef4444'}`,
+              padding: '24px 32px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 32,
+            }}>
+              {/* 评分圆圈 */}
+              <div style={{
+                width: 88, height: 88, borderRadius: '50%',
+                background: 'white',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                <div style={{
+                  fontSize: 30, fontWeight: 800, lineHeight: 1,
+                  color: reviewResult.passed ? '#10b981' : reviewResult.score >= 60 ? '#f59e0b' : '#ef4444',
+                }}>
+                  {reviewResult.score}
+                </div>
+                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>分</div>
+              </div>
+              {/* 评分说明 */}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#1f2937', marginBottom: 4 }}>
+                  {reviewResult.passed ? '审查通过' : reviewResult.score >= 60 ? '需要改进' : '问题较多'}
+                </div>
+                <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.6 }}>
+                  {reviewResult.passed
+                    ? '该需求符合规范要求，可以放心提交评审'
+                    : `该需求存在 ${reviewResult.issues.length} 个问题需要关注，建议优化后再提交评审`}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '0 24px 24px' }}>
+              {/* 优化后的标题和描述 */}
+              {(reviewResult.optimizedTitle || reviewResult.optimizedDescription) && (
+                <div style={{
+                  marginTop: 20, padding: 16,
+                  background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+                  borderRadius: 10, border: '1px solid #d8b4fe',
+                }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#7c3aed', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
+                    ✨ AI 优化建议
+                  </div>
+                  {reviewResult.optimizedTitle && (
+                    <div style={{ fontWeight: 600, fontSize: 15, color: '#1f2937', marginBottom: 8 }}>
+                      {reviewResult.optimizedTitle}
+                    </div>
+                  )}
+                  {reviewResult.optimizedDescription && (
+                    <div style={{ fontSize: 13, color: '#4b5563', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                      {reviewResult.optimizedDescription}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tabs：问题 / 建议 / 验收条件 */}
+              <Tabs
+                style={{ marginTop: 20 }}
+                defaultActiveKey="issues"
+                items={[
+                  reviewResult.issues.length > 0 ? {
+                    key: 'issues',
+                    label: <span style={{ fontSize: 13 }}>⚠️ 问题 ({reviewResult.issues.length})</span>,
+                    children: (
+                      <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+                        {reviewResult.issues.map((issue, index) => (
+                          <div key={index} style={{
+                            padding: '12px 16px',
+                            marginBottom: 8,
+                            borderRadius: 8,
+                            background: issue.severity === 'high' ? '#fef2f2' : issue.severity === 'medium' ? '#fffbeb' : '#eff6ff',
+                            borderLeft: `3px solid ${issue.severity === 'high' ? '#ef4444' : issue.severity === 'medium' ? '#f59e0b' : '#3b82f6'}`,
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                              <span style={{
+                                fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 4,
+                                background: issue.severity === 'high' ? '#fee2e2' : issue.severity === 'medium' ? '#fef3c7' : '#dbeafe',
+                                color: issue.severity === 'high' ? '#dc2626' : issue.severity === 'medium' ? '#d97706' : '#2563eb',
+                              }}>
+                                {issue.severity === 'high' ? '严重' : issue.severity === 'medium' ? '中等' : '轻微'}
+                              </span>
+                              <Text strong style={{ fontSize: 13, flex: 1 }}>{issue.message}</Text>
+                            </div>
+                            <div style={{ fontSize: 12, color: '#6b7280', paddingLeft: 2 }}>
+                              💡 {issue.suggestion}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ),
+                  } : null,
+                  reviewResult.suggestions.length > 0 ? {
+                    key: 'suggestions',
+                    label: <span style={{ fontSize: 13 }}>💡 建议 ({reviewResult.suggestions.length})</span>,
+                    children: (
+                      <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+                        {reviewResult.suggestions.map((suggestion, index) => (
+                          <div key={index} style={{
+                            display: 'flex', alignItems: 'baseline',
+                            padding: '10px 0', borderBottom: index < reviewResult.suggestions.length - 1 ? '1px solid #f3f4f6' : 'none',
+                          }}>
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              width: 22, height: 22, borderRadius: '50%',
+                              background: '#dbeafe', color: '#2563eb', fontSize: 11, fontWeight: 700,
+                              marginRight: 10, flexShrink: 0,
+                            }}>
+                              {index + 1}
+                            </span>
+                            <Text style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{suggestion}</Text>
+                          </div>
+                        ))}
+                      </div>
+                    ),
+                  } : null,
+                  reviewResult.acceptanceCriteria && reviewResult.acceptanceCriteria.length > 0 ? {
+                    key: 'criteria',
+                    label: <span style={{ fontSize: 13 }}>✅ 验收条件 ({reviewResult.acceptanceCriteria.length})</span>,
+                    children: (
+                      <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+                        {reviewResult.acceptanceCriteria.map((criteria, index) => (
+                          <div key={index} style={{
+                            display: 'flex', alignItems: 'baseline',
+                            padding: '10px 0', borderBottom: index < reviewResult.acceptanceCriteria.length - 1 ? '1px solid #f3f4f6' : 'none',
+                          }}>
+                            <CheckCircleOutlined style={{ color: '#10b981', fontSize: 16, marginRight: 10, marginTop: 2, flexShrink: 0 }} />
+                            <Text style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{criteria}</Text>
+                          </div>
+                        ))}
+                      </div>
+                    ),
+                  } : null,
+                ].filter(Boolean) as any}
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

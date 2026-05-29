@@ -639,7 +639,7 @@ describe('T1 US1.1 需求录入', () => {
       expect(body.data.list.length).toBeLessThanOrEqual(5);
     });
 
-    it('pageSize 超出上限100应截断为100', async () => {
+    it('pageSize 超出上限100应返回校验错误', async () => {
       const res = await app.inject({
         method: 'GET',
         url: '/api/requirements?pageSize=200',
@@ -648,8 +648,8 @@ describe('T1 US1.1 需求录入', () => {
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
-      expect(body.success).toBe(true);
-      expect(body.data.pageSize).toBe(100); // 截断为上限
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('VALIDATION_ERROR');
     });
 
     it('pageSize=0 应修正为1', async () => {
@@ -1133,69 +1133,60 @@ describe('T1 US1.1 需求录入', () => {
     let us15Timestamp: string;
 
     beforeAll(async () => {
-      us15Timestamp = Date.now().toString() + '_us15';
-      // 清理上次测试可能残留的数据
-      await prisma.user.deleteMany({
-        where: {
-          username: {
-            in: [
-              'test_train_admin_us1',
-              'test_super_admin_us1',
-              'test_tech_mgr_us1',
-              'test_ba2_us15',
-            ],
-          },
-        },
-      });
+      us15Timestamp = Date.now().toString() + '_' + Math.random().toString(36).slice(2, 8) + '_us15';
 
-      const trainAdminPasswordHash = await bcrypt.hash('TrainPass123!', 10);
-      const superAdminPasswordHash = await bcrypt.hash('SuperPass123!', 10);
-      const techMgrPasswordHash = await bcrypt.hash('TechPass123!', 10);
-      const ba2PasswordHash = await bcrypt.hash('BA2Pass123!', 10);
-
-      const trainAdminUser = await prisma.user.create({
-        data: {
+      // 使用 /api/auth/seed 创建用户，确保密码哈希一致
+      const trainAdminSeed = await app.inject({
+        method: 'POST',
+        url: '/api/auth/seed',
+        payload: {
           username: 'test_train_admin_us1_' + us15Timestamp,
-          password: trainAdminPasswordHash,
+          password: 'TrainPass123!',
           displayName: '测试火车管理员_US1',
           email: 'test_train_admin_us1_' + us15Timestamp + '@test.com',
           role: 'TRAIN_ADMIN',
         },
       });
-      trainAdminId = trainAdminUser.id;
+      trainAdminId = trainAdminSeed.json().data.id;
 
-      const superAdminUser = await prisma.user.create({
-        data: {
+      const superAdminSeed = await app.inject({
+        method: 'POST',
+        url: '/api/auth/seed',
+        payload: {
           username: 'test_super_admin_us1_' + us15Timestamp,
-          password: superAdminPasswordHash,
+          password: 'SuperPass123!',
           displayName: '测试超级管理员_US1',
           email: 'test_super_admin_us1_' + us15Timestamp + '@test.com',
           role: 'SUPER_ADMIN',
         },
       });
-      superAdminId = superAdminUser.id;
+      superAdminId = superAdminSeed.json().data.id;
 
-      const techMgrUser = await prisma.user.create({
-        data: {
+      const techMgrSeed = await app.inject({
+        method: 'POST',
+        url: '/api/auth/seed',
+        payload: {
           username: 'test_tech_mgr_us1_' + us15Timestamp,
-          password: techMgrPasswordHash,
+          password: 'TechPass123!',
           displayName: '测试技术经理_US1',
           email: 'test_tech_mgr_us1_' + us15Timestamp + '@test.com',
           role: 'TECH_MGR',
         },
       });
-      techMgrId = techMgrUser.id;
+      techMgrId = techMgrSeed.json().data.id;
 
-      const ba2User = await prisma.user.create({
-        data: {
+      const ba2Seed = await app.inject({
+        method: 'POST',
+        url: '/api/auth/seed',
+        payload: {
           username: 'test_ba2_us15_' + us15Timestamp,
-          password: ba2PasswordHash,
+          password: 'BA2Pass123!',
           displayName: '测试BA2_US15',
           email: 'test_ba2_us15_' + us15Timestamp + '@test.com',
           role: 'BA',
         },
       });
-      ba2Id = ba2User.id;
+      ba2Id = ba2Seed.json().data.id;
 
       // 收集所有测试用户 ID 用于清理
       allTestUserIds = [trainAdminId, superAdminId, techMgrId, ba2Id].filter(Boolean);

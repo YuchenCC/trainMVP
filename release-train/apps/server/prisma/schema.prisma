@@ -7,355 +7,337 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ========== 用户 ==========
 model User {
-  id          String   @id @default(cuid())       // 用户ID
-  username    String   @unique                      // 用户名
-  displayName String                                // 显示名称
-  email       String   @unique                      // 邮箱
-  password    String?                               // 密码（本地开发用，生产走SSO）
-  role        Role     @default(BA)                 // 角色
-  ssoId       String?  @unique                      // SSO对接ID
-  createdAt   DateTime @default(now())              // 创建时间
-  updatedAt   DateTime @updatedAt                   // 更新时间
-
-  ownedRequirements   Requirement[]  @relation("BA")        // 作为业务归属人的需求
-  pmRequirements      Requirement[]  @relation("PM")        // 作为产品经理的需求
-  createdRequirements Requirement[]  @relation("Creator")   // 创建的需求
-  createdTrains       Train[]        @relation("TrainCreator") // 创建的火车
-  createdSchedules    TrainSchedule[] @relation("ScheduleCreator") // 创建的班次
-  statusLogs          StatusLog[]    @relation("StatusOperator") // 操作的状态日志
-  emergencyApprovals  EmergencyChange[] @relation("Approver")     // 审批的紧急变更
-  systemMembers       SystemMember[]                       // 所属系统成员
+  id                  String            @id @default(cuid())
+  username            String            @unique
+  displayName         String
+  email               String            @unique
+  password            String?
+  role                Role              @default(BA)
+  ssoId               String?           @unique
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  emergencyApprovals  EmergencyChange[] @relation("Approver")
+  ownedRequirements   Requirement[]     @relation("BA")
+  createdRequirements Requirement[]     @relation("Creator")
+  pmRequirements      Requirement[]     @relation("PM")
+  statusLogs          StatusLog[]       @relation("StatusOperator")
+  systemMembers       SystemMember[]
+  createdTrains       Train[]           @relation("TrainCreator")
+  createdSchedules    TrainSchedule[]   @relation("ScheduleCreator")
 }
 
-enum Role {
-  BA             // 业务BA
-  PM             // 产品经理
-  PROJECT_MGR    // 项目经理
-  TECH_MGR       // 技术经理
-  TEST_MGR       // 测试经理
-  TRAIN_ADMIN    // 火车管理员
-  SUPER_ADMIN    // 超级管理员
-}
-
-// ========== 系统 ==========
 model System {
-  id          String   @id @default(cuid())       // 系统ID
-  name        String   @unique                      // 系统名称
-  description String?                               // 系统描述
-  createdAt   DateTime @default(now())              // 创建时间
-  updatedAt   DateTime @updatedAt                   // 更新时间
-
-  requirements Requirement[]                         // 系统下的需求
-  trainSystems TrainSystem[]                        // 系统参与的火车
-  snapshots    TrainSystemSnapshot[]               // 系统参与的班次快照
-  members      SystemMember[]                      // 系统成员
+  id             String                @id @default(cuid())
+  name           String                @unique
+  description    String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  changeRequests ChangeRequest[]
+  requirements   Requirement[]
+  members        SystemMember[]
+  trainSystems   TrainSystem?
+  snapshots      TrainSystemSnapshot[]
 }
 
-// ========== 系统成员 ==========
 model SystemMember {
-  id       String     @id @default(cuid())         // 成员ID
-  systemId String                                   // 所属系统ID
-  userId   String                                   // 用户ID
-  role     SystemRole @default(DEV)                 // 成员角色
-
+  id       String     @id @default(cuid())
+  systemId String
+  userId   String
+  role     SystemRole @default(DEV)
   system   System     @relation(fields: [systemId], references: [id], onDelete: Cascade)
   user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([systemId, userId, role])               // 同一系统同一用户同一角色唯一
+  @@unique([systemId, userId, role])
 }
 
-enum SystemRole {
-  BA            // 业务BA
-  PM            // 产品经理
-  PROJECT_MGR   // 项目经理
-  TECH_MGR      // 技术经理
-  TEST_MGR      // 测试经理
-  DEV           // 开发人员
-  QA            // 测试人员
-}
-
-// ========== 需求 ==========
 model Requirement {
-  id              String        @id @default(cuid())       // 需求ID，自动生成的CUID
-  reqCode         String        @unique                      // 需求编号，格式REQ-{年份}-{4位序号}，全局唯一
-  title           String                                    // 需求标题，简洁描述核心内容
-  description     String        @db.Text                     // 需求描述，HTML富文本（存储时已做XSS过滤）
-  systemId        String                                    // 归属系统ID，必填，系统有关联需求时阻止删除
-  priority        Priority                                    // 优先级 P0/P1/P2/P3
-  storyPoints     Int                                         // 工作量点数 1-100，纳版容量计算依据
-  baId            String                                    // 业务归属人ID，需求的责任BA
-  pmId            String?                                   // 产品经理ID，评审通过时指定（可选）
-  creatorId       String                                    // 创建人ID，实际创建该需求的用户
-  status          ReqStatus     @default(DRAFT)             // 主状态，需求生命周期当前阶段
-  subStatus       ReqSubStatus?                              // 子状态，仅已纳版状态有值
-  scheduleId      String?                                   // 所属班次ID（v2.0：需求关联班次，而非火车）
-  version         Int           @default(1)                  // 乐观锁版本号，每次更新自增，防止并发冲突
-  reqType         ReqType?                                   // 需求类型：新功能/优化/缺陷（可选）
-  sourceChannel   SourceChannel?                             // 来源渠道：业务提出/用户反馈等（可选）
-  createdAt       DateTime      @default(now())              // 创建时间
-  updatedAt       DateTime      @updatedAt                   // 更新时间
+  id               String                  @id @default(cuid())
+  reqCode          String                  @unique
+  title            String
+  description      String
+  systemId         String
+  priority         Priority
+  storyPoints      Int
+  baId             String
+  pmId             String?
+  creatorId        String
+  status           ReqStatus               @default(DRAFT)
+  subStatus        ReqSubStatus?
+  version          Int                     @default(1)
+  reqType          ReqType?
+  sourceChannel    SourceChannel?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  scheduleId       String?
+  changeRequests   ChangeRequest[]
+  emergencyChanges EmergencyChange[]
+  ba               User                    @relation("BA", fields: [baId], references: [id])
+  creator          User                    @relation("Creator", fields: [creatorId], references: [id])
+  pm               User?                   @relation("PM", fields: [pmId], references: [id])
+  trainSchedule    TrainSchedule?          @relation(fields: [scheduleId], references: [id])
+  system           System                  @relation(fields: [systemId], references: [id])
+  dependants       RequirementDependency[] @relation("DependantRequirement")
+  dependencies     RequirementDependency[] @relation("DependencyRequirement")
+  statusLogs       StatusLog[]
 
-  // 关联关系
-  system          System        @relation(fields: [systemId], references: [id])             // 归属系统
-  ba              User          @relation("BA", fields: [baId], references: [id])           // 业务归属人
-  pm              User?         @relation("PM", fields: [pmId], references: [id])           // 产品经理
-  creator         User          @relation("Creator", fields: [creatorId], references: [id]) // 创建人
-  trainSchedule   TrainSchedule?   @relation(fields: [scheduleId], references: [id])       // 所属班次
-
-  // 依赖关系（双向：作为依赖方和被依赖方）
-  dependants      RequirementDependency[] @relation("DependantRequirement")  // 本需求依赖的其他需求
-  dependencies    RequirementDependency[] @relation("DependencyRequirement") // 依赖本需求的其他需求
-
-  // 审计与变更
-  statusLogs      StatusLog[]                               // 状态变更日志，操作审计
-  emergencyChanges  EmergencyChange[]                       // 紧急变更记录
-
-  // 业务查询索引
-  @@index([status, subStatus])   // 按主状态+子状态筛选（看板分组）
-  @@index([systemId])            // 按系统筛选需求列表
-  @@index([baId])                // BA查看自己的需求
-  @@index([scheduleId])          // 按班次筛选（v2.0）
-  @@index([priority])            // 按优先级排序
+  @@index([status, subStatus])
+  @@index([systemId])
+  @@index([baId])
+  @@index([scheduleId])
+  @@index([priority])
 }
 
-// ========== 需求依赖关系 ==========
 model RequirementDependency {
-  id             String       @id @default(cuid())         // 依赖关系ID
-  dependantId    String                                   // 依赖方需求ID（A依赖B，A是依赖方）
-  dependencyId   String                                   // 被依赖方需求ID（A依赖B，B是被依赖方）
+  id           String      @id @default(cuid())
+  dependantId  String
+  dependencyId String
+  dependant    Requirement @relation("DependantRequirement", fields: [dependantId], references: [id], onDelete: Cascade)
+  dependency   Requirement @relation("DependencyRequirement", fields: [dependencyId], references: [id], onDelete: Cascade)
 
-  dependant      Requirement  @relation("DependantRequirement", fields: [dependantId], references: [id], onDelete: Cascade)
-  dependency     Requirement  @relation("DependencyRequirement", fields: [dependencyId], references: [id], onDelete: Cascade)
-
-  @@unique([dependantId, dependencyId])                    // 同一对依赖关系唯一
-  @@index([dependencyId])                                  // 按被依赖方查询（谁依赖了我）
+  @@unique([dependantId, dependencyId])
+  @@index([dependencyId])
 }
 
-// ========== 优先级枚举 ==========
-enum Priority {
-  P0   // 最高优先级（线上故障/业务阻断）
-  P1   // 高优先级（核心功能/重要需求）
-  P2   // 中优先级（常规需求）
-  P3   // 低优先级（优化/体验类）
-}
-
-// ========== 需求类型枚举 ==========
-enum ReqType {
-  NEW_FEATURE   // 新功能：全新开发的业务功能
-  OPTIMIZATION  // 优化：已有功能的改进提升
-  BUG           // 缺陷：需要修复的问题
-}
-
-// ========== 来源渠道枚举 ==========
-enum SourceChannel {
-  BUSINESS      // 业务提出：业务方直接提出
-  USER_FEEDBACK // 用户反馈：终端用户反馈
-  DATA_ANALYSIS // 数据分析：基于数据洞察提出
-  COMPETITOR    // 竞品分析：参考竞品功能提出
-}
-
-enum ReqStatus {
-  DRAFT           // 草稿
-  PENDING_REVIEW  // 待评审
-  READY           // 已就绪
-  REJECTED        // 已拒绝
-  ONBOARDED       // 已纳版
-  RELEASED        // 已投产
-  CANCELLED       // 已取消
-}
-
-enum ReqSubStatus {
-  DEV_IN_PROGRESS  // 开发中
-  SIT_TESTING      // SIT测试
-  UAT_TESTING      // UAT测试
-  FROZEN           // 封板
-}
-
-// ========== 状态变更记录 ==========
 model StatusLog {
-  id             String        @id @default(cuid())         // 日志ID
-  requirementId  String                                    // 需求ID
-  operationType  OperationType                              // 操作类型，用于审计日志
-  fromStatus     ReqStatus?                                // 变更前状态
-  toStatus       ReqStatus                                 // 变更后状态
-  fromSubStatus  ReqSubStatus?                             // 变更前子状态
-  toSubStatus    ReqSubStatus?                             // 变更后子状态
-  reason         String?       @db.Text                    // 变更原因
-  operatorId     String                                    // 操作人ID
-  operator       User          @relation("StatusOperator", fields: [operatorId], references: [id]) // 操作人
-  createdAt      DateTime      @default(now())              // 操作时间
+  id            String        @id @default(cuid())
+  requirementId String
+  operationType OperationType
+  fromStatus    ReqStatus?
+  toStatus      ReqStatus
+  fromSubStatus ReqSubStatus?
+  toSubStatus   ReqSubStatus?
+  reason        String?
+  operatorId    String
+  createdAt     DateTime      @default(now())
+  operator      User          @relation("StatusOperator", fields: [operatorId], references: [id])
+  requirement   Requirement   @relation(fields: [requirementId], references: [id], onDelete: Cascade)
 
-  requirement    Requirement   @relation(fields: [requirementId], references: [id], onDelete: Cascade)
-
-  @@index([requirementId, createdAt(sort: Desc)])         // 需求时间线（按时间倒序）
+  @@index([requirementId, createdAt(sort: Desc)])
 }
 
-// ========== 操作类型枚举 ==========
-enum OperationType {
-  CREATE                // 创建需求
-  UPDATE                // 编辑需求（草稿状态）
-  SUBMIT_REVIEW         // 发起评审
-  REVIEW_PASS           // 评审通过
-  REVIEW_REJECT         // 评审拒绝
-  RE_EDIT               // 重新编辑（已拒绝→草稿）
-  CANCEL                // 取消需求
-  CHANGE_REQUIREMENT    // 需求变更（已就绪/已纳版非封板→草稿）
-  EMERGENCY_CHANGE      // 紧急变更（封板→草稿，需审批）
-  DEV_COMPLETE          // 开发完成（开发中→SIT测试）
-  SIT_PASS              // SIT通过（SIT测试→UAT测试）
-  UAT_PASS              // UAT通过（UAT测试→封板）
-  CHANGE_SUB_STATUS     // 子状态变更
-  BATCH_SUBMIT_REVIEW   // 批量发起评审
-  BATCH_CANCEL          // 批量取消
-  BATCH_CHANGE_PRIORITY // 批量修改优先级
-  ONBOARD               // 纳版（Task 2）
-  REMOVE                // 从火车移除（Task 2）
-  RELEASE               // 投产（Task 2）
-  ROLLBACK              // 回滚（Task 2）
-}
-
-// ========== 版本火车 ==========
 model Train {
-  id            String       @id @default(cuid())         // 火车ID
-  name          String                                     // 火车名称
-  description   String?      @db.Text                     // 火车描述
-  version       Int          @default(1)                  // 乐观锁版本号
-
-  createdById   String                                     // 创建人ID
-  createdBy     User         @relation("TrainCreator", fields: [createdById], references: [id]) // 创建人
-  createdAt     DateTime     @default(now())              // 创建时间
-  updatedAt     DateTime     @updatedAt                   // 更新时间
-
-  trainSystems  TrainSystem[]                            // 火车-系统关联
-  schedules     TrainSchedule[]                         // 火车下的班次（1火车→多班次）
+  id           String          @id @default(cuid())
+  name         String
+  description  String?
+  createdById  String
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  version      Int             @default(1)
+  createdBy    User            @relation("TrainCreator", fields: [createdById], references: [id])
+  schedules    TrainSchedule[]
+  trainSystems TrainSystem[]
 }
 
-// ========== 火车班次 ==========
 model TrainSchedule {
-  id            String                @id @default(cuid())         // 班次ID
-  trainId       String                                              // 火车ID
-  name          String                                              // 班次名称（如：第1班、Q2A1等）
-  status        TrainScheduleStatus  @default(PLANNING)          // 班次状态
-  startDate     DateTime?                                        // 开始日期
-  endDate       DateTime?                                        // 结束日期
-  boardingDate  DateTime?                                        // 统一纳版日（第一节点）
-  sitDate       DateTime?                                        // SIT提测日（第三节点）
-  uatDate       DateTime?                                        // UAT提测日（第四节点）
-  lockdownDate  DateTime?                                        // 统一封板日（第五节点）
-  releaseDate   DateTime?                                        // 统一投产日（第六节点）
-  version       Int                   @default(1)                  // 乐观锁版本号
+  id           String                 @id @default(cuid())
+  trainId      String
+  name         String
+  status       TrainScheduleStatus    @default(PLANNING)
+  startDate    DateTime?
+  endDate      DateTime?
+  boardingDate DateTime?
+  lockdownDate DateTime?
+  releaseDate  DateTime?
+  version      Int                    @default(1)
+  createdById  String
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  sitDate      DateTime?
+  uatDate      DateTime?
+  requirements Requirement[]
+  createdBy    User                   @relation("ScheduleCreator", fields: [createdById], references: [id])
+  train        Train                  @relation(fields: [trainId], references: [id], onDelete: Cascade)
+  keyDates     TrainScheduleKeyDate[]
+  snapshots    TrainSystemSnapshot[]
 
-  createdById   String                                              // 创建人ID
-  createdBy     User         @relation("ScheduleCreator", fields: [createdById], references: [id]) // 创建人
-  createdAt     DateTime     @default(now())              // 创建时间
-  updatedAt     DateTime     @updatedAt                   // 更新时间
-
-  train         Train         @relation(fields: [trainId], references: [id], onDelete: Cascade)
-  requirements  Requirement[]                            // 本班次下的需求
-  snapshots     TrainSystemSnapshot[]                   // 本班次的容量快照
-  keyDates      TrainScheduleKeyDate[]                // 自定义关键日期
-
-  @@index([trainId, createdAt(sort: Desc)])             // 按火车和创建时间查询班次
+  @@index([trainId, createdAt(sort: Desc)])
 }
 
-enum TrainScheduleStatus {
-  PLANNING      // 规划中
-  IN_PROGRESS   // 进行中
-  LOCKED_DOWN   // 已封板
-  RELEASED      // 已投产
-}
-
-// ========== 火车-系统关联 ==========
 model TrainSystem {
-  id             String  @id @default(cuid())             // 关联ID
-  trainId        String                                     // 火车ID
-  systemId       String                                     // 系统ID
-  capacityPoints Int     @default(0)                       // 容量点数（系统可承接的最大工作量）
-  usedPoints     Int     @default(0)                       // 已用点数（已分配的需求工作量）
-
-  // 团队成员配置
-  baUserId       String?                                   // 业务BA用户ID
-  pmUserId       String?                                   // 产品经理用户ID
-  techMgrUserId  String?                                   // 技术经理用户ID
-  testMgrUserId  String?                                   // 测试负责人用户ID
-  devTeamUserIds String[]   @default([])                   // 开发团队用户ID列表（JSON数组存储）
-
-  train          Train   @relation(fields: [trainId], references: [id], onDelete: Cascade) // 所属火车
-  system         System  @relation(fields: [systemId], references: [id], onDelete: Cascade) // 所属系统
-
-  @@unique([trainId, systemId])                            // 同一火车同一系统唯一
-  @@unique([systemId])                                     // 同一系统只能在一个火车中
-  @@index([trainId])                                       // 按火车查询搭载系统
-}
-
-// ========== 火车班次容量快照 ==========
-// 班次创建时保存搭载系统的容量配置快照，后续调整火车容量不影响已创建的班次
-model TrainSystemSnapshot {
-  id             String   @id @default(cuid())             // 快照ID
-  trainScheduleId String                                     // 班次ID
-  systemId       String                                     // 系统ID
-
-  // 容量快照
-  capacityPoints Int       @default(0)                       // 快照时的容量点
-  usedPoints     Int       @default(0)                       // 快照时的已用点
-
-  // 团队成员快照（创建时复制）
+  id             String   @id @default(cuid())
+  trainId        String
+  systemId       String   @unique
+  capacityPoints Int      @default(0)
+  usedPoints     Int      @default(0)
   baUserId       String?
   pmUserId       String?
   techMgrUserId  String?
   testMgrUserId  String?
-  devTeamUserIds String[]   @default([])
+  devTeamUserIds String[] @default([])
+  system         System   @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  train          Train    @relation(fields: [trainId], references: [id], onDelete: Cascade)
 
-  trainSchedule  TrainSchedule @relation(fields: [trainScheduleId], references: [id], onDelete: Cascade)
-  system         System        @relation(fields: [systemId], references: [id], onDelete: Cascade)
-
-  createdAt      DateTime @default(now())
-
-  @@unique([trainScheduleId, systemId])                 // 同一班次同一系统唯一
-  @@index([trainScheduleId])                              // 按班次查询快照
+  @@unique([trainId, systemId])
+  @@index([trainId])
 }
 
-// ========== 班次自定义关键日期 ==========
-model TrainScheduleKeyDate {
-  id             String       @id @default(cuid())         // 关键日期ID
-  trainScheduleId String                                     // 班次ID
-  name           String                                     // 关键日期名称
-  date           DateTime?                                  // 日期
-  createdAt      DateTime     @default(now())              // 创建时间
-  updatedAt      DateTime     @updatedAt                   // 更新时间
+model TrainSystemSnapshot {
+  id              String        @id @default(cuid())
+  trainScheduleId String
+  systemId        String
+  capacityPoints  Int           @default(0)
+  usedPoints      Int           @default(0)
+  baUserId        String?
+  pmUserId        String?
+  techMgrUserId   String?
+  testMgrUserId   String?
+  devTeamUserIds  String[]      @default([])
+  createdAt       DateTime      @default(now())
+  system          System        @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  trainSchedule   TrainSchedule @relation(fields: [trainScheduleId], references: [id], onDelete: Cascade)
 
-  trainSchedule  TrainSchedule @relation(fields: [trainScheduleId], references: [id], onDelete: Cascade)
+  @@unique([trainScheduleId, systemId])
+  @@index([trainScheduleId])
+}
+
+model TrainScheduleKeyDate {
+  id              String        @id @default(cuid())
+  trainScheduleId String
+  name            String
+  date            DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  trainSchedule   TrainSchedule @relation(fields: [trainScheduleId], references: [id], onDelete: Cascade)
 
   @@index([trainScheduleId])
 }
 
-// ========== 紧急变更审批 ==========
 model EmergencyChange {
-  id             String          @id @default(cuid())       // 变更ID
-  requirementId  String                                     // 关联需求ID
-  requirement    Requirement     @relation(fields: [requirementId], references: [id], onDelete: Cascade) // 关联需求
-  urgency        UrgencyLevel                               // 紧急程度
-  reason         String          @db.Text                   // 变更原因
-  status         ApprovalStatus  @default(PENDING)          // 审批状态
-  approvalStep   Int             @default(1)                // 审批步骤：1=测试经理, 2=项目经理
-  approverId     String?                                    // 当前审批人ID
-  approver       User?            @relation("Approver", fields: [approverId], references: [id]) // 审批人
-  approvedAt     DateTime?                                  // 审批通过时间
-  rejectReason   String?         @db.Text                   // 驳回原因
-  createdAt      DateTime        @default(now())            // 创建时间
+  id            String         @id @default(cuid())
+  requirementId String
+  urgency       UrgencyLevel
+  reason        String
+  status        ApprovalStatus @default(PENDING)
+  approverId    String?
+  approvedAt    DateTime?
+  rejectReason  String?
+  createdAt     DateTime       @default(now())
+  approvalStep  Int            @default(1)
+  approver      User?          @relation("Approver", fields: [approverId], references: [id])
+  requirement   Requirement    @relation(fields: [requirementId], references: [id], onDelete: Cascade)
 
-  @@index([status, approverId])                           // 审批人查看待审批列表
+  @@index([status, approverId])
+}
+
+model ChangeRequest {
+  id              String      @id @default(cuid())
+  changeCode      String      @unique
+  requirementId   String
+  systemId        String
+  conversation    String?
+  changeSummary   String?
+  workloadImpact  String?
+  scheduleImpact  String?
+  riskLevel       String?     @default("低")
+  riskDescription String?
+  status          String      @default("PENDING")
+  source          String      @default("coze")
+  confirmedBy     String?
+  confirmedAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  requirement     Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  system          System      @relation(fields: [systemId], references: [id])
+
+  @@index([requirementId, createdAt(sort: Desc)])
+  @@index([systemId])
+}
+
+enum Role {
+  BA
+  PM
+  PROJECT_MGR
+  TECH_MGR
+  TEST_MGR
+  TRAIN_ADMIN
+  SUPER_ADMIN
+}
+
+enum SystemRole {
+  BA
+  PM
+  PROJECT_MGR
+  TECH_MGR
+  TEST_MGR
+  DEV
+  QA
+}
+
+enum Priority {
+  P0
+  P1
+  P2
+  P3
+}
+
+enum ReqType {
+  NEW_FEATURE
+  OPTIMIZATION
+  BUG
+}
+
+enum SourceChannel {
+  BUSINESS
+  USER_FEEDBACK
+  DATA_ANALYSIS
+  COMPETITOR
+}
+
+enum ReqStatus {
+  DRAFT
+  PENDING_REVIEW
+  READY
+  REJECTED
+  ONBOARDED
+  RELEASED
+  CANCELLED
+}
+
+enum ReqSubStatus {
+  DEV_IN_PROGRESS
+  SIT_TESTING
+  UAT_TESTING
+  FROZEN
+}
+
+enum OperationType {
+  CREATE
+  UPDATE
+  SUBMIT_REVIEW
+  REVIEW_PASS
+  REVIEW_REJECT
+  RE_EDIT
+  CANCEL
+  CHANGE_REQUIREMENT
+  EMERGENCY_CHANGE
+  DEV_COMPLETE
+  SIT_PASS
+  UAT_PASS
+  BATCH_SUBMIT_REVIEW
+  BATCH_CANCEL
+  BATCH_CHANGE_PRIORITY
+  ONBOARD
+  REMOVE
+  RELEASE
+  ROLLBACK
+  CHANGE_SUB_STATUS
+}
+
+enum TrainScheduleStatus {
+  PLANNING
+  IN_PROGRESS
+  LOCKED_DOWN
+  RELEASED
 }
 
 enum UrgencyLevel {
-  P0              // 最高紧急（线上故障）
-  P1              // 高紧急（业务阻断）
+  P0
+  P1
 }
 
 enum ApprovalStatus {
-  PENDING         // 待审批
-  APPROVED        // 已通过
-  REJECTED        // 已驳回
+  PENDING
+  APPROVED
+  REJECTED
 }
