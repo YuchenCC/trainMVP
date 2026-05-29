@@ -206,7 +206,8 @@ export async function generateOnboardSuggestions(
   console.log('📤 发送给 Coze 的数据:', JSON.stringify(cozeInput, null, 2));
 
   // 调用 Coze 工作流
-  const result = await coze.runWorkflowAndParse<SmartOnboardSuggestResponse>(CozeWorkflow.SMART_ONBOARD, cozeInput);
+  // SMART_ONBOARD 工作流起始变量名为 parameters（单个变量，非多个独立变量）
+  const result = await coze.runWorkflowAndParse<SmartOnboardSuggestResponse>(CozeWorkflow.SMART_ONBOARD, { parameters: cozeInput });
 
   // Coze 返回 null 时返回错误
   if (!result) {
