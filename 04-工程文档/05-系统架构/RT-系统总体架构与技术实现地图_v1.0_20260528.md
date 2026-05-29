@@ -496,7 +496,7 @@ RequirementForm (AI审查按钮)
             ├── 成功 → issues/suggestions/score
             │          + optimizedTitle/Description/acceptanceCriteria
             └── 失败 → 降级，返回空，不阻塞
-  → 合并结果: localScore×70% + aiScore×30%
+  → 合并结果: localScore×20% + aiScore×80%
   → HTTP 200 → ApiResponse<RequirementReviewResult>
   → setReviewResult() → Modal Tabs 展示
 ```

@@ -711,7 +711,7 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
       <Modal
         title={
           <Space>
-            <RobotOutlined style={{ color: '#7c3aed' }} />
+            <RobotOutlined style={{ color: 'var(--rt-purple, #7c3aed)' }} />
             <span style={{ fontWeight: 600, fontSize: 16 }}>
               {reviewResult ? 'AI 审查报告' : 'AI 正在审查...'}
             </span>
@@ -736,17 +736,20 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
                     icon={<CopyOutlined />}
                     onClick={() => {
                       const parts: string[] = [];
-                      if (reviewResult.suggestions.length > 0) {
-                        parts.push('【优化建议】\n' + reviewResult.suggestions.map((s, i) => `${i + 1}. ${s}`).join('\n'));
+                      if (reviewResult.optimizedDescription) {
+                        const desc = reviewResult.optimizedTitle
+                          ? `${reviewResult.optimizedTitle}\n\n${reviewResult.optimizedDescription}`
+                          : reviewResult.optimizedDescription;
+                        parts.push('【优化描述】\n' + desc);
                       }
                       if (reviewResult.acceptanceCriteria && reviewResult.acceptanceCriteria.length > 0) {
                         parts.push('【验收条件】\n' + reviewResult.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join('\n'));
                       }
                       navigator.clipboard.writeText(parts.join('\n\n'));
-                      message.success('建议和验收条件已复制');
+                      message.success('优化描述和验收条件已复制');
                     }}
                   >
-                    复制建议和验收条件
+                    复制优化描述和验收条件
                   </Button>
                 )}
               </div>
@@ -771,7 +774,7 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
                 0% { transform: translateY(12px); opacity: 0; }
                 100% { transform: translateY(0); opacity: 1; }
               }
-              .ai-thinking-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #1677ff; margin: 0 4px; }
+              .ai-thinking-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--rt-primary, #2563eb); margin: 0 4px; }
               .ai-thinking-dot:nth-child(1) { animation: aiDot1 1.4s infinite; }
               .ai-thinking-dot:nth-child(2) { animation: aiDot2 1.4s infinite; }
               .ai-thinking-dot:nth-child(3) { animation: aiDot3 1.4s infinite; }
@@ -780,7 +783,7 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
               🔍
             </div>
             <Title level={4} style={{ marginBottom: 8 }}>
-              <span style={{ color: '#1677ff' }}>AI 需求审查</span> 正在分析...
+              <span style={{ color: 'var(--rt-primary, #2563eb)' }}>AI 需求审查</span> 正在分析...
             </Title>
             <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>
               正在检查需求完整性和规范性
@@ -788,14 +791,14 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
               <span className="ai-thinking-dot" />
               <span className="ai-thinking-dot" />
             </Text>
-            <div style={{ maxWidth: 400, margin: '0 auto', background: '#f6f8fa', borderRadius: 12, padding: '16px 20px', textAlign: 'left' }}>
+            <div style={{ maxWidth: 400, margin: '0 auto', background: 'var(--rt-surface-muted, #f8fafc)', borderRadius: 12, padding: '16px 20px', textAlign: 'left' }}>
               {[
                 { label: '标题检查', desc: '检查标题是否简洁清晰', delay: 0 },
                 { label: '用户故事格式', desc: '验证描述是否符合标准格式', delay: 0.3 },
                 { label: '验收条件', desc: '检查是否包含明确的验收标准', delay: 0.6 },
                 { label: '优先级与工作量', desc: '评估优先级和故事点是否合理', delay: 0.9 },
               ].map((step, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '8px 0', animation: `aiSlide 0.5s ease-out ${step.delay}s both`, borderBottom: i < 3 ? '1px solid #e8e8e8' : 'none' }}>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', padding: '8px 0', animation: `aiSlide 0.5s ease-out ${step.delay}s both`, borderBottom: i < 3 ? '1px solid var(--rt-divider, #eef1f5)' : 'none' }}>
                   <Spin size="small" style={{ marginRight: 12 }} />
                   <div>
                     <Text strong style={{ fontSize: 13 }}>{step.label}</Text>
@@ -811,11 +814,11 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
             {/* 评分头部卡片 */}
             <div style={{
               background: reviewResult.passed
-                ? 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)'
+                ? 'linear-gradient(135deg, var(--rt-success-bg, #ecfdf3) 0%, #d1fae5 100%)'
                 : reviewResult.score >= 60
-                  ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)'
-                  : 'linear-gradient(135deg, #fef2f2 0%, #fecaca 100%)',
-              borderBottom: `3px solid ${reviewResult.passed ? '#10b981' : reviewResult.score >= 60 ? '#f59e0b' : '#ef4444'}`,
+                  ? 'linear-gradient(135deg, var(--rt-warning-bg, #fffbeb) 0%, #fef3c7 100%)'
+                  : 'linear-gradient(135deg, var(--rt-danger-bg, #fef2f2) 0%, #fecaca 100%)',
+              borderBottom: `3px solid ${reviewResult.passed ? 'var(--rt-success, #16a34a)' : reviewResult.score >= 60 ? 'var(--rt-warning, #f59e0b)' : 'var(--rt-danger, #dc2626)'}`,
               padding: '24px 32px',
               display: 'flex',
               alignItems: 'center',
@@ -824,25 +827,25 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
               {/* 评分圆圈 */}
               <div style={{
                 width: 88, height: 88, borderRadius: '50%',
-                background: 'white',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                background: 'var(--rt-surface, #fff)',
+                boxShadow: 'var(--rt-shadow-card, 0 1px 2px rgba(16,24,40,0.04))',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 flexShrink: 0,
               }}>
                 <div style={{
                   fontSize: 30, fontWeight: 800, lineHeight: 1,
-                  color: reviewResult.passed ? '#10b981' : reviewResult.score >= 60 ? '#f59e0b' : '#ef4444',
+                  color: reviewResult.passed ? 'var(--rt-success, #16a34a)' : reviewResult.score >= 60 ? 'var(--rt-warning, #f59e0b)' : 'var(--rt-danger, #dc2626)',
                 }}>
                   {reviewResult.score}
                 </div>
-                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>分</div>
+                <div style={{ fontSize: 11, color: 'var(--rt-text-tertiary, #98a2b3)', marginTop: 2 }}>分</div>
               </div>
               {/* 评分说明 */}
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#1f2937', marginBottom: 4 }}>
+                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--rt-text, #172033)', marginBottom: 4 }}>
                   {reviewResult.passed ? '审查通过' : reviewResult.score >= 60 ? '需要改进' : '问题较多'}
                 </div>
-                <div style={{ fontSize: 13, color: '#6b7280', lineHeight: 1.6 }}>
+                <div style={{ fontSize: 13, color: 'var(--rt-text-secondary, #667085)', lineHeight: 1.6 }}>
                   {reviewResult.passed
                     ? '该需求符合规范要求，可以放心提交评审'
                     : `该需求存在 ${reviewResult.issues.length} 个问题需要关注，建议优化后再提交评审`}
@@ -855,19 +858,19 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
               {(reviewResult.optimizedTitle || reviewResult.optimizedDescription) && (
                 <div style={{
                   marginTop: 20, padding: 16,
-                  background: 'linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)',
+                  background: 'linear-gradient(135deg, var(--rt-purple-bg, #f5f3ff) 0%, #ede9fe 100%)',
                   borderRadius: 10, border: '1px solid #d8b4fe',
                 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#7c3aed', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--rt-purple, #7c3aed)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>
                     ✨ AI 优化建议
                   </div>
                   {reviewResult.optimizedTitle && (
-                    <div style={{ fontWeight: 600, fontSize: 15, color: '#1f2937', marginBottom: 8 }}>
+                    <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--rt-text, #172033)', marginBottom: 8 }}>
                       {reviewResult.optimizedTitle}
                     </div>
                   )}
                   {reviewResult.optimizedDescription && (
-                    <div style={{ fontSize: 13, color: '#4b5563', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                    <div style={{ fontSize: 13, color: 'var(--rt-text-secondary, #667085)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
                       {reviewResult.optimizedDescription}
                     </div>
                   )}
@@ -889,20 +892,20 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
                             padding: '12px 16px',
                             marginBottom: 8,
                             borderRadius: 8,
-                            background: issue.severity === 'high' ? '#fef2f2' : issue.severity === 'medium' ? '#fffbeb' : '#eff6ff',
-                            borderLeft: `3px solid ${issue.severity === 'high' ? '#ef4444' : issue.severity === 'medium' ? '#f59e0b' : '#3b82f6'}`,
+                            background: issue.severity === 'high' ? 'var(--rt-danger-bg, #fef2f2)' : issue.severity === 'medium' ? 'var(--rt-warning-bg, #fffbeb)' : 'var(--rt-primary-bg, #eff6ff)',
+                            borderLeft: `3px solid ${issue.severity === 'high' ? 'var(--rt-danger, #dc2626)' : issue.severity === 'medium' ? 'var(--rt-warning, #f59e0b)' : 'var(--rt-primary, #2563eb)'}`,
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                               <span style={{
                                 fontSize: 11, fontWeight: 600, padding: '1px 6px', borderRadius: 4,
                                 background: issue.severity === 'high' ? '#fee2e2' : issue.severity === 'medium' ? '#fef3c7' : '#dbeafe',
-                                color: issue.severity === 'high' ? '#dc2626' : issue.severity === 'medium' ? '#d97706' : '#2563eb',
+                                color: issue.severity === 'high' ? 'var(--rt-danger, #dc2626)' : issue.severity === 'medium' ? '#d97706' : 'var(--rt-primary, #2563eb)',
                               }}>
                                 {issue.severity === 'high' ? '严重' : issue.severity === 'medium' ? '中等' : '轻微'}
                               </span>
-                              <Text strong style={{ fontSize: 13, flex: 1 }}>{issue.message}</Text>
+                              <Text strong style={{ fontSize: 13, flex: 1, color: 'var(--rt-text, #172033)' }}>{issue.message}</Text>
                             </div>
-                            <div style={{ fontSize: 12, color: '#6b7280', paddingLeft: 2 }}>
+                            <div style={{ fontSize: 12, color: 'var(--rt-text-secondary, #667085)', paddingLeft: 2 }}>
                               💡 {issue.suggestion}
                             </div>
                           </div>
@@ -918,17 +921,17 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
                         {reviewResult.suggestions.map((suggestion, index) => (
                           <div key={index} style={{
                             display: 'flex', alignItems: 'baseline',
-                            padding: '10px 0', borderBottom: index < reviewResult.suggestions.length - 1 ? '1px solid #f3f4f6' : 'none',
+                            padding: '10px 0', borderBottom: index < reviewResult.suggestions.length - 1 ? '1px solid var(--rt-divider, #eef1f5)' : 'none',
                           }}>
                             <span style={{
                               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                               width: 22, height: 22, borderRadius: '50%',
-                              background: '#dbeafe', color: '#2563eb', fontSize: 11, fontWeight: 700,
+                              background: 'var(--rt-primary-bg, #eff6ff)', color: 'var(--rt-primary, #2563eb)', fontSize: 11, fontWeight: 700,
                               marginRight: 10, flexShrink: 0,
                             }}>
                               {index + 1}
                             </span>
-                            <Text style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{suggestion}</Text>
+                            <Text style={{ fontSize: 13, color: 'var(--rt-text, #172033)', lineHeight: 1.6 }}>{suggestion}</Text>
                           </div>
                         ))}
                       </div>
@@ -939,13 +942,13 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
                     label: <span style={{ fontSize: 13 }}>✅ 验收条件 ({reviewResult.acceptanceCriteria.length})</span>,
                     children: (
                       <div style={{ maxHeight: 360, overflowY: 'auto' }}>
-                        {reviewResult.acceptanceCriteria.map((criteria, index) => (
+                        {reviewResult.acceptanceCriteria!.map((criteria, index) => (
                           <div key={index} style={{
                             display: 'flex', alignItems: 'baseline',
-                            padding: '10px 0', borderBottom: index < reviewResult.acceptanceCriteria.length - 1 ? '1px solid #f3f4f6' : 'none',
+                            padding: '10px 0', borderBottom: index < reviewResult.acceptanceCriteria!.length - 1 ? '1px solid var(--rt-divider, #eef1f5)' : 'none',
                           }}>
-                            <CheckCircleOutlined style={{ color: '#10b981', fontSize: 16, marginRight: 10, marginTop: 2, flexShrink: 0 }} />
-                            <Text style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{criteria}</Text>
+                            <CheckCircleOutlined style={{ color: 'var(--rt-success, #16a34a)', fontSize: 16, marginRight: 10, marginTop: 2, flexShrink: 0 }} />
+                            <Text style={{ fontSize: 13, color: 'var(--rt-text, #172033)', lineHeight: 1.6 }}>{criteria}</Text>
                           </div>
                         ))}
                       </div>

@@ -323,9 +323,9 @@ export async function reviewRequirement(requirementId: string): Promise<Requirem
   const allIssues = [...localIssues, ...aiIssues];
   const allSuggestions = [...new Set(aiSuggestions)]; // 去重
   
-  // 计算最终分数（本地规则权重 70%，AI 权重 30%）
+  // 计算最终分数（本地规则权重 20%，AI 权重 80%）
   const localScore = calculateScore(localIssues);
-  const finalScore = Math.round(localScore * 0.7 + aiScore * 0.3);
+  const finalScore = Math.round(localScore * 0.2 + aiScore * 0.8);
   
   return {
     requirementId: requirement.id,
@@ -353,9 +353,9 @@ export async function reviewRequirementData(requirement: Partial<Requirement>): 
   const allIssues = [...localIssues, ...aiIssues];
   const allSuggestions = [...new Set(aiSuggestions)]; // 去重
 
-  // 计算最终分数（本地规则权重 70%，AI 权重 30%）
+  // 计算最终分数（本地规则权重 20%，AI 权重 80%）
   const localScore = calculateScore(localIssues);
-  const finalScore = Math.round(localScore * 0.7 + aiScore * 0.3);
+  const finalScore = Math.round(localScore * 0.2 + aiScore * 0.8);
   
   return {
     requirementId: requirement.id || '',
