@@ -1,8 +1,9 @@
 # 代码结构映射 — 用户故事 → 代码文件
 
-**版本号**: v1.4
-**日期**: 2026-05-23
+**版本号**: v1.5
+**日期**: 2026-05-29
 **用途**: Bug 修复时快速定位代码文件，先判断属于哪个 US，再查此表
+**变更**: v1.5 — 新增 US2.5~2.9 代码映射、T3智能纳版、T4仪表盘重构、T5需求变更智能体、T6需求审查
 
 ---
 
@@ -18,6 +19,8 @@ release-train/
 │   │   ├── modules/
 │   │   │   ├── auth/         # 认证模块
 │   │   │   ├── requirements/ # 需求模块 (核心)
+│   │   │   ├── requirement-review/ # AI需求审查 (T6新增)
+│   │   │   ├── smart-onboard/     # 智能纳版 (T3新增)
 │   │   │   ├── systems/      # 系统模块
 │   │   │   └── trains/       # 版本火车模块
 │   │   │       ├── index.ts          # 火车路由 (GET/POST /api/trains)
@@ -388,3 +391,9 @@ release-train/
 | 服务启动/重启 | 运维 | `dev.sh start|stop|restart|status` |
 | 路由跳转错误 | 路由 | 路由表：`/schedules`=班次列表 `/trains`=火车列表 `/dashboard`=首页 |
 | 取消班次需求回滚 | US2.2.2 | `train.service.ts:cancelTrainSchedule()` → `ONBOARDED` → `READY` |
+| AI审查失败/无返回 | T6 US6.1 | `requirement-review/service.ts:runAiReview()` → Coze timeout/error catch → 降级 |
+| AI审查前端超时 | T6 US6.1 | `api.ts:timeout` (3min) + `requirement.ts:reviewData()` |
+| 审查结果不显示验收条件 | T6 US6.2 | `RequirementForm.tsx:reviewResult.acceptanceCriteria` → Tabs/Criteria |
+| 智能纳版Coze报错 | T3 | `smart-onboard/service.ts:generateOnboardSuggestions()` → Coze WORKFLOW_ID |
+| Coze SDK参数包装 | T3/T6 | `coze/index.ts:runWorkflow()` — SDK自动包装parameters，不要双重嵌套 |
+| Coze枚举映射 | T6 US6.1 | `service.ts:mapPriorityToChinese()` / `mapReqTypeToChinese()` |

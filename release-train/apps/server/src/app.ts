@@ -8,6 +8,7 @@ import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -30,6 +31,7 @@ import { systemRoutes } from './modules/systems/index.js';
 import { trainRoutes } from './modules/trains/index.js';
 import { smartOnboardRoutes } from './modules/smart-onboard/index.js';
 import { pluginRoutes } from './modules/plugin/routes.js';
+import { requirementReviewRoutes } from './modules/requirement-review/index.js';
 // import { userRoutes } from './modules/users/index.js';
 import { Operation } from '@release-train/shared';
 
@@ -43,12 +45,16 @@ export async function createApp() {
 
   // ========== 初始化 Coze 客户端 ==========
   const cozeApiKey = process.env.COZE_API_KEY;
-  const cozeWorkflowId = process.env.COZE_WORKFLOW_ID;
+  const cozeSmartOnboardWorkflowId = process.env.COZE_SMART_ONBOARD_WORKFLOW_ID;
+  const cozeRequirementReviewWorkflowId = process.env.COZE_REQUIREMENT_REVIEW_WORKFLOW_ID;
 
-  if (cozeApiKey && cozeWorkflowId) {
+  if (cozeApiKey && (cozeSmartOnboardWorkflowId || cozeRequirementReviewWorkflowId)) {
     initCozeClient({
       apiKey: cozeApiKey,
-      workflowId: cozeWorkflowId,
+      workflowIds: {
+        SMART_ONBOARD: cozeSmartOnboardWorkflowId || '',
+        REQUIREMENT_REVIEW: cozeRequirementReviewWorkflowId || '',
+      },
     });
   }
   
@@ -223,10 +229,32 @@ export async function createApp() {
   await app.register(seedRoute);
   await app.register(systemRoutes);
   await app.register(requirementRoutes);
+  await app.register(requirementReviewRoutes);
   await app.register(trainRoutes);
   await app.register(smartOnboardRoutes);
   await app.register(pluginRoutes);
-  // await app.register(userRoutes);
+  // await app.register(pluginRoutes);
+
+  // ===== Coze 插件 OpenAPI 规范（无需鉴权） =====
+  app.get('/api/plugin/openapi.json', async (_request, reply) => {
+    // 尝试多个路径：dist 目录（编译后）和项目根目录
+    const possiblePaths = [
+      path.resolve(process.cwd(), 'coze-plugin-openapi.json'),
+      path.resolve(process.cwd(), 'dist/coze-plugin-openapi.json'),
+    ];
+    let content: string | null = null;
+    for (const specPath of possiblePaths) {
+      if (fs.existsSync(specPath)) {
+        content = fs.readFileSync(specPath, 'utf-8');
+        break;
+      }
+    }
+    if (content) {
+      reply.header('Content-Type', 'application/json').send(JSON.parse(content));
+    } else {
+      reply.send({ success: false, message: 'OpenAPI spec not found' });
+    }
+  });
 
   // ========== 健康检查 ==========
   app.get('/api/health', async () => ({

@@ -6,7 +6,7 @@ import type { ApiResponse } from '@release-train/shared';
 // ========== Axios实例 ==========
 const api = axios.create({
   baseURL: '/api',
-  timeout: 10000,
+  timeout: 180000, // 全局超时3分钟（AI审查等长耗时请求单独设更长超时）
   headers: {
     'Content-Type': 'application/json',
   },
@@ -46,6 +46,9 @@ api.interceptors.response.use(
   (error) => {
     // 仅处理网络错误（无响应），后端所有错误均走 HTTP 200
     if (!error.response) {
+      if (error.code === 'ECONNABORTED') {
+        return Promise.reject(new Error('请求超时，请稍后重试'));
+      }
       return Promise.reject(new Error('网络连接失败'));
     }
     // 兜底：万一有非 200 响应（如网关层），取后端返回的 message

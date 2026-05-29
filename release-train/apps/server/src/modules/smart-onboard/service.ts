@@ -9,7 +9,7 @@ import {
 } from '@release-train/shared';
 import { errors } from '../../common/errors';
 import { prisma } from '../../prisma';
-import { getCozeClient } from '../../common/coze';
+import { getCozeClient, CozeWorkflow } from '../../common/coze';
 
 /**
  * 前端预处理：检测循环依赖
@@ -206,7 +206,7 @@ export async function generateOnboardSuggestions(
   console.log('📤 发送给 Coze 的数据:', JSON.stringify(cozeInput, null, 2));
 
   // 调用 Coze 工作流
-  const result = await coze.runWorkflowAndParse<SmartOnboardSuggestResponse>(cozeInput);
+  const result = await coze.runWorkflowAndParse<SmartOnboardSuggestResponse>(CozeWorkflow.SMART_ONBOARD, cozeInput);
 
   // Coze 返回 null 时返回错误
   if (!result) {
