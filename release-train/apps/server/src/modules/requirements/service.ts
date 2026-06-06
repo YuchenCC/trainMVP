@@ -1967,6 +1967,15 @@ export async function getRequirementStats(params: {
         changeRate,
         emergencyChangeRate,
       };
+    } else {
+      // 无已纳版需求时返回初始值
+      changeStats = {
+        totalOnboarded: 0,
+        changedCount: 0,
+        emergencyChangeCount: 0,
+        changeRate: 0,
+        emergencyChangeRate: 0,
+      };
     }
   }
 
