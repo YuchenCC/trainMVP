@@ -22,7 +22,6 @@
 | 📋 需求 | **to-issues** | "create issues" / "break into issues" | 把计划/PRD 拆成可独立认领的 Issue（垂直切片） |
 | 📋 需求 | **triage** | "triage" / "create issue" / "manage issues" | Issue 分拣状态机，管理 Bug/Feature 工作流 |
 | 🚀 原型 | **prototype** | "prototype this" / "try designs" | 快速原型：业务逻辑走终端，UI 走多方案切换 |
-| 🔧 Git | **git-commit** | "/commit" / "commit changes" | 智能 diff 分析 + conventional commit + 交互式提交 |
 | 🔧 Git | **gh-cli** | GitHub 操作相关 | GitHub CLI 全面参考：仓库、Issue、PR、Actions |
 | 🎨 设计 | **figma** | Figma URL / node ID / 设计转代码 | 从 Figma 获取设计上下文，转成生产代码 |
 | 💬 沟通 | **caveman** | "caveman mode" / "less tokens" / "be brief" | 极简沟通模式，省约 75% token |
@@ -160,18 +159,6 @@
 
 ---
 
-### 🔧 git-commit — 智能提交
-
-**触发**：说 "/commit" / "commit changes"
-
-**行为**：
-1. 自动检测变更类型和范围
-2. 从 diff 生成 conventional commit 消息
-3. 交互式提交，可覆盖类型/范围/描述
-4. 智能文件暂存，逻辑分组
-
----
-
 ### 🎨 frontend-design — 高质量前端
 
 **触发**：构建 Web 组件/页面/布局/样式
@@ -258,7 +245,6 @@
 ```
 "grill me T1的设计方案"     → 激活 grill-me
 "tdd 这个功能"              → 激活 tdd
-"/commit"                   → 激活 git-commit
 "diagnose this"             → 激活 diagnose
 "caveman mode"              → 激活 caveman
 ```
