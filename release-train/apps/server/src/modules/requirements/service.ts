@@ -1926,12 +1926,57 @@ export async function getRequirementStats(params: {
     },
   });
 
+  // ========== 变更率统计（纳版后）==========
+  // 仅当有班次筛选时计算变更率
+  let changeStats = undefined;
+  if (params.scheduleId) {
+    // 查找该班次已纳版的需求
+    const onboardedRequirements = await prisma.requirement.findMany({
+      where: { scheduleId: params.scheduleId, status: ReqStatus.ONBOARDED },
+      select: { id: true },
+    });
+    const onboardedIds = onboardedRequirements.map(r => r.id);
+    const totalOnboarded = onboardedIds.length;
+
+    if (totalOnboarded > 0) {
+      // 查找有变更记录的需求（状态变更日志中有超过1条记录，说明有过变更）
+      const changedRequirements = await prisma.statusLog.groupBy({
+        by: ['requirementId'],
+        where: { requirementId: { in: onboardedIds } },
+        _count: true,
+        having: { requirementId: { _count: { gt: 1 } } }, // 超过1条记录说明有变更
+      });
+      const changedCount = changedRequirements.length;
+
+      // 查找有紧急变更的需求
+      const emergencyChanges = await prisma.emergencyChange.findMany({
+        where: { requirementId: { in: onboardedIds } },
+        select: { requirementId: true },
+        distinct: ['requirementId'],
+      });
+      const emergencyChangeCount = emergencyChanges.length;
+
+      // 计算比例（百分比）
+      const changeRate = Math.round((changedCount / totalOnboarded) * 100);
+      const emergencyChangeRate = Math.round((emergencyChangeCount / totalOnboarded) * 100);
+
+      changeStats = {
+        totalOnboarded,
+        changedCount,
+        emergencyChangeCount,
+        changeRate,
+        emergencyChangeRate,
+      };
+    }
+  }
+
   return {
     byStatus: Object.fromEntries(byStatus.map(item => [item.status, item._count])),
     bySubStatus: Object.fromEntries(bySubStatus.filter(item => item.subStatus).map(item => [item.subStatus, item._count])),
     byPriority: Object.fromEntries(byPriority.map(item => [item.priority, item._count])),
     total,
     activeCount,
+    changeStats,
   };
 }
 

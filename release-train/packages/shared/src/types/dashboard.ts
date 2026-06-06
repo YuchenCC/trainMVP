@@ -10,6 +10,14 @@ export interface RequirementStatsResponse {
   byPriority: Record<string, number>;  // { P0: 1, P1: 3, P2: 8, P3: 2 }
   total: number;
   activeCount: number;                 // 排除 CANCELLED + RELEASED
+  // 变更率统计（纳版后）
+  changeStats?: {
+    totalOnboarded: number;            // 已纳版需求总数
+    changedCount: number;              // 有变更记录的需求数
+    emergencyChangeCount: number;      // 紧急变更的需求数
+    changeRate: number;                // 变更率（百分比）
+    emergencyChangeRate: number;       // 紧急变更率（百分比）
+  };
 }
 
 // ========== API-02: 紧急变更列表项 ==========

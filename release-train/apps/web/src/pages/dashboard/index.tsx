@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Card, 
   Row, 
@@ -8,6 +8,9 @@ import {
   Space, 
   Typography,
   Empty,
+  Select,
+  Progress,
+  Statistic,
 } from 'antd';
 import {
   CalendarOutlined,
@@ -15,13 +18,18 @@ import {
   WarningOutlined,
   CheckCircleOutlined,
   EyeOutlined,
+  RocketOutlined,
+  SwapOutlined,
+  AlertOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/auth';
 import { useDashboardData } from '../../hooks/useDashboardData';
-import { Role, ReqStatus } from '@release-train/shared';
+import { Role, ReqStatus, TrainScheduleStatus } from '@release-train/shared';
 import SystemSelector from '../../components/dashboard/SystemSelector';
 import { AppPageHeader, DataCard, MetricCard, StatusTag } from '../../components/common';
+import SmartOnboardModal from '../../components/smart-onboard/SmartOnboardModal';
+import requirementService from '../../services/requirement';
 
 const { Text } = Typography;
 
@@ -33,11 +41,22 @@ interface TodoSection {
   type: 'requirement' | 'emergency';
 }
 
+interface ChangeStats {
+  totalOnboarded: number;
+  changedCount: number;
+  emergencyChangeCount: number;
+  changeRate: number;
+  emergencyChangeRate: number;
+}
+
 // ========== 统一仪表盘页面 ==========
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [selectedSystemId, setSelectedSystemId] = useState<string>('');
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string>('');
+  const [changeStats, setChangeStats] = useState<ChangeStats | null>(null);
+  const [showSmartOnboardModal, setShowSmartOnboardModal] = useState(false);
   
   const { 
     stats, 
@@ -51,6 +70,37 @@ const DashboardPage: React.FC = () => {
 
   // 当前用户角色
   const role = user?.role as Role;
+
+  // 默认选中进行中的第一个班次
+  useEffect(() => {
+    if (schedules.length > 0 && !selectedScheduleId) {
+      const inProgressSchedule = schedules.find(s => s.status === TrainScheduleStatus.IN_PROGRESS);
+      if (inProgressSchedule) {
+        setSelectedScheduleId(inProgressSchedule.scheduleId);
+      }
+    }
+  }, [schedules, selectedScheduleId]);
+
+  // 获取班次变更率数据
+  useEffect(() => {
+    const fetchChangeStats = async () => {
+      if (!selectedScheduleId) {
+        setChangeStats(null);
+        return;
+      }
+      try {
+        const res = await requirementService.getStats({ scheduleId: selectedScheduleId });
+        if (res.success && res.data?.changeStats) {
+          setChangeStats(res.data.changeStats);
+        } else {
+          setChangeStats(null);
+        }
+      } catch {
+        setChangeStats(null);
+      }
+    };
+    fetchChangeStats();
+  }, [selectedScheduleId]);
 
   // 关键日期数据
   const getKeyDates = () => {
@@ -320,6 +370,37 @@ const DashboardPage: React.FC = () => {
         actions={
           <>
             <SystemSelector value={selectedSystemId} onChange={setSelectedSystemId} />
+            {schedules.length > 0 && (
+              <Select
+                placeholder="选择班次查看变更率"
+                allowClear
+                style={{ width: 200 }}
+                value={selectedScheduleId || undefined}
+                onChange={(value) => setSelectedScheduleId(value || '')}
+                options={schedules.map(s => ({
+                  label: s.scheduleName || s.trainName,
+                  value: s.scheduleId,
+                }))}
+              />
+            )}
+            {role === Role.TRAIN_ADMIN && (
+              <Button 
+                type="primary" 
+                icon={<RocketOutlined />}
+                onClick={() => setShowSmartOnboardModal(true)}
+              >
+                AI 智能纳版
+              </Button>
+            )}
+            {(role === Role.BA || role === Role.PM) && (
+              <Button 
+                type="primary" 
+                icon={<RocketOutlined />}
+                onClick={() => navigate('/requirements/new')}
+              >
+                AI 智能提需求
+              </Button>
+            )}
             <Button onClick={refresh} loading={loading}>
               刷新数据
             </Button>
@@ -405,6 +486,61 @@ const DashboardPage: React.FC = () => {
                   </>
                 )}
               </Row>
+
+              {/* 变更率统计（选择班次后显示） */}
+              {selectedScheduleId && changeStats && (
+                <Row gutter={16} style={{ marginTop: 16 }}>
+                  <Col span={24}>
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      班次变更率统计（{schedules.find(s => s.scheduleId === selectedScheduleId)?.scheduleName || ''}）
+                    </Text>
+                  </Col>
+                  <Col xs={24} sm={12} md={8}>
+                    <Card size="small" style={{ background: '#f6ffed', borderColor: '#52c41a' }}>
+                      <Statistic
+                        title="需求变更率"
+                        value={changeStats.changeRate}
+                        suffix="%"
+                        prefix={<SwapOutlined style={{ color: '#52c41a' }} />}
+                        valueStyle={{ color: '#52c41a', fontSize: 24 }}
+                      />
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {changeStats.changedCount}/{changeStats.totalOnboarded} 个需求发生过变更
+                      </Text>
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} md={8}>
+                    <Card size="small" style={{ background: '#fff2e8', borderColor: '#fa8c16' }}>
+                      <Statistic
+                        title="紧急变更率"
+                        value={changeStats.emergencyChangeRate}
+                        suffix="%"
+                        prefix={<AlertOutlined style={{ color: '#fa8c16' }} />}
+                        valueStyle={{ color: '#fa8c16', fontSize: 24 }}
+                      />
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {changeStats.emergencyChangeCount}/{changeStats.totalOnboarded} 个需求发生紧急变更
+                      </Text>
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12} md={8}>
+                    <Card size="small">
+                      <Statistic
+                        title="已纳版需求"
+                        value={changeStats.totalOnboarded}
+                        prefix={<RocketOutlined style={{ color: '#7c3aed' }} />}
+                        valueStyle={{ color: '#7c3aed', fontSize: 24 }}
+                      />
+                      <Progress 
+                        percent={changeStats.changeRate} 
+                        size="small" 
+                        strokeColor="#52c41a"
+                        style={{ marginTop: 8 }}
+                      />
+                    </Card>
+                  </Col>
+                </Row>
+              )}
             </DataCard>
 
             {/* 第二部分：关键时间倒计时 */}
@@ -585,6 +721,12 @@ const DashboardPage: React.FC = () => {
             </DataCard>
           </div>
         )}
+        
+        {/* 智能纳版模态框 */}
+        <SmartOnboardModal 
+          visible={showSmartOnboardModal} 
+          onCancel={() => setShowSmartOnboardModal(false)} 
+        />
     </div>
   );
 };

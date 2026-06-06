@@ -3,7 +3,7 @@
 // 包含：班次信息、容量概览、搭载系统、关键节点、纳版管理、操作按钮
 // 文件名：schedule-detail.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Card, Descriptions, Button, Spin, Result, Typography, Row, Col, message, Table, Badge, Modal, Form, Input, DatePicker, Checkbox, Space, Divider, List, Progress, Tag, Alert,
 } from 'antd';
@@ -66,12 +66,18 @@ interface ScheduleDetail {
 const ScheduleDetailPage: React.FC = () => {
   const { trainId, scheduleId } = useParams<{ trainId: string; scheduleId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const autoOnboard = searchParams.get('autoOnboard') === 'true';
+  const autoOnboardTriggered = React.useRef(false); // 防止重复触发
 
   const [loading, setLoading] = useState(true);
   const [schedule, setSchedule] = useState<ScheduleDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // 编辑模态框状态
+  const [dataLoading, setDataLoading] = useState(true);
+  const [readyRequirements, setReadyRequirements] = useState<RequirementListItem[]>([]);
+  const [onboardedRequirements, setOnboardedRequirements] = useState<RequirementListItem[]>([]);
+  const [smartSuggestionResult, setSmartSuggestionResult] = useState<SmartOnboardSuggestResponse | null>(null);
+  const [showSmartSuggestionModal, setShowSmartSuggestionModal] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editModalLoading, setEditModalLoading] = useState(false);
   const [form] = Form.useForm();
@@ -473,6 +479,8 @@ const ScheduleDetailPage: React.FC = () => {
               scheduleStatus={schedule.status}
               onRefresh={handleRefresh}
               navigate={navigate}
+              autoOnboard={autoOnboard}
+              autoOnboardTriggered={autoOnboardTriggered}
             />
           </Card>
         </Col>
@@ -648,7 +656,15 @@ const ScheduleDetailPage: React.FC = () => {
 };
 
 // ========== 纳版管理标签页组件 ==========
-const OnboardTab = ({ scheduleId, systems, scheduleStatus, onRefresh, navigate }: { scheduleId: string; systems: any[]; scheduleStatus?: string; onRefresh?: () => void; navigate: any }) => {
+const OnboardTab = ({ scheduleId, systems, scheduleStatus, onRefresh, navigate, autoOnboard, autoOnboardTriggered }: { 
+  scheduleId: string; 
+  systems: any[]; 
+  scheduleStatus?: string; 
+  onRefresh?: () => void; 
+  navigate: any;
+  autoOnboard?: boolean;
+  autoOnboardTriggered?: React.MutableRefObject<boolean>;
+}) => {
   const [selectedRequirements, setSelectedRequirements] = useState<string[]>([]);
   const [selectedOnboardedIds, setSelectedOnboardedIds] = useState<string[]>([]);
   const [precheckResult, setPrecheckResult] = useState<PrecheckOnboardResponse | null>(null);
@@ -659,7 +675,6 @@ const OnboardTab = ({ scheduleId, systems, scheduleStatus, onRefresh, navigate }
   const [onboardedRequirements, setOnboardedRequirements] = useState<RequirementListItem[]>([]);
   const [smartSuggestionResult, setSmartSuggestionResult] = useState<SmartOnboardSuggestResponse | null>(null);
   const [showSmartSuggestionModal, setShowSmartSuggestionModal] = useState(false);
-
   const isLockedDown = scheduleStatus === 'LOCKED_DOWN';
 
   // 容量颜色映射
@@ -677,7 +692,34 @@ const OnboardTab = ({ scheduleId, systems, scheduleStatus, onRefresh, navigate }
       // 先获取待纳版需求
       const readyRes = await api.get(`/trains/schedules/${scheduleId}/ready-requirements`);
       if (readyRes.data.success && readyRes.data.data) {
-        setReadyRequirements(readyRes.data.data.list);
+        const list = readyRes.data.data.list;
+        setReadyRequirements(list);
+        
+        // 自动触发智能纳版
+        if (autoOnboard && autoOnboardTriggered?.current === false && list.length > 0) {
+          autoOnboardTriggered.current = true;
+          // 延迟执行，等待 UI 更新
+          setTimeout(() => {
+            setSmartSuggestionResult(null);
+            setShowSmartSuggestionModal(true);
+            smartOnboardService.generateSuggest({
+              scheduleId,
+              requirementIds: list.map((r: any) => r.id),
+            }).then(result => {
+              if (result.success) {
+                setSmartSuggestionResult(result.data);
+              } else {
+                message.error(result.message || '生成建议失败');
+                setShowSmartSuggestionModal(false);
+              }
+            }).catch(() => {
+              message.error('生成建议失败');
+              setShowSmartSuggestionModal(false);
+            });
+          }, 300);
+        } else if (autoOnboard && list.length === 0) {
+          message.warning('没有就绪的需求可用于智能纳版');
+        }
       }
       // 再获取已纳版需求
       const onboardedRes = await api.get(`/trains/schedules/${scheduleId}/onboarded-requirements`);
@@ -690,8 +732,9 @@ const OnboardTab = ({ scheduleId, systems, scheduleStatus, onRefresh, navigate }
     } finally {
       setDataLoading(false);
     }
-  }, [scheduleId]);
+  }, [scheduleId, autoOnboard, autoOnboardTriggered]);
 
+  // 初始加载数据
   useEffect(() => {
     loadData();
   }, [loadData]);
