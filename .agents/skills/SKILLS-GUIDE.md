@@ -23,6 +23,7 @@
 | 📋 需求 | **triage** | "triage" / "create issue" / "manage issues" | Issue 分拣状态机，管理 Bug/Feature 工作流 |
 | 🚀 原型 | **prototype** | "prototype this" / "try designs" | 快速原型：业务逻辑走终端，UI 走多方案切换 |
 | 🔧 Git | **git-commit** | "commit" / "commit changes" | Conventional commit 生成器，支持类型/范围/描述 |
+| 🔧 Git | **git-commitpush** | "commit and push" / "提交并推送" | Git 提交 + 推送 + 飞书通知干系人 |
 | 🔧 Git | **gh-cli** | GitHub 操作相关 | GitHub CLI 全面参考：仓库、Issue、PR、Actions |
 | 🎨 设计 | **figma** | Figma URL / node ID / 设计转代码 | 从 Figma 获取设计上下文，转成生产代码 |
 | 💬 沟通 | **caveman** | "caveman mode" / "less tokens" / "be brief" | 极简沟通模式，省约 75% token |
@@ -185,6 +186,31 @@
 
 ---
 
+### 🔧 git-commitpush — 提交 + 推送 + 飞书通知
+
+**触发**：说 "commit and push" / "提交并推送"
+
+**行为**：
+1. 分析 git status 和 git diff
+2. 生成 Conventional Commits 格式的 message
+3. 请求用户确认
+4. 执行 `git add` + `git commit`
+5. 执行 `git push`
+6. 发送飞书卡片消息通知干系人
+
+**前置配置**：
+- 创建 `.agents/feishu-config.json`（见示例模板）
+- 获取飞书群机器人 webhook URL
+- 可选配置需要 @提及的用户 ID
+
+**飞书消息内容**：
+- 项目名称、分支名
+- 提交 hash 和消息
+- 变更文件列表
+- 查看提交链接
+
+---
+
 ### 🎨 frontend-design — 高质量前端
 
 **触发**：构建 Web 组件/页面/布局/样式
@@ -272,6 +298,7 @@
 "grill me T1的设计方案"     → 激活 grill-me
 "tdd 这个功能"              → 激活 tdd
 "commit"                    → 激活 git-commit
+"commit and push"           → 激活 git-commitpush
 "diagnose this"             → 激活 diagnose
 "caveman mode"              → 激活 caveman
 ```
@@ -291,6 +318,8 @@
 │   └── scripts/              # 辅助脚本
 ├── git-commit/
 │   └── SKILL.md              # Conventional commit 生成器
+├── git-commitpush/
+│   └── SKILL.md              # 提交 + 推送 + 飞书通知
 ├── grill-with-docs/
 │   ├── SKILL.md
 │   ├── ADR-FORMAT.md         # 附带资源

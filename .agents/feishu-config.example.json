@@ -1,0 +1,6 @@
+{
+  "webhook": "https://open.feishu.cn/open-apis/bot/v2/hook/your-webhook-id",
+  "mentions": ["ou_xxx", "ou_yyy"],
+  "projectName": "版本火车需求管理系统",
+  "repoUrl": "https://github.com/your-org/your-repo"
+}
