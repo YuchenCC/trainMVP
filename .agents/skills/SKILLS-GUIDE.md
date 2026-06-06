@@ -22,6 +22,7 @@
 | 📋 需求 | **to-issues** | "create issues" / "break into issues" | 把计划/PRD 拆成可独立认领的 Issue（垂直切片） |
 | 📋 需求 | **triage** | "triage" / "create issue" / "manage issues" | Issue 分拣状态机，管理 Bug/Feature 工作流 |
 | 🚀 原型 | **prototype** | "prototype this" / "try designs" | 快速原型：业务逻辑走终端，UI 走多方案切换 |
+| 🔧 Git | **git-commit** | "commit" / "commit changes" | Conventional commit 生成器，支持类型/范围/描述 |
 | 🔧 Git | **gh-cli** | GitHub 操作相关 | GitHub CLI 全面参考：仓库、Issue、PR、Actions |
 | 🎨 设计 | **figma** | Figma URL / node ID / 设计转代码 | 从 Figma 获取设计上下文，转成生产代码 |
 | 💬 沟通 | **caveman** | "caveman mode" / "less tokens" / "be brief" | 极简沟通模式，省约 75% token |
@@ -159,6 +160,31 @@
 
 ---
 
+### 🔧 git-commit — Conventional Commit
+
+**触发**：说 "commit" / "commit changes"
+
+**行为**：
+1. 分析 git status 和 git diff
+2. 根据变更文件识别 scope
+3. 根据变更类型选择 commit type（feat/fix/docs/refactor 等）
+4. 生成符合 Conventional Commits 格式的 message
+5. 请求用户确认后再执行 commit
+
+**支持的类型**：
+- `feat` - 新功能
+- `fix` - Bug 修复
+- `docs` - 文档变更
+- `style` - 格式变更
+- `refactor` - 重构
+- `test` - 测试
+- `perf` - 性能优化
+- `build` - 构建系统
+- `ci` - CI 配置
+- `chore` - 维护工作
+
+---
+
 ### 🎨 frontend-design — 高质量前端
 
 **触发**：构建 Web 组件/页面/布局/样式
@@ -245,6 +271,7 @@
 ```
 "grill me T1的设计方案"     → 激活 grill-me
 "tdd 这个功能"              → 激活 tdd
+"commit"                    → 激活 git-commit
 "diagnose this"             → 激活 diagnose
 "caveman mode"              → 激活 caveman
 ```
@@ -262,6 +289,8 @@
 ├── diagnose/
 │   ├── SKILL.md
 │   └── scripts/              # 辅助脚本
+├── git-commit/
+│   └── SKILL.md              # Conventional commit 生成器
 ├── grill-with-docs/
 │   ├── SKILL.md
 │   ├── ADR-FORMAT.md         # 附带资源
