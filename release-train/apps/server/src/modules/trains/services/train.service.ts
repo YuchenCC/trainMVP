@@ -704,10 +704,9 @@ export async function getAvailableSystems(trainId?: string): Promise<AvailableSy
   });
 
   return systems.map((system) => {
-    const conflictTrain = system.trainSystems.find((ts) => {
-      if (trainId && ts.train.id === trainId) return false;
-      return true;
-    });
+    const conflictTrain = system.trainSystems && (!trainId || system.trainSystems.train.id !== trainId)
+      ? system.trainSystems
+      : undefined;
 
     return {
       id: system.id,
