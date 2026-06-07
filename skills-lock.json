@@ -78,6 +78,12 @@
       "sourceType": "github",
       "skillPath": "skills/engineering/zoom-out/SKILL.md",
       "computedHash": "a8b8ed45609fdfa9f184d0c9f69326e43822a42eebea14db2792d777373de562"
+    },
+    "git-push-notice": {
+      "source": "local",
+      "sourceType": "local",
+      "skillPath": ".agents/skills/git-push-notice/SKILL.md",
+      "computedHash": "5627eee7140df0d4b5f485a2b01528a716e8b30098942df29017c61b9ceb6a05"
     }
   }
 }

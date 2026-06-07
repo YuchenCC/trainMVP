@@ -2,7 +2,7 @@
 // 路由 /requirements：分页列表 + 系统筛选 + 状态多选 + 关键词搜索 + 排序 + 操作按钮矩阵
 // 点击「新增需求」跳转 /requirements/new
 // 点击行跳转 /requirements/:id（需求详情）
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, Table, Input, Select, Space, Tag, message, Modal } from 'antd';
 import {
   PlusOutlined,
@@ -14,11 +14,12 @@ import {
   CloseOutlined,
   RedoOutlined,
 } from '@ant-design/icons';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { requirementService } from '../../services/requirement';
 import { systemService, SystemOption } from '../../services/system';
 import { useAuthStore } from '../../stores/auth';
+import { useTourStore } from '../../tour/store';
 import {
   RequirementListItem,
   ReqStatus,
@@ -161,6 +162,10 @@ function getActionButtons(
 const RequirementsPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  // ========== 导览状态 ==========
+  const { startFeatureTour, checkShouldShowFeatureTour, isActive, clearCompleted } = useTourStore();
 
   // ========== 列表数据状态 ==========
   const [loading, setLoading] = useState(false);
@@ -199,6 +204,48 @@ const RequirementsPage: React.FC = () => {
   useEffect(() => {
     systemService.list().then(setSystems).catch(() => {});
   }, []);
+
+  // 使用ref避免重复触发
+  const hasProcessedTour = useRef(false);
+  
+  // 页面首次访问或从帮助按钮跳转时触发导览
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // 避免重复处理
+      if (hasProcessedTour.current) {
+        return;
+      }
+      
+      // 检查URL参数是否指定了要启动的导览
+      const tourParam = searchParams.get('tour');
+      
+      // 如果导览已经激活，不要重复启动
+      if (isActive) {
+        // 如果URL参数还在，清除它并标记已处理
+        if (tourParam === 'requirements') {
+          window.history.replaceState({}, '', window.location.pathname);
+          hasProcessedTour.current = true;
+        }
+        return;
+      }
+      
+      // 如果URL参数指定了导览，则强制启动（即使已完成）
+      if (tourParam === 'requirements') {
+        // 标记已处理
+        hasProcessedTour.current = true;
+        // 清除已完成标记
+        clearCompleted('requirements');
+        // 启动导览
+        startFeatureTour('requirements');
+        // 立即清除URL参数，避免退出导览后再次启动
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (checkShouldShowFeatureTour('requirements')) {
+        // 否则检查是否应该自动启动（首次访问）
+        startFeatureTour('requirements');
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [isActive, checkShouldShowFeatureTour, startFeatureTour, searchParams, clearCompleted]);
 
   // 加载需求列表
   const fetchList = useCallback(async (params: any) => {
@@ -580,93 +627,99 @@ const RequirementsPage: React.FC = () => {
         title="需求池"
         description="集中查询、评审和跟踪所有需求的状态、优先级与纳版进展。"
         actions={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => navigate('/requirements/new')}
-          >
-            新增需求
-          </Button>
+          <div id="requirements-new-btn">
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => navigate('/requirements/new')}
+            >
+              新增需求
+            </Button>
+          </div>
         }
       />
 
       {/* 筛选栏：系统筛选 + 状态多选 + 关键字搜索 + 查询/重置按钮 */}
-      <FilterBar
-        fields={
-          <>
-          <Select
-            placeholder="归属系统"
-            value={systemFilter}
-            onChange={(value) => setSystemFilter(value)}
-            options={systems.map((s) => ({ label: s.name, value: s.id }))}
-            style={{ width: 160 }}
-            allowClear
-          />
-          <Select
-            mode="multiple"
-            placeholder="需求状态"
-            value={statusFilter}
-            onChange={(value) => setStatusFilter(value)}
-            options={STATUS_OPTIONS}
-            style={{ minWidth: 200 }}
-            allowClear
-            maxTagCount={2}
-          />
-          <Input.Search
-            placeholder="搜索需求编号或标题"
-            allowClear
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            onSearch={(value) => { setKeyword(value); setPage(1); }}
-            style={{ width: 280 }}
-            prefix={<SearchOutlined />}
-          />
-          <Button type="primary" icon={<SearchOutlined />} onClick={handleQuery}>
-            查询
-          </Button>
-          <Button icon={<ReloadOutlined />} onClick={handleReset}>
-            重置
-          </Button>
-          </>
-        }
-      />
+      <div id="requirements-filter">
+        <FilterBar
+          fields={
+            <>
+            <Select
+              placeholder="归属系统"
+              value={systemFilter}
+              onChange={(value) => setSystemFilter(value)}
+              options={systems.map((s) => ({ label: s.name, value: s.id }))}
+              style={{ width: 160 }}
+              allowClear
+            />
+            <Select
+              mode="multiple"
+              placeholder="需求状态"
+              value={statusFilter}
+              onChange={(value) => setStatusFilter(value)}
+              options={STATUS_OPTIONS}
+              style={{ minWidth: 200 }}
+              allowClear
+              maxTagCount={2}
+            />
+            <Input.Search
+              placeholder="搜索需求编号或标题"
+              allowClear
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              onSearch={(value) => { setKeyword(value); setPage(1); }}
+              style={{ width: 280 }}
+              prefix={<SearchOutlined />}
+            />
+            <Button type="primary" icon={<SearchOutlined />} onClick={handleQuery}>
+              查询
+            </Button>
+            <Button icon={<ReloadOutlined />} onClick={handleReset}>
+              重置
+            </Button>
+            </>
+          }
+        />
+      </div>
 
       {/* 需求列表表格（分页 + 排序） */}
-      <DataCard tableCard>
-        <Table<RequirementListItem>
-          rowKey="id"
-          columns={columns}
-          dataSource={data}
-          loading={loading}
-          onChange={handleTableChange}
-          onRow={(record) => ({
-            onClick: () => navigate(`/requirements/${record.id}`),
-            style: { cursor: 'pointer' },
-          })}
-          pagination={{
-            current: page,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            pageSizeOptions: ['10', '20', '50', '100'],
-            showTotal: (t) => `共 ${t} 条`,
-            onChange: (p, ps) => {
-              setPage(p);
-              setPageSize(ps);
-              fetchList({
-                page: p,
-                pageSize: ps,
-                systemId: systemFilter,
-                status: statusFilter.length > 0 ? statusFilter : undefined,
-                keyword: keyword || undefined,
-                sortBy,
-                sortOrder,
-              });
-            },
-          }}
-          locale={{ emptyText: '暂无需求，点击「新增需求」创建' }}
-        />
-      </DataCard>
+      <div id="requirements-list">
+        <DataCard tableCard>
+          <Table<RequirementListItem>
+            rowKey="id"
+            columns={columns}
+            dataSource={data}
+            loading={loading}
+            onChange={handleTableChange}
+            onRow={(record) => ({
+              onClick: () => navigate(`/requirements/${record.id}`),
+              style: { cursor: 'pointer' },
+            })}
+            pagination={{
+              current: page,
+              pageSize,
+              total,
+              showSizeChanger: true,
+              pageSizeOptions: ['10', '20', '50', '100'],
+              showTotal: (t) => `共 ${t} 条`,
+              onChange: (p, ps) => {
+                setPage(p);
+                setPageSize(ps);
+                fetchList({
+                  page: p,
+                  pageSize: ps,
+                  systemId: systemFilter,
+                  status: statusFilter.length > 0 ? statusFilter : undefined,
+                  keyword: keyword || undefined,
+                  sortBy,
+                  sortOrder,
+                });
+              },
+            }}
+            locale={{ emptyText: '暂无需求，点击「新增需求」创建' }}
+          />
+        </DataCard>
+      </div>
 
       {/* 子状态变更弹窗 */}
       <Modal

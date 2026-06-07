@@ -2,7 +2,7 @@
 // 路由 /trains/schedule-detail，展示班次完整信息
 // 包含：班次信息、容量概览、搭载系统、关键节点、纳版管理、操作按钮
 // 文件名：schedule-detail.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Card, Descriptions, Button, Spin, Result, Typography, Row, Col, message, Table, Badge, Modal, Form, Input, DatePicker, Checkbox, Space, Divider, List, Progress, Tag, Alert,
@@ -27,6 +27,7 @@ import api from '../../services/api';
 import { trainService } from '../../services/train';
 import { smartOnboardService } from '../../services/smart-onboard';
 import dayjs from 'dayjs';
+import { useTourStore } from '../../tour/store';
 
 const { Text, Title } = Typography;
 
@@ -69,6 +70,51 @@ const ScheduleDetailPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const autoOnboard = searchParams.get('autoOnboard') === 'true';
   const autoOnboardTriggered = React.useRef(false); // 防止重复触发
+
+  // 导览状态
+  const { startFeatureTour, checkShouldShowFeatureTour, isActive, clearCompleted } = useTourStore();
+  
+  // 使用ref避免重复触发
+  const hasProcessedTour = useRef(false);
+
+  // 页面首次访问或从帮助按钮跳转时触发导览
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      // 避免重复处理
+      if (hasProcessedTour.current) {
+        return;
+      }
+      
+      // 检查URL参数是否指定了要启动的导览
+      const tourParam = searchParams.get('tour');
+      
+      // 如果导览已经激活，不要重复启动
+      if (isActive) {
+        // 如果URL参数还在，清除它并标记已处理
+        if (tourParam === 'schedule-detail') {
+          window.history.replaceState({}, '', window.location.pathname);
+          hasProcessedTour.current = true;
+        }
+        return;
+      }
+      
+      // 如果URL参数指定了导览，则强制启动（即使已完成）
+      if (tourParam === 'schedule-detail') {
+        // 标记已处理
+        hasProcessedTour.current = true;
+        // 清除已完成标记
+        clearCompleted('schedule-detail');
+        // 启动导览
+        startFeatureTour('schedule-detail');
+        // 立即清除URL参数，避免退出导览后再次启动
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (checkShouldShowFeatureTour('schedule-detail')) {
+        // 否则检查是否应该自动启动（首次访问）
+        startFeatureTour('schedule-detail');
+      }
+    }, 800); // 稍微延迟，等待页面加载完成
+    return () => clearTimeout(timer);
+  }, [isActive, checkShouldShowFeatureTour, startFeatureTour, searchParams, clearCompleted]);
 
   const [loading, setLoading] = useState(true);
   const [schedule, setSchedule] = useState<ScheduleDetail | null>(null);
@@ -393,7 +439,7 @@ const ScheduleDetailPage: React.FC = () => {
   return (
     <div>
       {/* 操作栏 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div id="schedule-detail-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => navigate('/schedules')}>
           返回班次列表
         </Button>
@@ -405,7 +451,7 @@ const ScheduleDetailPage: React.FC = () => {
       <Row gutter={[16, 16]}>
         <Col xs={24}>
           {/* 基本信息卡片 */}
-          <Card title="班次信息" style={{ marginBottom: 16 }}>
+          <Card id="schedule-detail-info" title="班次信息" style={{ marginBottom: 16 }}>
             <Descriptions column={3} size="small" labelStyle={{ color: '#64748b', width: 100 }}>
               <Descriptions.Item label="班次名称">
                 <Text strong>{schedule.name}</Text>
@@ -430,7 +476,7 @@ const ScheduleDetailPage: React.FC = () => {
           </Card>
 
           {/* 容量概览卡片 */}
-          <Card title="容量概览" style={{ marginBottom: 16 }}>
+          <Card id="schedule-detail-capacity" title="容量概览" style={{ marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 28, fontWeight: 'bold' }}>
@@ -462,17 +508,17 @@ const ScheduleDetailPage: React.FC = () => {
           </Card>
 
           {/* 搭载系统卡片 */}
-          <Card title={`搭载系统（${schedule.snapshots.length}）`} style={{ marginBottom: 16 }}>
+          <Card id="schedule-detail-systems" title={`搭载系统（${schedule.snapshots.length}）`} style={{ marginBottom: 16 }}>
             {systemsTable}
           </Card>
 
           {/* 关键节点卡片 */}
-          <Card title="关键节点" style={{ marginBottom: 16 }}>
+          <Card id="schedule-detail-key-dates" title="关键节点" style={{ marginBottom: 16 }}>
             {keyDatesContent}
           </Card>
 
           {/* 纳版管理卡片 */}
-          <Card title="纳版管理">
+          <Card id="schedule-detail-onboard" title="纳版管理">
             <OnboardTab
               scheduleId={scheduleId!}
               systems={schedule.snapshots}

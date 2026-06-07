@@ -15,6 +15,7 @@ const SmartOnboardSuggestion: React.FC<SmartOnboardSuggestionProps> = ({
 }) => {
   return (
     <Button
+      id="ai-smart-onboard-button"
       type="primary"
       icon={<RocketOutlined />}
       onClick={onClick}

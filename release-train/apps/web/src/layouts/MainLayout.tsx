@@ -15,6 +15,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore } from '../stores/auth';
 import { ROLE_LABELS } from '@release-train/shared';
+import { TourHelpButton } from '../tour';
 import type { MenuProps } from 'antd';
 
 const { Header, Sider, Content } = Layout;
@@ -211,6 +212,7 @@ const MainLayout: React.FC = () => {
 
         {/* 导航菜单 */}
         <Menu
+          id="main-navigation"
           mode="inline"
           selectedKeys={[selectedKey]}
           items={menuItems}
@@ -292,32 +294,36 @@ const MainLayout: React.FC = () => {
             />
           </Space>
 
-          {/* 右侧：用户信息 */}
-          <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
-            <Space
-              style={{
-                cursor: 'pointer',
-                padding: '4px 12px 4px 8px',
-                borderRadius: 8,
-                transition: 'background 0.2s',
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background = '#eff6ff';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.background = 'transparent';
-              }}
-            >
-              <Avatar
-                size={28}
-                style={{ background: '#2563eb', flexShrink: 0 }}
-                icon={<UserOutlined />}
-              />
-              <span style={{ fontSize: 13, color: '#172033', fontWeight: 500 }}>
-                {user?.displayName}
-              </span>
-            </Space>
-          </Dropdown>
+          {/* 右侧：帮助按钮 + 用户信息 */}
+          <Space size={8}>
+            <TourHelpButton />
+            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
+              <Space
+                id="user-menu"
+                style={{
+                  cursor: 'pointer',
+                  padding: '4px 12px 4px 8px',
+                  borderRadius: 8,
+                  transition: 'background 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = '#eff6ff';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = 'transparent';
+                }}
+              >
+                <Avatar
+                  size={28}
+                  style={{ background: '#2563eb', flexShrink: 0 }}
+                  icon={<UserOutlined />}
+                />
+                <span style={{ fontSize: 13, color: '#172033', fontWeight: 500 }}>
+                  {user?.displayName}
+                </span>
+              </Space>
+            </Dropdown>
+          </Space>
         </Header>
 
         {/* 内容区域 */}

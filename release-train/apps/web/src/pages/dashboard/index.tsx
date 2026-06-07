@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Card, 
   Row, 
@@ -22,7 +22,7 @@ import {
   SwapOutlined,
   AlertOutlined,
 } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../../stores/auth';
 import { useDashboardData } from '../../hooks/useDashboardData';
 import { Role, ReqStatus, TrainScheduleStatus } from '@release-train/shared';
@@ -30,6 +30,7 @@ import SystemSelector from '../../components/dashboard/SystemSelector';
 import { AppPageHeader, DataCard, MetricCard, StatusTag } from '../../components/common';
 import SmartOnboardModal from '../../components/smart-onboard/SmartOnboardModal';
 import requirementService from '../../services/requirement';
+import { useTourStore } from '../../tour/store';
 
 const { Text } = Typography;
 
@@ -52,6 +53,7 @@ interface ChangeStats {
 // ========== 统一仪表盘页面 ==========
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuthStore();
   const [selectedSystemId, setSelectedSystemId] = useState<string>('');
   const [selectedScheduleId, setSelectedScheduleId] = useState<string>('');
@@ -68,6 +70,9 @@ const DashboardPage: React.FC = () => {
     systemId: selectedSystemId 
   });
 
+  // 导览状态
+  const { startFeatureTour, checkShouldShowFeatureTour, isActive, clearCompleted } = useTourStore();
+
   // 当前用户角色
   const role = user?.role as Role;
 
@@ -80,6 +85,49 @@ const DashboardPage: React.FC = () => {
       }
     }
   }, [schedules, selectedScheduleId]);
+
+  // 使用ref避免重复触发
+  const hasProcessedTour = useRef(false);
+  
+  // 页面首次访问或从帮助按钮跳转时触发仪表盘导览
+  useEffect(() => {
+    // 检查URL参数是否指定了要启动的导览
+    const tourParam = searchParams.get('tour');
+    
+    // 延迟触发，确保页面渲染完成
+    const timer = setTimeout(() => {
+      // 避免重复处理
+      if (hasProcessedTour.current) {
+        return;
+      }
+      
+      // 如果导览已经激活，不要重复启动
+      if (isActive) {
+        // 如果URL参数还在，清除它并标记已处理
+        if (tourParam === 'dashboard') {
+          window.history.replaceState({}, '', window.location.pathname);
+          hasProcessedTour.current = true;
+        }
+        return;
+      }
+      
+      // 如果URL参数指定了导览，则强制启动（即使已完成）
+      if (tourParam === 'dashboard') {
+        // 标记已处理
+        hasProcessedTour.current = true;
+        // 清除已完成标记
+        clearCompleted('dashboard');
+        // 启动导览
+        startFeatureTour('dashboard');
+        // 立即清除URL参数，避免退出导览后再次启动
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (checkShouldShowFeatureTour('dashboard')) {
+        // 否则检查是否应该自动启动（首次访问）
+        startFeatureTour('dashboard');
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [isActive, checkShouldShowFeatureTour, startFeatureTour, searchParams, clearCompleted]);
 
   // 获取班次变更率数据
   useEffect(() => {
@@ -369,19 +417,23 @@ const DashboardPage: React.FC = () => {
         meta={<Text type="secondary" style={{ fontSize: 12 }}>{user?.username} | {role}</Text>}
         actions={
           <>
-            <SystemSelector value={selectedSystemId} onChange={setSelectedSystemId} />
+            <div id="dashboard-system-filter">
+              <SystemSelector value={selectedSystemId} onChange={setSelectedSystemId} />
+            </div>
             {schedules.length > 0 && (
-              <Select
-                placeholder="选择班次查看变更率"
-                allowClear
-                style={{ width: 200 }}
-                value={selectedScheduleId || undefined}
-                onChange={(value) => setSelectedScheduleId(value || '')}
-                options={schedules.map(s => ({
-                  label: s.scheduleName || s.trainName,
-                  value: s.scheduleId,
-                }))}
-              />
+              <div id="dashboard-schedule-select">
+                <Select
+                  placeholder="选择班次查看变更率"
+                  allowClear
+                  style={{ width: 200 }}
+                  value={selectedScheduleId || undefined}
+                  onChange={(value) => setSelectedScheduleId(value || '')}
+                  options={schedules.map(s => ({
+                    label: s.scheduleName || s.trainName,
+                    value: s.scheduleId,
+                  }))}
+                />
+              </div>
             )}
             {role === Role.TRAIN_ADMIN && (
               <Button 
@@ -412,15 +464,16 @@ const DashboardPage: React.FC = () => {
         ) : (
           <div className="dashboard-content">
             {/* 第一部分：统计卡片 */}
-            <DataCard
-              title={
-                <Space>
-                  <span>需求统计概览</span>
-                  <StatusTag type="custom" value="实时数据" label="实时数据" />
-                </Space>
-              }
-              styles={{ body: { padding: '16px' } }}
-            >
+            <div id="dashboard-stats">
+              <DataCard
+                title={
+                  <Space>
+                    <span>需求统计概览</span>
+                    <StatusTag type="custom" value="实时数据" label="实时数据" />
+                  </Space>
+                }
+                styles={{ body: { padding: '16px' } }}
+              >
               <Row gutter={[16, 12]}>
                 {stats && stats.byStatus && (
                   <>
@@ -496,32 +549,36 @@ const DashboardPage: React.FC = () => {
                     </Text>
                   </Col>
                   <Col xs={24} sm={12} md={8}>
-                    <Card size="small" style={{ background: '#f6ffed', borderColor: '#52c41a' }}>
-                      <Statistic
-                        title="需求变更率"
-                        value={changeStats.changeRate}
-                        suffix="%"
-                        prefix={<SwapOutlined style={{ color: '#52c41a' }} />}
-                        valueStyle={{ color: '#52c41a', fontSize: 24 }}
-                      />
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {changeStats.changedCount}/{changeStats.totalOnboarded} 个需求发生过变更
-                      </Text>
-                    </Card>
+                    <div id="dashboard-change-rate">
+                      <Card size="small" style={{ background: '#f6ffed', borderColor: '#52c41a' }}>
+                        <Statistic
+                          title="需求变更率"
+                          value={changeStats.changeRate}
+                          suffix="%"
+                          prefix={<SwapOutlined style={{ color: '#52c41a' }} />}
+                          valueStyle={{ color: '#52c41a', fontSize: 24 }}
+                        />
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {changeStats.changedCount}/{changeStats.totalOnboarded} 个需求发生过变更
+                        </Text>
+                      </Card>
+                    </div>
                   </Col>
                   <Col xs={24} sm={12} md={8}>
-                    <Card size="small" style={{ background: '#fff2e8', borderColor: '#fa8c16' }}>
-                      <Statistic
-                        title="紧急变更率"
-                        value={changeStats.emergencyChangeRate}
-                        suffix="%"
-                        prefix={<AlertOutlined style={{ color: '#fa8c16' }} />}
-                        valueStyle={{ color: '#fa8c16', fontSize: 24 }}
-                      />
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {changeStats.emergencyChangeCount}/{changeStats.totalOnboarded} 个需求发生紧急变更
-                      </Text>
-                    </Card>
+                    <div id="dashboard-change-type-stats">
+                      <Card size="small" style={{ background: '#fff2e8', borderColor: '#fa8c16' }}>
+                        <Statistic
+                          title="紧急变更率"
+                          value={changeStats.emergencyChangeRate}
+                          suffix="%"
+                          prefix={<AlertOutlined style={{ color: '#fa8c16' }} />}
+                          valueStyle={{ color: '#fa8c16', fontSize: 24 }}
+                        />
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          {changeStats.emergencyChangeCount}/{changeStats.totalOnboarded} 个需求发生紧急变更
+                        </Text>
+                      </Card>
+                    </div>
                   </Col>
                   <Col xs={24} sm={12} md={8}>
                     <Card size="small">
@@ -542,17 +599,19 @@ const DashboardPage: React.FC = () => {
                 </Row>
               )}
             </DataCard>
+            </div>
 
             {/* 第二部分：关键时间倒计时 */}
-            <DataCard
-              title={
-                <Space>
-                  <span>关键时间节点</span>
-                  <StatusTag type="custom" value="未来14天" label="未来14天" />
-                </Space>
-              }
-              styles={{ body: { padding: '16px' } }}
-            >
+            <div id="dashboard-key-dates">
+              <DataCard
+                title={
+                  <Space>
+                    <span>关键时间节点</span>
+                    <StatusTag type="custom" value="未来14天" label="未来14天" />
+                  </Space>
+                }
+                styles={{ body: { padding: '16px' } }}
+              >
               {getKeyDates().length > 0 ? (
                 <Row gutter={[12, 12]}>
                   {getKeyDates().map((item: any) => (
@@ -606,17 +665,19 @@ const DashboardPage: React.FC = () => {
                 <Empty description="未来14天内无关键节点" />
               )}
             </DataCard>
+            </div>
 
             {/* 第三部分：待办事项列表 */}
-            <DataCard
-              title={
-                <Space>
-                  <span>我的待办</span>
-                  <StatusTag type="custom" value="待办数量" label={`${getTodoSections().reduce((sum, s) => sum + s.data.length, 0)} 项`} />
-                </Space>
-              }
-              styles={{ body: { padding: 0 } }}
-            >
+            <div id="dashboard-todos">
+              <DataCard
+                title={
+                  <Space>
+                    <span>我的待办</span>
+                    <StatusTag type="custom" value="待办数量" label={`${getTodoSections().reduce((sum, s) => sum + s.data.length, 0)} 项`} />
+                  </Space>
+                }
+                styles={{ body: { padding: 0 } }}
+              >
               {getTodoSections().length > 0 ? (
                 <div style={{ padding: '4px 0' }}>
                   {getTodoSections().map((section) => (
@@ -719,6 +780,7 @@ const DashboardPage: React.FC = () => {
                 </div>
               )}
             </DataCard>
+            </div>
           </div>
         )}
         

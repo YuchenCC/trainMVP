@@ -6,7 +6,6 @@ import MainLayout from './layouts/MainLayout';
 import { appTheme } from './theme';
 import LoginPage from './pages/login';
 import DashboardPage from './pages/dashboard';
-// 已删除：BADashboard 和 PMDashboard 已合并到统一的 DashboardPage
 import CalendarPage from './pages/calendar';
 import RequirementsPage from './pages/requirements';
 import RequirementCreatePage from './pages/requirements/create';
@@ -20,6 +19,7 @@ import SchedulesPage from './pages/trains/schedules';
 import ScheduleDetailPage from './pages/trains/schedule-detail';
 import SystemsPage from './pages/systems';
 import { AuthGuard, GuestGuard } from './components/AuthGuard';
+import { TourProvider, WelcomeModal } from './tour';
 
 // ========== App根组件 ==========
 const App: React.FC = () => {
@@ -41,7 +41,10 @@ const App: React.FC = () => {
           <Route
             element={
               <AuthGuard>
-                <MainLayout />
+                <TourProvider>
+                  <MainLayout />
+                  <WelcomeModal />
+                </TourProvider>
               </AuthGuard>
             }
           >
@@ -65,7 +68,6 @@ const App: React.FC = () => {
             {/* 其他模块 */}
             <Route path="/systems" element={<SystemsPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
-            {/* 已删除：/dashboard/ba 和 /dashboard/pm 已合并到统一的 /dashboard */}
             <Route path="/calendar" element={<CalendarPage />} />
           </Route>
 

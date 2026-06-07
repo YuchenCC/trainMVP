@@ -470,59 +470,63 @@ const CalendarView: React.FC<CalendarViewProps> = ({ schedules: propSchedules })
         }
       />
 
-      <FilterBar
-        fields={
-          <>
-                <Text type="secondary" style={{ fontSize: 13 }}>选择系统：</Text>
-                <Select
-                  value={selectedSystemId}
-                  onChange={(value) => switchSystem(value)}
-                  style={{ width: 150 }}
-                  options={[
-                    ...systems.map(system => ({ label: system.name, value: system.id })),
-                  ]}
-                />
-                <Text type="secondary" style={{ fontSize: 13 }}>选择火车：</Text>
-                <Select
-                  value={activeTrainId || ''}
-                  onChange={(value) => switchTrain(value)}
-                  style={{ width: 180 }}
-                  options={[
-                    ...trains.map(train => ({ label: train.name, value: train.id })),
-                  ]}
-                />
-          </>
-        }
-      />
+      <div id="calendar-filter">
+        <FilterBar
+          fields={
+            <>
+                  <Text type="secondary" style={{ fontSize: 13 }}>选择系统：</Text>
+                  <Select
+                    value={selectedSystemId}
+                    onChange={(value) => switchSystem(value)}
+                    style={{ width: 150 }}
+                    options={[
+                      ...systems.map(system => ({ label: system.name, value: system.id })),
+                    ]}
+                  />
+                  <Text type="secondary" style={{ fontSize: 13 }}>选择火车：</Text>
+                  <Select
+                    value={activeTrainId || ''}
+                    onChange={(value) => switchTrain(value)}
+                    style={{ width: 180 }}
+                    options={[
+                      ...trains.map(train => ({ label: train.name, value: train.id })),
+                    ]}
+                  />
+            </>
+          }
+        />
+      </div>
 
-      <DataCard>
-        <div className="calendar-schedule-view">
-          <div style={{ marginBottom: 12 }}>
-            <Row justify="space-between" align="middle">
-              <Col>
-                <Space>
-                  <Button size="small" onClick={goToPrevMonth}>&lt;</Button>
-                  <Text strong style={{ fontSize: 15, minWidth: 180, textAlign: 'center', display: 'inline-block' }}>
-                    {viewDate.format('YYYY年M月')} - {viewDate.add(1, 'month').format('M月')}
-                  </Text>
-                  <Button size="small" onClick={goToNextMonth}>&gt;</Button>
-                  <Button size="small" type="text" onClick={goToToday}>今天</Button>
-                </Space>
+      <div id="calendar-main">
+        <DataCard>
+          <div className="calendar-schedule-view">
+            <div id="calendar-nav" style={{ marginBottom: 12 }}>
+              <Row justify="space-between" align="middle">
+                <Col>
+                  <Space>
+                    <Button size="small" onClick={goToPrevMonth}>&lt;</Button>
+                    <Text strong style={{ fontSize: 15, minWidth: 180, textAlign: 'center', display: 'inline-block' }}>
+                      {viewDate.format('YYYY年M月')} - {viewDate.add(1, 'month').format('M月')}
+                    </Text>
+                    <Button size="small" onClick={goToNextMonth}>&gt;</Button>
+                    <Button size="small" type="text" onClick={goToToday}>今天</Button>
+                  </Space>
+                </Col>
+              </Row>
+            </div>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Calendar value={viewDate.date(1)} headerRender={() => null} cellRender={cellRender} onChange={() => {}} />
+              </Col>
+              <Col span={12}>
+                <Calendar value={viewDate.add(1, 'month').date(1)} headerRender={() => null} cellRender={cellRender} onChange={() => {}} />
               </Col>
             </Row>
           </div>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Calendar value={viewDate.date(1)} headerRender={() => null} cellRender={cellRender} onChange={() => {}} />
-            </Col>
-            <Col span={12}>
-              <Calendar value={viewDate.add(1, 'month').date(1)} headerRender={() => null} cellRender={cellRender} onChange={() => {}} />
-            </Col>
-          </Row>
-        </div>
-      </DataCard>
+        </DataCard>
+      </div>
 
-      <div style={{ marginTop: 16, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+      <div id="calendar-details" style={{ marginTop: 16, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
         {allSchedules.map(schedule => (
           <DataCard
             key={schedule.id}

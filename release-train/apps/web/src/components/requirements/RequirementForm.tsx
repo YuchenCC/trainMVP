@@ -553,7 +553,7 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
 
           {/* 需求描述 */}
           <Form.Item name="description" label="需求描述" rules={[{ required: true, message: '请输入需求描述' }]}>
-            <TextArea rows={6} placeholder="详细描述需求背景、目标、验收标准等" />
+            <TextArea id="requirements-description-input" rows={6} placeholder="详细描述需求背景、目标、验收标准等" />
           </Form.Item>
 
           {/* 关联依赖区域 */}
@@ -626,10 +626,10 @@ const RequirementForm: React.FC<RequirementFormProps> = ({ mode, initialData, on
           </Card>
 
           {/* 底部操作按钮 */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
+          <div id="requirement-form-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
             {onCancel && <Button onClick={onCancel}>取消</Button>}
             <Button type="default" icon={<SaveOutlined />} onClick={handleSaveDraft}>保存草稿</Button>
-            <Button type="default" icon={<RobotOutlined />} onClick={handleAIReview} loading={reviewLoading}>AI 审查</Button>
+            <Button id="ai-review-button" type="default" icon={<RobotOutlined />} onClick={handleAIReview} loading={reviewLoading}>AI 审查</Button>
             <Button type="primary" icon={<SendOutlined />} htmlType="submit" loading={isSubmitting}>
               {mode === 'create' ? '保存并发起评审' : '发起评审'}
             </Button>
