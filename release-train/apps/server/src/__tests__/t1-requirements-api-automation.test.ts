@@ -7,6 +7,8 @@ import { createApp } from '../app.js';
 import { prisma } from '../prisma/index.js';
 import { FastifyInstance } from 'fastify';
 import bcrypt from 'bcrypt';
+import { Role } from '@prisma/client';
+import { ReqStatus } from '@release-train/shared';
 
 const TEST_SYSTEM_NAME = 'API测试系统';
 const TEST_PREFIX = `api_test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -52,7 +54,7 @@ describe('T1 需求池管理 API 自动化测试', { sequential: true }, () => {
   }
 
   async function createTestUsers() {
-    const users = [
+    const users: { username: string; role: Role; password: string }[] = [
       { username: `${TEST_PREFIX}_ba`, role: 'BA', password: 'BAPass123!' },
       { username: `${TEST_PREFIX}_pm`, role: 'PM', password: 'PMPass123!' },
       { username: `${TEST_PREFIX}_projectmgr`, role: 'PROJECT_MGR', password: 'PMgrPass123!' },
@@ -86,7 +88,7 @@ describe('T1 需求池管理 API 自动化测试', { sequential: true }, () => {
     }
   }
 
-  async function createTestRequirement(title: string, status: string = 'DRAFT'): Promise<string> {
+  async function createTestRequirement(title: string, status: ReqStatus = 'DRAFT'): Promise<string> {
     const res = await app.inject({
       method: 'POST',
       url: '/api/requirements',
