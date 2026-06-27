@@ -117,6 +117,10 @@ async function generateReqCode(tx: Prisma.TransactionClient, retries = 5): Promi
   throw errors.requirementCodeConflict();
 }
 
+export const __testing = {
+  generateReqCode,
+};
+
 /**
  * 循环依赖检测：判断在 A → B 方向添加依赖是否形成循环
  * 
