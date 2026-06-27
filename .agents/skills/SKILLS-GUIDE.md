@@ -1,7 +1,7 @@
 # Skills 说明文档
 
 > 版本火车需求管理系统 MVP 项目可用的 AI Skills 速查手册
-> 更新时间：2026-05-12
+> 更新时间：2026-06-09
 
 ---
 
@@ -11,7 +11,12 @@
 |------|-------|---------|-----------|
 | 🔍 诊断 | **diagnose** | "diagnose this" / "debug this" / 报告 Bug | 严格诊断循环：复现→最小化→假设→插桩→修复→回归 |
 | 🧪 测试 | **tdd** | "TDD" / "red-green-refactor" / "test first" | 红绿重构循环的测试驱动开发 |
-| 🎨 前端 | **frontend-design** | 构建 Web 组件/页面/布局 | 高质量前端界面，避免通用 AI 美学 |
+| 🧪 测试 | **test-strategy-analyzer** | "分析测试策略" / "测试案例×测试方式" | 分析测试案例确定测试方式，输出分层策略文档 |
+| 🧪 测试 | **test-report-generator** | "生成自测报告" / "输出测试报告" | 从 vitest/playwright 提取数据，生成可验证的自测报告 |
+| 🧪 测试 | **webapp-testing** | 测试本地 Web 应用 | Playwright 前端功能验证、截图、浏览器日志 |
+| 🔌 测试 | **automating-api-testing** | "/api-test-automation" / API 接口测试 | 从 OpenAPI 规范自动生成 REST/GraphQL 接口测试 |
+| 🔒 测试 | **pentesting-claude-skill** | 安全扫描 / 渗透测试 | AI 驱动渗透测试：SAST 分析、OWASP Top 10、报告生成 |
+| � 前端 | **frontend-design** | 构建 Web 组件/页面/布局 | 高质量前端界面，避免通用 AI 美学 |
 | 🎨 前端 | **web-artifacts-builder** | 复杂多组件 artifact | React + Tailwind + shadcn/ui 多组件构建 |
 | 📱 移动端 | **vercel-react-native-skills** | React Native / Expo 任务 | RN 性能优化、动画、原生模块最佳实践 |
 | 🏗️ 架构 | **improve-codebase-architecture** | "improve architecture" / "refactor" | 发现深层重构机会，提升可测试性和可导航性 |
@@ -27,10 +32,11 @@
 | 🔧 Git | **gh-cli** | GitHub 操作相关 | GitHub CLI 全面参考：仓库、Issue、PR、Actions |
 | 🎨 设计 | **figma** | Figma URL / node ID / 设计转代码 | 从 Figma 获取设计上下文，转成生产代码 |
 | 💬 沟通 | **caveman** | "caveman mode" / "less tokens" / "be brief" | 极简沟通模式，省约 75% token |
+| 💬 沟通 | **handoff** | "handoff" / "handover" | 压缩对话上下文生成交接文档 |
 | 🗄️ 数据库 | **redis-development** | Redis 相关任务 | Redis 性能优化、数据结构、向量搜索最佳实践 |
-| 🌐 测试 | **webapp-testing** | 测试本地 Web 应用 | Playwright 交互测试、截图、浏览器日志 |
 | 🛠️ 元技能 | **skill-creator** | 创建新 Skill | 创建新 Skill 的必须工具 |
 | 🛠️ 元技能 | **write-a-skill** | "write a skill" / "build a skill" | 编写新 Skill 的结构和资源 |
+| 🛠️ 元技能 | **setup-matt-pocock-skills** | 初始化项目 Skills | Matt Pocock Skills 项目初始化配置 |
 
 ---
 
@@ -238,6 +244,150 @@
 
 **行为**：使用 Playwright 进行前端功能验证、UI 行为调试、浏览器截图、查看浏览器日志。
 
+**附带资源**：
+- `examples/` — 控制台日志捕获、元素发现、静态 HTML 自动化示例
+- `scripts/with_server.py` — 服务器生命周期管理（自动启动/停止开发服务器）
+
+**文件结构**：
+```
+webapp-testing/
+├── examples/
+│   ├── console_logging.py
+│   ├── element_discovery.py
+│   └── static_html_automation.py
+├── scripts/
+│   └── with_server.py
+├── LICENSE.txt
+└── SKILL.md
+```
+
+---
+
+### 🧪 test-strategy-analyzer — 测试策略分析
+
+**触发**：说 "分析测试策略" / "测试案例×测试方式" / 设计分层测试策略
+
+**调用格式**（必须指定代码范围）：
+```
+"分析 T1 需求池管理的测试策略，代码范围：service.ts"
+"分析最近提交的测试策略，代码范围：HEAD~5"
+```
+
+**调用流程**：
+1. **Step 0: 需求澄清**：多轮询问确认测试案例文档、代码范围、需求文档
+2. **Step 1: 输出确认清单**：分析前输出清单，用户审核后再执行
+3. **Step 2: 确认后分析**：读取文件并分析
+
+**代码范围参数**：
+- `模块名`：Task 编号或功能模块（如 `T1-需求池`、`紧急变更`）
+- `文件路径`：需要分析的代码文件（如 `service.ts`、`index.ts`）
+- `提交范围`：Git 提交（`HEAD~5`、`feature/xxx`、`abc123..def456`）
+- `函数列表`：需要单测的具体函数（如 `sanitizeDescription`）
+
+**分层原则**：
+- **L1 单测**：必须先读代码，分析函数内部逻辑
+- **L2 API自动化**：需要读 API 路由确认路径和方法
+- **L3 Playwright**：基于业务理解串用户旅程
+
+**覆盖率目标**：
+- 增量覆盖率 ≥ 80%（service.ts 新增代码）
+- API 自动化覆盖率 ≥ 90%（核心业务流程）
+- Playwright 覆盖 N 条核心用户旅程
+
+**输出产物**：
+- 有测试案例 → 2 份：分层测试策略 + 测试方式对照表
+- 无测试案例 → 3 份：测试案例（基于代码分析生成）+ 分层测试策略 + 测试方式对照表
+
+**文件名规范**：
+- `RT-{TaskName}-测试案例_{版本}_{日期}.md`（无测试案例时生成）
+- `RT-{TaskName}-分层测试策略_{版本}_{日期}.md`
+- `RT-{TaskName}-测试案例测试方式对照表_{版本}_{日期}.md`
+
+---
+
+### 🔌 automating-api-testing — API 接口测试自动化
+
+**来源**：jeremylongshore/claude-code-plugins-plus-skills
+
+**触发**：`/api-test-automation:automating-api-testing`
+
+**行为**：从 OpenAPI 规范自动生成 REST/GraphQL 接口测试，包括请求生成、响应验证、schema 合规、认证流程、错误处理和幂等性测试。
+
+**多语言支持**：
+- **Node.js** — Supertest
+- **Python** — pytest + httpx
+- **Java** — REST-assured
+
+**支持格式**：
+- OpenAPI/Swagger 规范
+- Postman/Newman 集合
+- Pact 消费者驱动契约测试
+
+**附带资源**：
+- `assets/` — examples（OpenAPI YAML、GraphQL Schema、测试套件模板）
+- `scripts/generate_test_suite.py` — 自动生成测试套件脚本
+
+---
+
+### 🔒 pentesting-claude-skill — 渗透测试
+
+**来源**：PyPI pentesting-claude-skill v1.0.0
+
+**触发**：安全扫描 / 渗透测试 / 代码安全审查
+
+**行为**：AI 驱动的渗透测试自动化，使用 Claude 的语义代码理解能力，超越简单模式匹配，识别复杂漏洞。
+
+**核心功能**：
+- 🔍 **语义 SAST 分析** — 深度代码安全扫描
+- 🎯 **OWASP Top 10 全覆盖** — 访问控制、注入、加密缺陷等
+- 🚀 **CI/CD 集成** — GitHub Actions 工作流
+- 📊 **报告生成** — HTML/PDF/JSON 专业报告
+- 🔗 **攻击链检测** — 多步骤利用路径识别
+- ✅ **误报过滤** — 上下文感知降噪
+
+**使用方式**：
+```bash
+# SAST 分析
+python3 -m handlers.sast_analyzer --scope full_codebase
+
+# 生成报告
+python3 -m handlers.report_generator --format html
+```
+
+**文件结构**：
+```
+pentesting-claude-skill/
+├── handlers/                    # 核心 Python 模块
+│   ├── sast_analyzer.py         # 静态分析引擎
+│   ├── report_generator.py      # 报告生成
+│   ├── finding_aggregator.py    # 发现去重聚合
+│   ├── payload_generator.py     # 攻击载荷创建
+│   └── dynamic_executor.py      # 动态测试
+├── instructions/                # Claude 分析指令
+│   ├── security-review.md
+│   ├── dynamic-testing.md
+│   ├── attack-vectors.md
+│   ├── reporting.md
+│   └── orchestration.md
+├── resources/                   # 配置和模板
+│   ├── attack_vectors.json
+│   ├── severity_matrix.json
+│   ├── false_positive_filters.txt
+│   └── report_templates/
+└── tests/                       # 测试套件
+```
+
+---
+
+### 💬 handoff — 交接文档
+
+**触发**：说 "handoff" / "handover" / "transfer to another agent"
+
+**行为**：将当前对话上下文压缩为交接文档，供其他 AI Agent 接管。包含项目状态、决策记录、剩余工作等信息。
+
+**附带资源**：
+- `handoff.sh` — 交接脚本
+
 ---
 
 ### 🎨 figma — Figma 设计转代码
@@ -283,13 +433,17 @@
 在对话中直接说出 Skill 名称或触发词即可，例如：
 
 ```
-"grill me T1的设计方案"     → 激活 grill-me
-"tdd 这个功能"              → 激活 tdd
-"commit"                    → 激活 git-commit
-"commit and push"           → 激活 git-push-notice（群通知）
-"/push-notice 铁胆"         → 激活 git-push-notice（私信通知）
-"diagnose this"             → 激活 diagnose
-"caveman mode"              → 激活 caveman
+"grill me T1的设计方案"              → 激活 grill-me
+"tdd 这个功能"                       → 激活 tdd
+"commit"                             → 激活 git-commit
+"commit and push"                    → 激活 git-push-notice（群通知）
+"/push-notice 铁胆"                  → 激活 git-push-notice（私信通知）
+"diagnose this"                      → 激活 diagnose
+"caveman mode"                       → 激活 caveman
+"handoff"                            → 激活 handoff
+"测试这个页面"                       → 激活 webapp-testing
+"/api-test-automation: 测试登录接口"  → 激活 automating-api-testing
+"扫描代码安全漏洞"                   → 激活 pentesting-claude-skill
 ```
 
 ---
@@ -300,26 +454,44 @@
 
 ```
 .agents/skills/
+├── automating-api-testing/      # API 接口测试自动化
+│   ├── SKILL.md
+│   ├── assets/                  # 示例文件（OpenAPI、GraphQL、测试模板）
+│   ├── scripts/
+│   └── references/
 ├── caveman/
-│   └── SKILL.md              # Skill 主文件（必需）
+│   └── SKILL.md
 ├── diagnose/
 │   ├── SKILL.md
-│   └── scripts/              # 辅助脚本
+│   └── scripts/
 ├── git-commit/
-│   └── SKILL.md              # Conventional commit 生成器
+│   └── SKILL.md
 ├── git-push-notice/
-│   └── SKILL.md              # 提交 + 推送 + 飞书通知
+│   └── SKILL.md
 ├── grill-with-docs/
 │   ├── SKILL.md
-│   ├── ADR-FORMAT.md         # 附带资源
+│   ├── ADR-FORMAT.md
 │   └── CONTEXT-FORMAT.md
+├── handoff/
+│   ├── SKILL.md
+│   └── handoff.sh
+├── pentesting-claude-skill/     # 渗透测试
+│   ├── SKILL.md (setup.py)
+│   ├── handlers/                # SAST 分析、报告生成等
+│   ├── instructions/            # 安全审查指令
+│   ├── resources/               # 漏洞库、评分矩阵
+│   └── tests/
 ├── tdd/
 │   ├── SKILL.md
-│   ├── tests.md              # 子主题文档
+│   ├── tests.md
 │   ├── mocking.md
 │   ├── interface-design.md
 │   ├── deep-modules.md
 │   └── refactoring.md
+├── webapp-testing/              # Web 应用测试
+│   ├── SKILL.md
+│   ├── examples/                # Playwright 示例脚本
+│   └── scripts/
 └── ...
 ```
 
