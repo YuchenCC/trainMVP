@@ -39,4 +39,7 @@ apps/server/prisma/migrations/
 apps/web/tsconfig.tsbuildinfo
 
 # Handoff documents
-../handoff-*.md*.pptx
+../handoff-*.md
+
+# 大型文件（不提交到仓库）
+*.pptx
