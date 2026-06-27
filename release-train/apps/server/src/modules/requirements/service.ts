@@ -76,52 +76,44 @@ function sanitizeDescription(html: string): string {
  * @returns 生成的需求编号字符串，如 "REQ-2026-0001"
  * @throws 重试耗尽后抛出 409 CONFLICT 错误
  */
-async function generateReqCode(tx: Prisma.TransactionClient, maxRetries = 3): Promise<string> {
-  const year = new Date().getFullYear();  // 获取当前年份，用于编号前缀
-  const prefix = `REQ-${year}-`;         // 构造年份前缀，如 "REQ-2026-"
+async function generateReqCode(tx: Prisma.TransactionClient, retries = 5): Promise<string> {
+  const year = new Date().getFullYear();
+  const prefix = `REQ-${year}-`;
 
-  // 循环重试：最多尝试 maxRetries 次
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    // 1. 查询当年已有编号中最大的一个（按 reqCode 降序取第一条）
-    const lastReq = await tx.requirement.findFirst({
-      where: { reqCode: { startsWith: prefix } }, // 只查当年编号
-      orderBy: { reqCode: 'desc' },               // 降序排列，取最大
-      select: { reqCode: true },                   // 只查编号字段
+  for (let attempt = 0; attempt < retries; attempt++) {
+    // 查询所有编号，提取序号并找最大值（解决字符串排序问题）
+    const allReqs = await tx.requirement.findMany({
+      where: { reqCode: { startsWith: prefix } },
+      select: { reqCode: true },
     });
 
-    // 2. 计算下一个序号：有记录则 +1，否则从 1 开始
-    let nextSeq = 1;
-    if (lastReq) {
-      const lastSeq = parseInt(lastReq.reqCode.slice(prefix.length), 10); // 从编号中截取序号部分
-      nextSeq = lastSeq + 1;  // 递增
+    let maxSeq = 0;
+    for (const req of allReqs) {
+      const seqStr = req.reqCode.slice(prefix.length);
+      const seq = parseInt(seqStr, 10);
+      if (seq > maxSeq) {
+        maxSeq = seq;
+      }
     }
 
-    // 3. 格式化为 REQ-{年份}-{4位序号}，不足4位前补零
+    const nextSeq = maxSeq + 1;
     const reqCode = `${prefix}${nextSeq.toString().padStart(4, '0')}`;
 
-    // 4. 检查唯一性：如果另一个并发事务已抢到这个编号，则重试
-    try {
-      const existing = await tx.requirement.findUnique({
-        where: { reqCode },     // 按唯一约束查
-        select: { id: true },   // 只取 ID，判断存在性
-      });
-      if (existing) {
-        // 编号冲突，如果是最后一次尝试则抛错，否则继续重试
-        if (attempt === maxRetries - 1) {
-          throw errors.requirementCodeConflict();
-        }
-        continue; // 继续下一轮重试
-      }
-      return reqCode; // 成功生成唯一编号
-    } catch (error) {
-      // 非业务错误的异常直接透出
-      if (attempt === maxRetries - 1) {
-        throw errors.requirementCodeConflict();
-      }
+    // 检查唯一性
+    const existing = await tx.requirement.findUnique({
+      where: { reqCode },
+      select: { id: true },
+    });
+    if (!existing) {
+      return reqCode;
+    }
+
+    // 编号已存在，等待随机时间后重试
+    if (attempt < retries - 1) {
+      await new Promise(resolve => setTimeout(resolve, Math.random() * 100 + 50));
     }
   }
 
-  // 兜底：重试耗尽
   throw errors.requirementCodeConflict();
 }
 
@@ -382,67 +374,82 @@ export async function createRequirement(
   }
 
   // 6. 开启 Prisma 事务：编号生成 → 需求创建 → 依赖创建 → 日志记录（原子操作）
-  return prisma.$transaction(async (tx) => {
-    // 6a. 生成唯一需求编号（事务内，冲突自动重试）
-    const reqCode = await generateReqCode(tx);
+  const maxRetries = 10;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await prisma.$transaction(async (tx) => {
+        // 6a. 生成唯一需求编号（事务内）
+        const reqCode = await generateReqCode(tx);
 
-    // 6b. 创建需求记录（初始状态 DRAFT）
-    const requirement = await tx.requirement.create({
-      data: {
-        reqCode,                             // 自动生成的需求编号
-        title: data.title,                   // 需求标题
-        description: filteredDescription,    // 已 XSS 过滤的描述
-        systemId: data.systemId,             // 归属系统 ID
-        priority: data.priority,             // 优先级 P0/P1/P2/P3
-        storyPoints: data.storyPoints,       // 工作量点数
-        baId: data.baId,                     // 业务归属人 ID
-        pmId: data.pmId ?? null,             // 产品经理 ID（可选，undefined → null）
-        creatorId,                           // 创建人 ID（从 JWT 提取）
-        reqType: data.reqType ?? null,       // 需求类型（可选）
-        sourceChannel: data.sourceChannel ?? null, // 来源渠道（可选）
-        status: 'DRAFT',                     // 初始状态：草稿
-      },
-      include: {                             // 关联查询（用于返回详情）
-        system: true,                        // 归属系统
-        ba: true,                            // 业务归属人
-        pm: true,                            // 产品经理
-        creator: true,                       // 创建人
-        trainSchedule: { include: { train: true } },                         // 所属火车（初始为 null）
-      },
-    });
-
-    // 6c. 如果指定了依赖，逐条创建依赖关系（含循环检测）
-    if (data.dependencyIds && data.dependencyIds.length > 0) {
-      for (const depId of data.dependencyIds) {
-        // 循环依赖检测：添加 A → depId 是否会形成环？
-        const hasCircular = await hasCircularDependency(requirement.id, depId, tx);
-        if (hasCircular) {
-          throw errors.requirementCircularDependency(); // 阻断保存
-        }
-
-        // 创建依赖关系记录
-        await tx.requirementDependency.create({
+        // 6b. 创建需求记录（初始状态 DRAFT）
+        const requirement = await tx.requirement.create({
           data: {
-            dependantId: requirement.id,   // 依赖方（A 依赖 B，A 是依赖方）
-            dependencyId: depId,           // 被依赖方（A 依赖 B，B 是被依赖方）
+            reqCode,                             // 自动生成的需求编号
+            title: data.title,                   // 需求标题
+            description: filteredDescription,    // 已 XSS 过滤的描述
+            systemId: data.systemId,             // 归属系统 ID
+            priority: data.priority,             // 优先级 P0/P1/P2/P3
+            storyPoints: data.storyPoints,       // 工作量点数
+            baId: data.baId,                     // 业务归属人 ID
+            pmId: data.pmId ?? null,             // 产品经理 ID（可选，undefined → null）
+            creatorId,                           // 创建人 ID（从 JWT 提取）
+            reqType: data.reqType ?? null,       // 需求类型（可选）
+            sourceChannel: data.sourceChannel ?? null, // 来源渠道（可选）
+            status: 'DRAFT',                     // 初始状态：草稿
+          },
+          include: {                             // 关联查询（用于返回详情）
+            system: true,                        // 归属系统
+            ba: true,                            // 业务归属人
+            pm: true,                            // 产品经理
+            creator: true,                       // 创建人
+            trainSchedule: { include: { train: true } },                         // 所属火车（初始为 null）
           },
         });
+
+        // 6c. 如果指定了依赖，逐条创建依赖关系（含循环检测）
+        if (data.dependencyIds && data.dependencyIds.length > 0) {
+          for (const depId of data.dependencyIds) {
+            // 循环依赖检测：添加 A → depId 是否会形成环？
+            const hasCircular = await hasCircularDependency(requirement.id, depId, tx);
+            if (hasCircular) {
+              throw errors.requirementCircularDependency(); // 阻断保存
+            }
+
+            // 创建依赖关系记录
+            await tx.requirementDependency.create({
+              data: {
+                dependantId: requirement.id,   // 依赖方（A 依赖 B，A 是依赖方）
+                dependencyId: depId,           // 被依赖方（A 依赖 B，B 是被依赖方）
+              },
+            });
+          }
+        }
+
+        // 6d. 创建状态变更日志（审计记录）
+        await tx.statusLog.create({
+          data: {
+            requirementId: requirement.id,       // 需求 ID
+            operationType: OperationType.CREATE,  // 操作类型：创建
+            toStatus: 'DRAFT',                    // 变更后状态：草稿
+            operatorId: creatorId,                // 操作人 ID
+          },
+        });
+
+        // 6e. 返回完整需求详情
+        return buildRequirementDetail(requirement, tx);
+      });
+    } catch (error: any) {
+      // 处理编号冲突错误（来自 generateReqCode 或 Prisma P2002）
+      const isCodeConflict = error.code === 'REQUIREMENT_CODE_CONFLICT' ||
+                              (error.code === 'P2002' && error.meta?.target?.includes('reqCode'));
+      if (isCodeConflict && attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, Math.random() * 200 + 100));
+        continue;
       }
+      throw error;
     }
-
-    // 6d. 创建状态变更日志（审计记录）
-    await tx.statusLog.create({
-      data: {
-        requirementId: requirement.id,       // 需求 ID
-        operationType: OperationType.CREATE,  // 操作类型：创建
-        toStatus: 'DRAFT',                    // 变更后状态：草稿
-        operatorId: creatorId,                // 操作人 ID
-      },
-    });
-
-    // 6e. 返回完整需求详情
-    return buildRequirementDetail(requirement, tx);
-  });
+  }
+  throw errors.requirementCodeConflict();
 }
 
 /**
