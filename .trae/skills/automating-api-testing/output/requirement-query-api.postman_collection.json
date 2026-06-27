@@ -1,0 +1,85 @@
+{
+  "info": {
+    "name": "版本火车 — 需求查询接口",
+    "description": "需求查询接口 API 集合，由 automating-api-testing 生成",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "automating-api-testing"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "token", "value": "your-jwt-token" }
+  ],
+  "item": [
+    {
+      "name": "需求列表分页查询",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/requirements?page=1&pageSize=20",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "requirements"],
+          "query": [
+            { "key": "page", "value": "1" },
+            { "key": "pageSize", "value": "20" },
+            { "key": "status", "value": "DRAFT", "disabled": true },
+            { "key": "keyword", "value": "登录", "disabled": true },
+            { "key": "systemId", "value": "sys-1", "disabled": true },
+            { "key": "sortBy", "value": "priority", "disabled": true },
+            { "key": "sortOrder", "value": "desc", "disabled": true }
+          ]
+        },
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ]
+      }
+    },
+    {
+      "name": "需求搜索",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/requirements/search?q=登录",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "requirements", "search"],
+          "query": [{ "key": "q", "value": "登录" }]
+        },
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ]
+      }
+    },
+    {
+      "name": "需求详情",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/requirements/:id",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "requirements", ":id"],
+          "variable": [{ "key": "id", "value": "your-requirement-id" }]
+        },
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ]
+      }
+    },
+    {
+      "name": "需求聚合统计",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/stats/requirements",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "stats", "requirements"],
+          "query": [
+            { "key": "systemIds", "value": "sys-1,sys-2", "disabled": true },
+            { "key": "scheduleId", "value": "schedule-1", "disabled": true }
+          ]
+        },
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ]
+      }
+    }
+  ]
+}
