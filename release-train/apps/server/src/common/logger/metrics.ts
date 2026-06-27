@@ -171,3 +171,12 @@ export function getMetricsSnapshot() {
     })),
   };
 }
+
+/**
+ * 重置指标数据（仅用于测试）
+ */
+export function resetMetrics(): void {
+  metrics.httpRequestTotal = [];
+  metrics.httpRequestDuration = [];
+  metrics.businessOperationTotal = [];
+}

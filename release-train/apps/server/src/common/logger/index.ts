@@ -12,6 +12,7 @@ export {
   createBusinessLogger,
   getLoggerFromRequest,
   logBusinessOperation,
+  resetGlobalLogger,
 } from './logger';
 
 // Logger 类型 (使用 type export 避免运行时问题)
@@ -25,6 +26,7 @@ export {
   initializeMetrics,
   recordBusinessOperation,
   getMetricsSnapshot,
+  resetMetrics,
 } from './metrics';
 
 // 敏感信息脱敏

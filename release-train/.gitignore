@@ -28,6 +28,9 @@ node_modules/
 dist/
 build/
 
+# 测试覆盖率报告（CI生成）
+coverage/
+
 # Prisma
 apps/server/prisma/migrations/
 apps/web/tsconfig.tsbuildinfo

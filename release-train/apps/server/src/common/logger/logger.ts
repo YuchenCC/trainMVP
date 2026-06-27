@@ -213,10 +213,10 @@ export function createBusinessLogger(module: string) {
  */
 export function getLoggerFromRequest(request: FastifyRequest): AppLogger {
   const baseLogger = request.log;
-  const logger = new Logger(baseLogger);
+  let logger: AppLogger = new Logger(baseLogger);
 
   if (request.correlationId) {
-    logger.withCorrelationId(request.correlationId);
+    logger = logger.withCorrelationId(request.correlationId);
   }
 
   // 如果请求中有用户信息，可以从 jwt 或 session 中获取
@@ -236,4 +236,11 @@ export function logBusinessOperation(meta: BusinessLogMeta): void {
     // 静默失败，避免日志记录影响业务
     console.error('Failed to log business operation:', error);
   }
+}
+
+/**
+ * 重置全局Logger（仅用于测试）
+ */
+export function resetGlobalLogger(): void {
+  globalLogger = null;
 }

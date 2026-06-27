@@ -14,7 +14,7 @@ const CORRELATION_CONTEXT_KEY = 'correlationId';
  * 生成唯一的 correlation ID
  * 格式: {timestamp}-{random}
  */
-function generateCorrelationId(): string {
+export function generateCorrelationId(): string {
   const timestamp = Date.now().toString(36);
   const random = Math.random().toString(36).substring(2, 10);
   return `${timestamp}-${random}`;

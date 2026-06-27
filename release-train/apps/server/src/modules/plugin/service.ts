@@ -22,32 +22,35 @@ export async function searchSystems(name: string, keyword?: string) {
     return null;
   }
 
-  // 如果有关键词，查询该系统下匹配的需求列表
+  // 查询该系统下所有需求（排除已取消和已投产），有关键词则进一步筛选
   let requirements: any[] = [];
+  const requirementWhere: any = {
+    systemId: system.id,
+    status: { notIn: ['CANCELLED', 'RELEASED'] },
+  };
+
   if (keyword) {
-    requirements = await prisma.requirement.findMany({
-      where: {
-        systemId: system.id,
-        OR: [
-          { title: { contains: keyword, mode: 'insensitive' } },
-          { reqCode: { contains: keyword, mode: 'insensitive' } },
-        ],
-        status: { notIn: ['CANCELLED', 'RELEASED'] }, // 排除已取消和已投产
-      },
-      select: {
-        id: true,
-        reqCode: true,
-        title: true,
-        status: true,
-        subStatus: true,
-        priority: true,
-        storyPoints: true,
-        ba: { select: { displayName: true } },
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: 10, // 最多返回 10 条
-    });
+    requirementWhere.OR = [
+      { title: { contains: keyword, mode: 'insensitive' } },
+      { reqCode: { contains: keyword, mode: 'insensitive' } },
+    ];
   }
+
+  requirements = await prisma.requirement.findMany({
+    where: requirementWhere,
+    select: {
+      id: true,
+      reqCode: true,
+      title: true,
+      status: true,
+      subStatus: true,
+      priority: true,
+      storyPoints: true,
+      ba: { select: { displayName: true } },
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: 10, // 最多返回 10 条
+  });
 
   return {
     system,

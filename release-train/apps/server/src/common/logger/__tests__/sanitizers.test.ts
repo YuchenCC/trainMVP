@@ -110,6 +110,78 @@ describe('Sanitizers - 敏感信息脱敏', () => {
       expect(result.a).toBeNull();
       expect(result.b).toBeUndefined();
     });
+
+    it('TC-SAN-005 - 应脱敏cookie请求头', () => {
+      const input = { headers: { cookie: 'session=abc123' } };
+      const result = sanitizeObject(input);
+      expect(result.headers.cookie).toBe('[REDACTED]');
+    });
+
+    it('TC-SAN-006 - 应脱敏apiKey字段', () => {
+      const input = { apiKey: 'sk-1234567890' };
+      const result = sanitizeObject(input);
+      expect(result.apiKey).toBe('[REDACTED]');
+    });
+
+    it('TC-SAN-007 - 应脱敏secret字段', () => {
+      const input = { secret: 'my-secret-key' };
+      const result = sanitizeObject(input);
+      expect(result.secret).toBe('[REDACTED]');
+    });
+
+    it('TC-SAN-008 - 应脱敏accessToken字段', () => {
+      const input = { accessToken: 'at-abc123' };
+      const result = sanitizeObject(input);
+      expect(result.accessToken).toBe('[REDACTED]');
+    });
+
+    it('TC-SAN-009 - 应脱敏refreshToken字段', () => {
+      const input = { refreshToken: 'rt-xyz789' };
+      const result = sanitizeObject(input);
+      expect(result.refreshToken).toBe('[REDACTED]');
+    });
+
+    it('TC-SAN-018 - 应脱敏中文姓名(4字)', () => {
+      const input = { realName: '欧阳娜娜' };
+      const result = sanitizeObject(input);
+      expect(result.realName).toBe('欧*娜');
+    });
+
+    it('TC-SAN-021 - 应脱敏社保号', () => {
+      const input = { socialSecurity: '123456789012345678' };
+      const result = sanitizeObject(input);
+      expect(result.socialSecurity).toBe('*** *** *** 5678');
+    });
+
+    it('TC-SAN-022 - 应脱敏护照号', () => {
+      const input = { passport: 'G12345678' };
+      const result = sanitizeObject(input);
+      expect(result.passport).toBe('****5678');
+    });
+
+    it('TC-SAN-023 - 应脱敏驾照号', () => {
+      const input = { driverLicense: '110101199001011234' };
+      const result = sanitizeObject(input);
+      expect(result.driverLicense).toBe('****1234');
+    });
+
+    it('TC-SAN-028 - 应处理多层嵌套对象', () => {
+      const input = { level1: { level2: { level3: { password: 'deep-secret' } } } };
+      const result = sanitizeObject(input);
+      expect(result.level1.level2.level3.password).toBe('[REDACTED]');
+    });
+
+    it('TC-EDGE-001 - 应处理空对象', () => {
+      const input = {};
+      const result = sanitizeObject(input);
+      expect(result).toEqual({});
+    });
+
+    it('TC-EDGE-004 - 应处理特殊字符邮箱', () => {
+      const input = { email: 'user.name+tag@domain.co.uk' };
+      const result = sanitizeObject(input);
+      expect(result.email).toMatch(/^u.*@domain\.co\.uk$/);
+    });
   });
 
   describe('sanitizeValue - 单值脱敏', () => {
