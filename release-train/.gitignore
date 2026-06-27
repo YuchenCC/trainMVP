@@ -31,9 +31,12 @@ build/
 # 测试覆盖率报告（CI生成）
 coverage/
 
+# 临时调试脚本
+apps/server/_*.mjs
+
 # Prisma
 apps/server/prisma/migrations/
 apps/web/tsconfig.tsbuildinfo
 
 # Handoff documents
-../handoff-*.md
+../handoff-*.md*.pptx
