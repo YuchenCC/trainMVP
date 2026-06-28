@@ -73,7 +73,10 @@ interface AvailableSystemResponse {
 
 interface TrainScheduleListItemResponse {
   id: string;
+  trainId: string;
+  trainName?: string;
   name: string;
+  status?: string;
   startDate?: string;
   endDate?: string;
   boardingDate?: string;

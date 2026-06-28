@@ -8,7 +8,7 @@
 | 适用工程 | `release-train` |
 | 技术栈 | React + Vite + Ant Design + Zustand / Fastify + Prisma / pnpm monorepo |
 | 制定日期 | 2026-05-10 |
-| 版本 | v1.1 |
+| 版本 | v1.2 |
 
 本规范用于统一 `release-train` 工程的目录组织、命名、类型、接口、数据访问、错误处理、测试和安全边界。所有新增业务模块（需求池、版本火车、AI排期与优化）均应遵守本文。
 
@@ -632,12 +632,48 @@ async function listRequirements(params: {
 
 ### 10.3 测试命名
 
-- 测试文件与被测文件同名，加 `.test.ts` 或 `.test.tsx`。
+#### 10.3.1 文件命名规范
+
+| 测试层级 | 命名格式 | 位置 | 示例 |
+|---|---|---|---|
+| **L1 单元测试** | `{源文件名}.unit.test.ts` | 与源文件同目录 | `train.service.unit.test.ts` |
+| **L2 集成/API测试** | `{Task}-{US}-{功能}.test.ts` | `src/__tests__/` | `t2-us2.1-train-crud.test.ts` |
+
+**命名约定**：
+
+- **L1 单元测试**：使用 `.unit.test.ts` 后缀明确标识为单元测试，测试纯函数、业务规则、状态流转等无外部依赖逻辑。
+- **L2 集成测试**：使用 `{Task}-{US}` 前缀关联需求，测试 API 端点、数据库交互、鉴权流程等。
 - 用例描述使用中文业务语义。
 
+**文件命名示例**：
+
+```text
+# L1 单元测试（与源文件同目录）
+src/modules/trains/services/train.service.unit.test.ts  ← 测试 train.service.ts
+src/modules/trains/utils/key-dates.unit.test.ts         ← 测试 key-dates.ts
+
+# L2 集成测试（统一在 src/__tests__/ 目录）
+src/__tests__/t2-us2.1-train-crud.test.ts                ← Task2-US2.1 火车 CRUD
+src/__tests__/t2-us2.2-train-schedule-create.test.ts     ← Task2-US2.2 班次创建
+```
+
+#### 10.3.2 用例命名规范
+
+- 用例描述使用中文业务语义，遵循 `{场景} → {预期结果}` 格式。
+- 一个测试文件按被测函数分组（`describe`），每个边界场景一个用例（`it`）。
+
 ```typescript
-it('未登录访问需求列表时返回 401', async () => {
-  // ...
+describe('train.service 业务逻辑', () => {
+  describe('listAllSchedules', () => {
+    it('默认分页参数 → 返回第1页20条', async () => { /* ... */ });
+    it('page=0 → 使用默认值1', async () => { /* ... */ });
+    it('空结果集 → 返回空列表', async () => { /* ... */ });
+  });
+
+  describe('updateTrainScheduleStatus', () => {
+    it('PLANNING → IN_PROGRESS → 合法流转', async () => { /* ... */ });
+    it('PLANNING → LOCKED_DOWN → 非法流转抛出错误', async () => { /* ... */ });
+  });
 });
 ```
 
@@ -687,5 +723,6 @@ it('未登录访问需求列表时返回 401', async () => {
 
 *文档编号：RT-CODE-STD*  
 *创建时间：2026-05-10*  
-*版本：v1.1*  
+*版本：v1.2*  
+*最后更新：2026-06-28 — 补充 L1/L2 测试文件命名规范*
 *关联文档：RT-T0-基础框架与数据层-设计方案_20260510.md、RT-安全规范_20260510.md*
