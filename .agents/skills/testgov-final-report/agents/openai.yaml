@@ -1,0 +1,4 @@
+interface:
+  display_name: "TestGov 最终报告"
+  short_description: "聚合分层测试证据并生成管理层覆盖与风险报告"
+  default_prompt: "请使用 testgov-final-report 生成最终测试覆盖报告"

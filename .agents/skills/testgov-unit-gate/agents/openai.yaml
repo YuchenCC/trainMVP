@@ -1,0 +1,4 @@
+interface:
+  display_name: "TestGov 单测门禁"
+  short_description: "检查后端单测门禁并识别前端单测触发建议"
+  default_prompt: "请使用 testgov-unit-gate 检查后端单测门禁"
