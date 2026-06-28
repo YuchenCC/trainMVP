@@ -370,3 +370,125 @@ JMeter 接口自动化
 React/Vue3 前端测试
 安全专项测试
 ```
+
+---
+
+## 补充：`test-strategy-planner` 细化建议
+
+### 定位
+
+`test-strategy-planner` 是测试治理流水线的入口 skill。它不负责执行单测、不负责计算覆盖率、不负责生成最终提测报告，而是负责把“需求 + 代码变更”拆成清晰的测试范围和测试分层策略。
+
+它的输出应作为后续 skill 的输入：
+
+```text
+需求 / 用户故事 / 代码变更
+  -> test-strategy-planner 输出测试策略
+  -> unit-test-governance 检查单测门禁
+  -> backend-java-junit-testing 指导后端单测实现
+  -> backend-api-jmeter-testing 规划接口自动化
+  -> frontend-web-testing 规划前端页面和用户旅程测试
+  -> test-coverage-report 汇总成管理层报告
+```
+
+### 不建议沿用旧 `test-strategy-analyzer` 的点
+
+当前旧 skill 更像示例项目分析器，存在三个问题：
+
+| 问题 | 影响 | 调整建议 |
+|---|---|---|
+| 中文内容乱码 | 人读和 AI 理解都会受影响 | 重写为 UTF-8 中文文档 |
+| 绑定 `service.ts / Vitest / Supertest / Playwright` | 不适合真实前后端分离、Java/JUnit5/JMeter 场景 | 改成技术中立的分层策略，技术细节放 references |
+| 输出偏测试用例分类 | 不能很好衔接后续单测门禁和最终报告 | 输出需求覆盖矩阵、代码影响矩阵、后续 skill 调用建议 |
+
+### 应该读取的输入
+
+| 输入 | 是否必需 | 说明 |
+|---|---|---|
+| 需求文档 / 用户故事 | 必需 | 用来识别业务范围和验收点 |
+| 代码变更范围 | 必需 | commit、commit range、分支、文件列表均可 |
+| 接口清单 / OpenAPI / Controller | 可选但推荐 | 用来规划 JMeter 接口自动化 |
+| 前端页面或路由清单 | 可选 | 用来规划 React/Vue 页面测试和 E2E |
+| 现有测试文件 | 可选 | 用来识别已有覆盖，不做门禁结论 |
+
+### 必须输出 Markdown 文件
+
+`test-strategy-planner` 的结果也应该输出为 Markdown 文件，文件名按范围生成：
+
+```text
+reports/test-strategy/commit-{short-sha}-test-strategy.md
+reports/test-strategy/branch-{branch-name}-test-strategy.md
+reports/test-strategy/requirement-{requirement-id-or-name}-test-strategy.md
+```
+
+文件内容必须是中文。
+
+### 建议输出结构
+
+#### 1. 策略摘要
+
+| 项目 | 结果 |
+|---|---|
+| 变更范围 | commit / branch / requirement |
+| 涉及需求 | 需求编号或名称 |
+| 涉及后端模块 | 模块列表 |
+| 涉及前端模块 | 页面/组件列表 |
+| 推荐测试层级 | L1 / L2 / L3 |
+| 是否需要单测门禁 | 是 / 否 |
+| 是否需要接口自动化 | 是 / 否 |
+| 是否需要前端/E2E | 是 / 否 |
+| 建议后续 skill | skill 列表 |
+
+#### 2. 需求覆盖规划矩阵
+
+| 需求点 | 后端影响 | 前端影响 | L1 单测建议 | L2 JMeter 建议 | L3 前端/E2E 建议 | 优先级 | 风险 |
+|---|---|---|---|---|---|---|---|
+
+#### 3. 代码影响测试矩阵
+
+| 变更文件 | 变更逻辑 | 影响功能 | 推荐测试层级 | 必须覆盖原因 | 后续 skill |
+|---|---|---|---|---|---|
+
+#### 4. 分层测试策略
+
+| 层级 | 是否需要 | 覆盖重点 | 推荐工具 | 交付物 |
+|---|---|---|---|---|
+| L1 单元测试 | 是 / 否 | 业务规则、算法、分支、异常 | JUnit5 / Jest / Vitest | 单测文件、覆盖率报告 |
+| L2 接口自动化 | 是 / 否 | 鉴权、参数、状态流转、数据副作用 | JMeter | `.jmx`、`.jtl`、HTML report |
+| L3 前端/E2E | 是 / 否 | 页面状态、权限展示、核心用户旅程 | React/Vue 测试框架、Playwright | 前端测试、E2E 报告 |
+
+#### 5. 后续执行建议
+
+| 顺序 | Skill | 输入 | 预期输出 |
+|---|---|---|---|
+| 1 | `unit-test-governance` | 代码变更范围 | 单测门禁报告 |
+| 2 | `backend-java-junit-testing` | 后端 must-cover 清单 | JUnit5 单测建议或实现 |
+| 3 | `backend-api-jmeter-testing` | API 覆盖清单 | JMeter 场景和执行报告 |
+| 4 | `frontend-web-testing` | 前端页面/旅程清单 | 前端测试计划 |
+| 5 | `test-coverage-report` | 各层测试结果 | 管理层测试覆盖报告 |
+
+### 和 `unit-test-governance` 的边界
+
+`test-strategy-planner` 只判断“哪些地方应该测、应该在哪一层测”。
+
+它不能替代 `unit-test-governance` 的结论：
+
+| 能做 | 不能做 |
+|---|---|
+| 判断某段代码是否需要单测 | 判定单测门禁通过 |
+| 规划 JUnit5 / JMeter / 前端测试范围 | 用 API 或 E2E 结果抵扣单测覆盖率 |
+| 输出后续 skill 调用建议 | 生成最终提测报告 |
+| 标记风险和优先级 | 宣称增量覆盖率达标 |
+
+### 最小可执行版本建议
+
+第一版 `test-strategy-planner` 可以先只实现这些能力：
+
+1. 读取需求文档或用户故事。
+2. 读取 commit / branch / 文件列表。
+3. 输出需求覆盖规划矩阵。
+4. 输出代码影响测试矩阵。
+5. 标记哪些逻辑需要交给 `unit-test-governance`。
+6. 生成中文 Markdown 策略文件。
+
+这样就能和已经完成的 `unit-test-governance` 形成闭环。

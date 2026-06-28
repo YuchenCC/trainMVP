@@ -1,0 +1,4 @@
+display_name: 测试策略规划
+short_description: 根据需求和代码变更规划分层测试策略
+one_line_description: 输出中文测试策略规划报告，衔接单测、接口、前端和最终覆盖报告。
+default_prompt: 根据需求文档和代码变更范围，生成中文测试策略规划 Markdown 报告。
