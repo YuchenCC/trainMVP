@@ -1,55 +1,43 @@
-# US2.3 班次列表查询与火车切换 SIT 人工验证 Summary
+# US2.3 班次列表查询与火车切换 - 人工验证证据 Summary
 
-## 基本信息
-
+## 1. 验证结论
 | 项目 | 内容 |
 |---|---|
-| 验证环境 | SIT：待填写 URL / build / branch / commit |
-| 验证人 | 待填写 |
-| 验证时间 | 待填写 |
-| 测试账号 | 账号/角色，不记录密码 |
-| 关联 ID | traceId / requestId / userId / 业务ID / 时间窗口 |
-| 总结论 | 待验证：通过 / 失败 / 阻塞 |
+| 验证范围 | TC2.3-GAP-01 所属火车列展示、TC2.3-GAP-02 按火车查询分页、TC2.3-GAP-03 前端权限按钮显隐 |
+| 环境 | 待确认（SIT/UAT/本地） |
+| 验证账号/角色 | TRAIN_ADMIN（火车管理员）、BA（普通用户） |
+| 结论 | 待验证 |
+| 风险 | 前端权限按钮未按角色隐藏（安全风险）、按火车查询未分页（性能风险）、班次列表未展示所属火车列（体验风险） |
 
-## 验证结论
-
-| 案例编号 | 场景 | 验证方式 | 结论 | 证据 | 备注 |
-|---|---|---|---|---|---|
-| TC2.3-FE-01 | 进入 `/schedules` 默认加载全局班次 | 人工截图 | 待验证 | screenshots/ | 页面标题、下拉、表格、分页器 |
-| TC2.3-FE-02 | 火车下拉加载 | 人工截图 | 待验证 | screenshots/ | 展开“所属火车”下拉 |
-| TC2.3-FE-03 | 切换所属火车刷新班次列表 | 人工截图 + 可选 Network | 待验证 | screenshots/；api/ | 只显示所选火车班次 |
-| TC2.3-FE-04 | 清空所属火车恢复全局列表 | 人工截图 | 待验证 | screenshots/ | 分页总数恢复全局 |
-| TC2.3-FE-05 | 班次列表字段展示 | 人工截图 | 待验证 | screenshots/ | 关注是否有“所属火车”列 |
-| TC2.3-FE-06 | 点击班次行进入详情页 | 人工截图 | 待验证 | screenshots/ | 记录跳转前后 URL |
-| TC2.3-FE-07 | 未选择火车时不可新增班次 | 人工截图 | 待验证 | screenshots/ | 提示“请先选择所属火车” |
-| TC2.3-FE-08 | 选择火车后打开新增班次弹窗 | 人工截图 | 待验证 | screenshots/ | 弹窗字段截图 |
-| TC2.3-FE-09 | 编辑班次弹窗 | 人工截图 | 待验证 | screenshots/ | 编辑字段和关键日期配置 |
-| TC2.3-FE-10 | 计划中班次显示开始操作 | 人工截图 | 待验证 | screenshots/ | 需记录账号角色 |
-| TC2.3-FE-11 | 进行中班次显示封板操作 | 人工截图 | 待验证 | screenshots/ | 需记录账号角色 |
-| TC2.3-FE-12 | 封板班次显示投产操作 | 人工截图 | 待验证 | screenshots/ | 需记录账号角色 |
-| TC2.3-GAP-01 | 班次列表未展示所属火车列 | 人工截图 | 待验证 | screenshots/ | 当前预期为差距项 |
-| TC2.3-GAP-03 | 前端操作按钮未按角色隐藏 | 多角色截图 + 可选日志 | 待验证 | screenshots/；logs/ | 火车管理员与 BA/普通用户对比 |
-
-## 失败/阻塞说明
-
-| 案例编号 | 问题 | 影响 | 处理建议 |
+## 2. 人工验证步骤
+| 步骤 | 操作 | 结果 | 证据 |
 |---|---|---|---|
-|  |  |  |  |
+| 1 | 使用 TRAIN_ADMIN 角色登录系统，进入班次列表页（/schedules） | 待验证 | screenshots/train-admin-schedule-list.png |
+| 2 | 确认班次列表表格是否展示"所属火车"列 | 待验证 | screenshots/schedule-table-columns.png |
+| 3 | 使用 TRAIN_ADMIN 角色选择某辆火车，查询该火车下的班次，确认接口响应是否包含分页信息 | 待验证 | screenshots/train-schedule-with-pagination.png, api/train-schedule-response.json |
+| 4 | 使用 BA 角色登录系统，进入班次列表页，确认是否能看到"新增班次"按钮和状态变更按钮（开始/封板/投产） | 待验证 | screenshots/ba-user-schedule-list.png |
 
-## 附件清单
+## 3. 测试案例结果
+| 案例 | 场景 | 结果 | 证据 |
+|---|---|---|---|
+| TC2.3-GAP-01 | 所属火车列展示 | 待验证 | screenshots/schedule-table-columns.png |
+| TC2.3-GAP-02 | 按火车查询分页 | 待验证 | screenshots/train-schedule-with-pagination.png, api/train-schedule-response.json |
+| TC2.3-GAP-03 | 前端权限按钮显隐 | 待验证 | screenshots/train-admin-schedule-list.png, screenshots/ba-user-schedule-list.png |
 
+## 4. 证据索引
 | 类型 | 文件 | 说明 |
 |---|---|---|
-| 截图 | screenshots/ | 页面、按钮、弹窗、结果页 |
-| 日志 | logs/ | 按 traceId/requestId/userId/时间窗口提取 |
-| 数据库 | db/ | 涉及写操作时保存 SQL 和结果 |
-| 接口 | api/ | HAR、curl、JMeter、网关日志或接口响应摘要 |
+| 截图 | screenshots/train-admin-schedule-list.png | TRAIN_ADMIN 角色班次列表页截图 |
+| 截图 | screenshots/schedule-table-columns.png | 班次列表表格列展示截图 |
+| 截图 | screenshots/train-schedule-with-pagination.png | 按火车查询班次截图 |
+| 截图 | screenshots/ba-user-schedule-list.png | BA 角色班次列表页截图 |
+| API/Network | api/train-schedule-response.json | GET /api/trains/:trainId/schedules 接口响应 |
+| 日志 | logs/ | 可选，如遇问题提供 |
+| DB 截图 | db/ | 不适用 |
 
-## 日志查询建议
-
-优先使用 `traceId/requestId/correlationId`；没有时使用 `userId + 精确时间窗口`，或业务 ID（如 trainId、scheduleId）。日志平台查询条件、结果截图或导出文件放到 `logs/`，并在“验证结论”表中关联案例编号。
-
-## 风险说明
-
-- 人工验证只替代低风险 UI 自动化，不替代 L1 单测门禁和 L2 API 契约测试。
-- 角色按钮显隐属于中高风险 UI 场景，建议后续补自动化；人工验证时必须保留多角色截图。
+## 5. 残余风险
+| 风险 | 影响 | 责任人 | 是否接受 |
+|---|---|---|---|
+| 前端权限按钮未按角色隐藏 | 非管理员用户可能看到管理按钮，存在越权操作风险 | 前端开发 | 待确认 |
+| 按火车查询未分页 | 大数据量时可能导致性能问题 | 后端开发 | 待确认 |
+| 班次列表未展示所属火车列 | 影响全局班次识别，用户体验下降 | 前端开发 | 待确认 |

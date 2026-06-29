@@ -52,10 +52,23 @@
 |---|---|---|---|
 | Q1 |  |  |  |
 
-## 8. 后续执行建议
-1. testgov-analyzer
-2. testgov-unit-gate
-3. testgov-api-jmeter
-4. testgov-ui-flow / testgov-manual-evidence
-5. testgov-final-report
+## 8. 可执行任务清单
+
+| 顺序 | 任务 | 依赖 | 输入 | 输出 | Skill | 状态 |
+|-----|------|------|------|------|-------|------|
+| 1 | testgov-analyzer | 无 | specs.md | analysis-{scope}.md | testgov-analyzer | 待执行 |
+| 2 | testgov-unit-gate | Task 1 完成 | specs.md + coverage report | unit-gate-{scope}.md | testgov-unit-gate | 待执行 |
+| 3 | testgov-api-jmeter | Task 2 完成 | analysis.md + JMeter脚本 | api-jmeter-{scope}.md | testgov-api-jmeter | 待执行 |
+| 4 | testgov-ui-flow | Task 2 完成 | analysis.md + E2E脚本 | ui-flow-{scope}.md | testgov-ui-flow | 待执行 |
+| 5 | testgov-manual-evidence | Task 3/4 完成 | 差距项列表 | manual-evidence-{scope}.md | testgov-manual-evidence | 待执行 |
+| 6 | testgov-final-report | Task 5 完成 | 所有前置报告 | final-{scope}.md | testgov-final-report | 待执行 |
+
+**任务说明：**
+
+- **Task 1 (testgov-analyzer)**: 基于需求和测试案例生成覆盖分析报告
+- **Task 2 (testgov-unit-gate)**: 检查后端增量单测覆盖率是否达到 >80% 门禁
+- **Task 3 (testgov-api-jmeter)**: 分析 L2 API 接口测试覆盖情况（如 JMeter 脚本已补充）
+- **Task 4 (testgov-ui-flow)**: 分析 L3 UI 自动化测试覆盖情况
+- **Task 5 (testgov-manual-evidence)**: 针对差距验证项创建人工验证证据包
+- **Task 6 (testgov-final-report)**: 聚合所有证据，生成最终测试覆盖与风险报告
 ```
