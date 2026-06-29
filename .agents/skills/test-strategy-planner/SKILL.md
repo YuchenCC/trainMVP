@@ -77,6 +77,7 @@ description: Plan layered test strategy and test-case coverage analysis from req
 2. 需求/PRD/用户故事/详细设计：用于确认业务口径。
 3. 代码范围：service、route/controller、frontend page/component/service、shared types。
 4. 现有测试文件：只能作为已有覆盖证据，不能替代测试案例覆盖分析。
+5. 自测检查点快照：需要横向补充风险时，读取 eferences/self-test-checkpoints.md；该文件已复制共享检查点全文。
 
 如果测试案例文档和用户口头描述不一致，必须在报告中明确写出“口径差异”。例如用户说“版本火车列表/详情”，但测试案例写的是“班次列表/详情”，应先按测试案例编号分析，并提示需要统一命名。
 
@@ -174,6 +175,7 @@ description: Plan layered test strategy and test-case coverage analysis from req
 6. 读取已确认的需求、PRD、用户故事或详细设计，确认业务口径和口径差异。
 7. 按测试案例索引读取已确认的相关代码和现有测试文件；代码范围较大或使用小模型时，读取 `references/small-model-reading.md` 并按分批闭环方式执行。
 8. 以测试案例编号或需求点为主线做覆盖分析，如果用户确认不用存量报告的情况下，不要用存量报告结论替代源文件分析。
+9. 读取 eferences/self-test-checkpoints.md，按自测检查点快照筛出本次适用的补充风险；不要用检查点替代测试案例覆盖结论。
 9. 先规划 L1 后端单测门禁候选覆盖，再标注 L1 前端单测建议，然后规划 L2 API/JMeter，最后规划 L3 UI 自动化；M 人工验证仅在用户确认启用时纳入。
 10. 如果存在人工验证候选场景，询问用户是否启用人工验证证据包；用户确认后立即创建证据目录和 `summary.md` 模板，用户未确认前不要创建。
 11. 为每个测试点标注 L1/L2/L3/M、当前覆盖状态、证据来源、缺口和优先级。

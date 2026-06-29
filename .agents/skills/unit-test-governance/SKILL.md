@@ -44,6 +44,7 @@ description: Enforce unit-test governance for frontend or backend changed code. 
 3. 根据路径、模块名、函数名、类名、接口路由、功能名和测试标题，把变更代码映射到相关测试。
 4. 如果存在相关单测且环境可执行，优先运行最小相关测试命令。
 5. 如果存在覆盖率命令，运行或请求最小相关的增量覆盖率命令。
+6. 读取 eferences/self-test-checkpoints.md，只筛选自测检查点快照中适合 L1 单测治理的内容。
 6. 将变更逻辑分类为：必须覆盖、可排除、单测已覆盖、或需要非单测覆盖。
 7. 检查单测执行结果和通过率。
 8. 检查增量覆盖率结果。
@@ -107,6 +108,8 @@ Node/Jest: npm test -- requirements.test.ts
 ## 必须覆盖的变更逻辑
 
 凡是会影响行为、决策或结果的变更，都需要单测覆盖。
+
+如需结合项目自测检查点，读取 eferences/self-test-checkpoints.md；该文件已复制检查点全文，但只能纳入适合单测治理的 L1 检查点。
 
 | 类型 | 示例 |
 |---|---|
