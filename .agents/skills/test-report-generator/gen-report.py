@@ -14,6 +14,51 @@ import subprocess
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
+try:
+    import yaml
+    HAS_YAML = True
+except ImportError:
+    HAS_YAML = False
+
+
+def read_project_config(repo_root: str) -> Dict:
+    """
+    读取项目公共配置文件
+    
+    Args:
+        repo_root: Git 仓库根目录
+    
+    Returns:
+        Dict: 配置内容，配置不存在时返回默认值
+    """
+    config_path = os.path.join(repo_root, 'config', 'project-config.yaml')
+    
+    if HAS_YAML and os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return yaml.safe_load(f)
+        except Exception:
+            pass
+    
+    return {
+        'paths': {
+            'governance': {
+                'test_strategy': 'reports/test-strategy',
+                'unit_test_governance': 'reports/unit-test-governance',
+                'test_report': 'reports/test-report',
+                'evidence': 'evidence'
+            },
+            'backend': {
+                'api_tests': ['**/*.api.test.ts', '**/*.api.spec.ts'],
+                'coverage_report': 'release-train/apps/server/coverage'
+            },
+            'frontend': {
+                'ui_tests': ['**/*.e2e.test.ts', '**/*.e2e.spec.ts'],
+                'test_results': 'release-train/apps/web/test-results'
+            }
+        }
+    }
+
 
 def get_git_info() -> Tuple[str, str, str]:
     """
@@ -315,18 +360,19 @@ def find_l3_ui_tests(project_root: str) -> Tuple[List[str], Optional[str]]:
     return list(set(test_files)), playwright_report
 
 
-def find_manual_evidence(scope: str, project_root: str) -> Dict:
+def find_manual_evidence(scope: str, project_root: str, evidence_base_dir: str = 'evidence') -> Dict:
     """
     检索人工验证证据目录
     
     Args:
         scope: 需求范围标识
         project_root: 项目根目录
+        evidence_base_dir: 证据基目录（从配置读取）
     
     Returns:
         Dict: 包含 summary.md、截图、日志等证据
     """
-    evidence_dir = os.path.join(project_root, 'evidence', scope)
+    evidence_dir = os.path.join(project_root, evidence_base_dir, scope)
     
     result = {
         'summary': None,
@@ -388,12 +434,13 @@ def generate_report(
     date_str = now.strftime('%Y%m%d')
     time_str = now.strftime('%Y-%m-%d %H:%M:%S')
     
-    report = f"""# RT-{scope}-自测报告_v1.0_{date_str}.md
+    report = f"""# ST-{scope}-自测报告_v1.0_{date_str}.md
 
 ## 基本信息
+
 | 项目 | 内容 |
-|------|------|
-| 报告编号 | RT-TEST-{date_str}-001 |
+| --- | --- |
+| 报告编号 | ST-{date_str}-001 |
 | 生成时间 | {time_str} |
 | 执行环境 | Node.js / macOS |
 | Git 分支/Commit | {git_branch_commit} |
@@ -494,7 +541,7 @@ def generate_report(
     
     # M 人工验证证据汇总
     report += "\n## M 人工验证证据汇总\n"
-    report += "（读取 evidence/{scope}/ 目录）\n\n"
+    report += "（读取 `{paths.governance.evidence}/{scope}/` 目录，路径从配置读取）\n\n"
     
     if manual_evidence['summary'] or manual_evidence['screenshots'] or manual_evidence['logs']:
         report += "| 验证项 | 证据文件 | 验证结果 |\n"
@@ -503,11 +550,22 @@ def generate_report(
             report += f"| 人工验证摘要 | summary.md | ✅ 已记录 |\n"
         if manual_evidence['screenshots']:
             for screenshot in manual_evidence['screenshots']:
-                short_path = screenshot.split('/evidence/')[-1]
+                # 从任意 evidence_base_dir 中提取相对路径
+                parts = screenshot.split('/')
+                if 'evidence' in parts:
+                    idx = parts.index('evidence')
+                    short_path = '/'.join(parts[idx+1:])
+                else:
+                    short_path = os.path.basename(screenshot)
                 report += f"| 截图证据 | {short_path} | ✅ 已截图 |\n"
         if manual_evidence['logs']:
             for log in manual_evidence['logs']:
-                short_path = log.split('/evidence/')[-1]
+                parts = log.split('/')
+                if 'evidence' in parts:
+                    idx = parts.index('evidence')
+                    short_path = '/'.join(parts[idx+1:])
+                else:
+                    short_path = os.path.basename(log)
                 report += f"| 日志证据 | {short_path} | ✅ 已记录 |\n"
     elif test_strategy and test_strategy['m_manual']:
         report += "| 验证项 | 证据文件 | 验证结果 |\n"
@@ -595,9 +653,18 @@ def main():
     # 获取项目根目录
     repo_root = os.getcwd()
     
-    # 检索文件
-    test_strategy_pattern = f"reports/test-strategy/requirement-{scope}-测试策略与覆盖分析.md"
-    unit_gov_pattern = f"reports/unit-test-governance/requirement-{scope}-unit-test-governance.md"
+    # 读取项目配置
+    config = read_project_config(repo_root)
+    paths = config.get('paths', {})
+    governance_paths = paths.get('governance', {})
+    
+    test_strategy_dir = governance_paths.get('test_strategy', 'reports/test-strategy')
+    unit_gov_dir = governance_paths.get('unit_test_governance', 'reports/unit-test-governance')
+    evidence_dir = governance_paths.get('evidence', 'evidence')
+    
+    # 检索文件（使用 ST- 前缀统一命名格式）
+    test_strategy_pattern = f"{test_strategy_dir}/ST-{scope}-测试策略_*.md"
+    unit_gov_pattern = f"{unit_gov_dir}/ST-{scope}-单测治理_*.md"
     
     test_strategy_path = None
     unit_gov_path = None
@@ -617,7 +684,7 @@ def main():
     l3_tests, playwright_report = find_l3_ui_tests(repo_root)
     
     # 检索人工验证证据
-    manual_evidence = find_manual_evidence(scope, repo_root)
+    manual_evidence = find_manual_evidence(scope, repo_root, evidence_dir)
     
     # 获取 Git 信息
     git_info = get_git_info()
@@ -655,11 +722,11 @@ def main():
     )
     
     # 输出报告
-    output_dir = "reports/test-report"
+    output_dir = governance_paths.get('test_report', 'reports/test-report')
     os.makedirs(output_dir, exist_ok=True)
     
     date_str = datetime.now().strftime('%Y%m%d')
-    output_path = os.path.join(output_dir, f"RT-{scope}-自测报告_v1.0_{date_str}.md")
+    output_path = os.path.join(output_dir, f"ST-{scope}-自测报告_v1.0_{date_str}.md")
     
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(report)

@@ -49,7 +49,7 @@
 ```
 ## 一、有测试案例文档时
 
-### 主报告：`requirement-{scope}-测试策略与覆盖分析.md`
+### 主报告：`ST-{scope}-测试策略_v{version}_{date}.md`
 
 ```markdown
 # {scope} 测试策略与覆盖分析报告
@@ -123,7 +123,7 @@
 |---|---|---|
 ```
 
-### 附件：`appendix-{scope}-测试案例测试方式对照表.md`
+### 附件：`ST-{scope}-测试案例对照表_v{version}_{date}.md`
 
 ```markdown
 # {scope} 测试案例测试方式对照表

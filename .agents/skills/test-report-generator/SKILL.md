@@ -1,11 +1,33 @@
 ---
 name: test-report-generator
-description: 从 vitest coverage 报告和 playwright 测试报告中自动提取数据，生成自测报告，证明真实执行并通过。支持结合测试策略文档生成分层报告，支持基于分支变更范围计算增量覆盖率。
+description: 聚合 L1 单测门禁结论 + L2 API/L3 UI/M 人工验证测试执行结果，生成自测报告，证明真实执行并通过。支持结合测试策略文档生成分层报告，支持基于分支变更范围计算增量覆盖率。
 tags: [测试, 报告, 覆盖率, Playwright, 自测]
 author: RT-Agent
-version: 1.2
-date: 2026-06-27
+version: 1.3
+date: 2026-06-30
 ---
+
+## 配置读取（必须步骤）
+
+1. 检查 `config/project-config.yaml` 是否存在
+2. 如果存在，读取配置并使用其中的路径、命令、模式等
+3. 如果不存在，使用默认值，并提示用户：
+   > "未找到项目配置文件 config/project-config.yaml，请先创建或确认配置文件位置。当前使用默认配置。"
+
+### 使用的配置项
+
+| 配置项 | 用途 |
+|---|---|
+| `paths.backend.api_tests` | 后端API测试文件路径列表 |
+| `paths.frontend.ui_tests` | 前端UI测试文件路径列表 |
+| `paths.frontend.test_results` | Playwright测试结果目录 |
+| `paths.governance.test_strategy` | 测试策略报告目录 |
+| `paths.governance.unit_test_governance` | 单测治理报告目录 |
+| `paths.governance.test_report` | 自测报告输出目录 |
+| `paths.governance.evidence` | 人工验证证据目录 |
+| `commands.backend_api_test` | 后端API测试执行命令 |
+| `commands.frontend_ui_test` | 前端UI测试执行命令 |
+| `report_naming.test_report` | 自测报告命名模板 |
 
 ## 触发方式
 
@@ -24,19 +46,19 @@ date: 2026-06-27
 
 ## 快速使用
 
+测试命令从 `config/project-config.yaml` 的 `commands` 配置项读取；如果配置文件不存在，使用默认命令。
+
 ```bash
-# 步骤1: 在 server 目录下运行测试并生成覆盖率
-cd release-train/apps/server
-pnpm test -- --coverage
+# 步骤1: 运行后端单测（命令来自配置：commands.backend_unit_test）
+cd release-train/apps/server && pnpm vitest run
 
-# 步骤2: 使用脚本生成报告（基础版）
-python3 ../../../.agents/skills/test-report-generator/gen-report.py
+# 步骤2: 运行API测试（命令来自配置：commands.backend_api_test）
+cd release-train/apps/server && pnpm vitest run src/__tests__
 
-# 步骤2: 使用脚本生成报告（结合测试策略）
-python3 ../../../.agents/skills/test-report-generator/gen-report.py "../../../03-需求与设计/Task1-需求池管理/测试案例/RT-T1-需求池管理-分层测试策略_v1.0_20260626.md"
+# 步骤3: 运行UI测试（命令来自配置：commands.frontend_ui_test）
+cd release-train/apps/web && pnpm playwright test
 
-# 步骤3: 查看报告
-cat 自测报告.md
+# 步骤4: 生成自测报告（报告输出到配置的 paths.governance.test_report 目录）
 ```
 
 ## 调用流程
@@ -49,11 +71,11 @@ cat 自测报告.md
 
 | 输入类型 | 来源 | 说明 |
 |----------|------|------|
-| 测试策略报告 | `reports/test-strategy/requirement-{scope}-测试策略与覆盖分析.md` | L2/L3/M 策略来源 |
-| 单测治理报告 | `reports/unit-test-governance/requirement-{scope}-unit-test-governance.md` | L1 门禁结论来源（直接引用） |
-| 策略对照表附件 | `reports/test-strategy/appendix-{scope}-测试案例测试方式对照表.md` | 测试案例编号、测试方式、覆盖逻辑 |
-| 测试文件列表 | 自动检索或用户指定 | L2 API 测试、L3 UI 测试文件路径 |
-| 人工测试目录 | `evidence/{scope}/` 或用户指定 | M 人工验证证据目录 |
+| 测试策略报告 | `{paths.governance.test_strategy}/ST-{scope}-测试策略_v{version}_{date}.md`（路径和命名从配置读取） | L2/L3/M 策略来源 |
+| 单测治理报告 | `{paths.governance.unit_test_governance}/ST-{scope}-单测治理_v{version}_{date}.md`（路径和命名从配置读取） | L1 门禁结论来源（直接引用） |
+| 策略对照表附件 | `{paths.governance.test_strategy}/ST-{scope}-测试案例对照表_v{version}_{date}.md`（路径和命名从配置读取） | 测试案例编号、测试方式、覆盖逻辑 |
+| 测试文件列表 | 自动检索或用户指定（路径从配置 `paths.backend.api_tests`、`paths.frontend.ui_tests` 读取） | L2 API 测试、L3 UI 测试文件路径 |
+| 人工测试目录 | `{paths.governance.evidence}/{scope}/`（路径从配置读取）或用户指定 | M 人工验证证据目录 |
 
 **确认清单模板**：
 
@@ -62,33 +84,35 @@ cat 自测报告.md
 
 | 输入类型 | 检索结果 | 是否纳入 |
 |----------|----------|----------|
-| 测试策略报告 | reports/test-strategy/requirement-xxx-测试策略与覆盖分析.md | 待确认 |
-| 单测治理报告 | reports/unit-test-governance/requirement-xxx-unit-test-governance.md | 待确认 |
-| 策略对照表附件 | reports/test-strategy/appendix-xxx-测试案例测试方式对照表.md | 待确认 |
-| L2 API 测试文件 | xx.api.test.ts、xx.api.spec.ts | 待确认 |
-| L3 UI 测试文件 | playwright-report/、xx.e2e.test.ts | 待确认 |
-| 人工测试证据目录 | evidence/{scope}/ | 待确认/不适用 |
+| 测试策略报告 | {paths.governance.test_strategy}/ST-xxx-测试策略_v1.0_20260630.md（路径和命名从配置读取） | 待确认 |
+| 单测治理报告 | {paths.governance.unit_test_governance}/ST-xxx-单测治理_v1.0_20260630.md（路径和命名从配置读取） | 待确认 |
+| 策略对照表附件 | {paths.governance.test_strategy}/ST-xxx-测试案例对照表_v1.0_20260630.md（路径和命名从配置读取） | 待确认 |
+| L2 API 测试文件 | 从配置 `paths.backend.api_tests` 读取的路径列表 | 待确认 |
+| L3 UI 测试文件 | 从配置 `paths.frontend.ui_tests` 读取的路径列表、playwright-report/ | 待确认 |
+| 人工测试证据目录 | {paths.governance.evidence}/{scope}/（路径从配置读取） | 待确认/不适用 |
 
 确认后我再开始分析并生成报告；如果某项不适用，请直接标注"不适用"。
 ```
 
 **文件检索规则**：
 
-| 类型 | 检索路径 |
-|------|----------|
-| 测试策略报告 | `reports/test-strategy/requirement-*-测试策略与覆盖分析.md` |
-| 单测治理报告 | `reports/unit-test-governance/requirement-*-unit-test-governance.md` |
-| 策略对照表 | `reports/test-strategy/appendix-*-测试案例测试方式对照表.md` |
-| L2 API 测试 | `**/*.api.test.ts`、`**/api/**/*.test.ts`、`**/__tests__/api*.ts`、`**/*.api.spec.ts` |
-| L3 UI 测试 | `playwright-report/index.html`、`test-results/**/*.png`、`**/*.e2e.test.ts`、`**/*.e2e.spec.ts` |
-| M 人工证据 | `evidence/{scope}/**/summary.md`、`evidence/{scope}/**/*.png`、`evidence/{scope}/**/*.log` |
+优先从 `config/project-config.yaml` 读取路径配置；如果配置文件不存在或对应配置项缺失，使用默认路径。
+
+| 类型 | 检索路径（从配置读取） | 默认路径 |
+|------|---------------------|---------|
+| 测试策略报告 | `paths.governance.test_strategy/ST-*-测试策略_v*.md` | `reports/test-strategy/ST-*-测试策略_v*.md` |
+| 单测治理报告 | `paths.governance.unit_test_governance/ST-*-单测治理_v*.md` | `reports/unit-test-governance/ST-*-单测治理_v*.md` |
+| 策略对照表 | `paths.governance.test_strategy/ST-*-测试案例对照表_v*.md` | `reports/test-strategy/ST-*-测试案例对照表_v*.md` |
+| L2 API 测试 | `paths.backend.api_tests` 配置的路径列表 | `**/*.api.test.ts`、`**/api/**/*.test.ts`、`**/__tests__/api*.ts`、`**/*.api.spec.ts` |
+| L3 UI 测试 | `paths.frontend.ui_tests` 配置的路径列表 | `playwright-report/index.html`、`test-results/**/*.png`、`**/*.e2e.test.ts`、`**/*.e2e.spec.ts` |
+| M 人工证据 | `paths.governance.evidence/{scope}/**/summary.md` | `evidence/{scope}/**/summary.md`、`evidence/{scope}/**/*.png`、`evidence/{scope}/**/*.log` |
 
 ### Step 1: 收集测试数据
 
 根据确认的输入范围收集数据，分层处理：
 
 **L1 单元测试（直接引用 unit-test-governance 报告）**：
-- 从 `reports/unit-test-governance/requirement-{scope}-unit-test-governance.md` 提取：
+- 从 `{paths.governance.unit_test_governance}/ST-{scope}-单测治理_v{version}_{date}.md`（路径和命名从配置读取）提取：
   - 单测门禁摘要（通过率、覆盖率）
   - L1 策略案例覆盖检查结论
   - 自测检查点 L1 覆盖现状
@@ -96,11 +120,11 @@ cat 自测报告.md
   - 最终决策（通过/不通过/阻塞）
 
 **L2/L3/M 测试（重新分析）**：
-- 从 `reports/test-strategy/requirement-{scope}-测试策略与覆盖分析.md` 提取：
+- 从 `{paths.governance.test_strategy}/ST-{scope}-测试策略_v{version}_{date}.md`（路径和命名从配置读取）提取：
   - L2/L3/M 策略和测试案例编号
-- 检索最新 L2 API 测试文件，分析执行结果和覆盖状态
-- 检索最新 L3 UI 测试文件和 playwright-report，分析执行结果和截图证据
-- 检索人工测试证据目录 `evidence/{scope}/`，读取 summary.md 和截图
+- 检索最新 L2 API 测试文件（路径从配置 `paths.backend.api_tests` 读取），分析执行结果和覆盖状态
+- 检索最新 L3 UI 测试文件（路径从配置 `paths.frontend.ui_tests` 读取）和 playwright-report，分析执行结果和截图证据
+- 检索人工测试证据目录 `{paths.governance.evidence}/{scope}/`（路径从配置读取），读取 summary.md 和截图
 
 **其他数据来源**：
 ```
@@ -110,7 +134,7 @@ cat 自测报告.md
    └── 相对于 main 的变更文件
 
 2. 策略对照表附件
-   └── reports/test-strategy/appendix-{scope}-测试案例测试方式对照表.md
+   └── {paths.governance.test_strategy}/ST-{scope}-测试案例对照表_v{version}_{date}.md（路径和命名从配置读取）
 ```
 
 ### Step 2: 生成报告
@@ -125,20 +149,28 @@ cat 自测报告.md
 5. 整合策略对照表，生成测试结果明细
 6. 基于测试结果判定 L2/L3/M 检查点覆盖状态
 
-**报告文件名规范**：
+**报告文件名规范**（统一格式 `ST-{scope}-{type}_v{version}_{date}.md`，路径和命名从配置读取）：
 ```
-reports/test-report/RT-{scope}-自测报告_{版本}_{日期}.md
+{paths.governance.test_report}/ST-{scope}-自测报告_v{version}_{date}.md
 ```
+
+路径优先级：
+1. 优先从 `config/project-config.yaml` 的 `paths.governance.test_report` 读取
+2. 配置不存在时，使用默认路径：`reports/test-report`
+
+命名优先级：
+1. 优先从 `config/project-config.yaml` 的 `report_naming.test_report` 读取
+2. 配置不存在时，使用默认命名：`ST-{scope}-自测报告_v1.0_{date}.md`
 
 **报告内容结构**：
 
 ```markdown
-# RT-{scope}-自测报告_{版本}_{日期}.md
+# ST-{scope}-自测报告_v{version}_{date}.md
 
 ## 基本信息
 | 项目 | 内容 |
 |------|------|
-| 报告编号 | RT-TEST-{日期}-001 |
+| 报告编号 | ST-{日期}-001 |
 | 生成时间 | {时间} |
 | 执行环境 | Node.js / macOS |
 | Git 分支/Commit | {分支}@{commit} |
@@ -186,7 +218,7 @@ reports/test-report/RT-{scope}-自测报告_{版本}_{日期}.md
 |---------|----------|----------|----------|
 
 ## M 人工验证证据汇总
-（读取 evidence/{scope}/ 目录）
+（读取 `{paths.governance.evidence}/{scope}/` 目录，路径从配置读取）
 
 | 验证项 | 证据文件 | 验证结果 |
 |--------|----------|----------|
@@ -234,14 +266,14 @@ git diff --name-only <base> HEAD  # 获取变更文件
 
 ### 测试策略解析
 
-从测试策略报告 `reports/test-strategy/requirement-{scope}-测试策略与覆盖分析.md` 中解析：
+从测试策略报告 `{paths.governance.test_strategy}/ST-{scope}-测试策略_v{version}_{date}.md`（路径和命名从配置读取）中解析：
 - 策略标题
 - L1/L2/L3/M 策略和测试案例编号
 - 覆盖率目标
 
 ### 单测治理报告解析
 
-从单测治理报告 `reports/unit-test-governance/requirement-{scope}-unit-test-governance.md` 中提取：
+从单测治理报告 `{paths.governance.unit_test_governance}/ST-{scope}-单测治理_v{version}_{date}.md`（路径和命名从配置读取）中提取：
 - 单测门禁摘要（通过率、覆盖率）
 - L1 策略案例覆盖检查结论
 - 自测检查点 L1 覆盖现状
@@ -280,8 +312,12 @@ export default defineConfig({
 ## 输出文件名规范
 
 ```
-reports/test-report/RT-{scope}-自测报告_{版本}_{日期}.md
+{paths.governance.test_report}/ST-{scope}-自测报告_v{version}_{date}.md
 ```
+
+路径从配置 `paths.governance.test_report` 读取，默认 `reports/test-report`。
+
+命名从配置 `report_naming.test_report` 读取，默认 `ST-{scope}-自测报告_v1.0_{date}.md`。
 
 ## 扩展能力
 
