@@ -41,209 +41,188 @@ cat 自测报告.md
 
 ## 调用流程
 
-### Step 0: 需求澄清（多轮询问）
+### Step 0: 输入确认（必须先确认再分析）
 
-如果信息不明确，通过多轮询问确认：
+正式生成报告前，必须先检索并确认输入范围。未确认前，只允许做文件检索和候选清单输出，不要生成覆盖结论或报告文件。
 
+**必须确认的输入**：
+
+| 输入类型 | 来源 | 说明 |
+|----------|------|------|
+| 测试策略报告 | `reports/test-strategy/requirement-{scope}-测试策略与覆盖分析.md` | L2/L3/M 策略来源 |
+| 单测治理报告 | `reports/unit-test-governance/requirement-{scope}-unit-test-governance.md` | L1 门禁结论来源（直接引用） |
+| 策略对照表附件 | `reports/test-strategy/appendix-{scope}-测试案例测试方式对照表.md` | 测试案例编号、测试方式、覆盖逻辑 |
+| 测试文件列表 | 自动检索或用户指定 | L2 API 测试、L3 UI 测试文件路径 |
+| 人工测试目录 | `evidence/{scope}/` 或用户指定 | M 人工验证证据目录 |
+
+**确认清单模板**：
+
+```markdown
+请确认本次报告生成输入：
+
+| 输入类型 | 检索结果 | 是否纳入 |
+|----------|----------|----------|
+| 测试策略报告 | reports/test-strategy/requirement-xxx-测试策略与覆盖分析.md | 待确认 |
+| 单测治理报告 | reports/unit-test-governance/requirement-xxx-unit-test-governance.md | 待确认 |
+| 策略对照表附件 | reports/test-strategy/appendix-xxx-测试案例测试方式对照表.md | 待确认 |
+| L2 API 测试文件 | xx.api.test.ts、xx.api.spec.ts | 待确认 |
+| L3 UI 测试文件 | playwright-report/、xx.e2e.test.ts | 待确认 |
+| 人工测试证据目录 | evidence/{scope}/ | 待确认/不适用 |
+
+确认后我再开始分析并生成报告；如果某项不适用，请直接标注"不适用"。
 ```
-询问 1: "请确认测试策略文档路径"
-       - 如果用户提供路径，直接读取
-       - 如果用户模糊描述，列出目录下匹配的 *测试策略*.md 文件供选择
 
-询问 2: "请确认测试案例文档路径"
-       - 如果用户提供路径，直接读取
-       - 如果用户模糊描述，列出目录下匹配的 .md 文件供选择
+**文件检索规则**：
 
-询问 3: "请指定代码分析范围"
-       - 可指定文件：service.ts、index.ts、特定函数
-       - 如果不确定，列出该 Task 下所有 service.ts 文件
-```
+| 类型 | 检索路径 |
+|------|----------|
+| 测试策略报告 | `reports/test-strategy/requirement-*-测试策略与覆盖分析.md` |
+| 单测治理报告 | `reports/unit-test-governance/requirement-*-unit-test-governance.md` |
+| 策略对照表 | `reports/test-strategy/appendix-*-测试案例测试方式对照表.md` |
+| L2 API 测试 | `**/*.api.test.ts`、`**/api/**/*.test.ts`、`**/__tests__/api*.ts`、`**/*.api.spec.ts` |
+| L3 UI 测试 | `playwright-report/index.html`、`test-results/**/*.png`、`**/*.e2e.test.ts`、`**/*.e2e.spec.ts` |
+| M 人工证据 | `evidence/{scope}/**/summary.md`、`evidence/{scope}/**/*.png`、`evidence/{scope}/**/*.log` |
 
 ### Step 1: 收集测试数据
 
-自动查找以下数据来源：
+根据确认的输入范围收集数据，分层处理：
 
+**L1 单元测试（直接引用 unit-test-governance 报告）**：
+- 从 `reports/unit-test-governance/requirement-{scope}-unit-test-governance.md` 提取：
+  - 单测门禁摘要（通过率、覆盖率）
+  - L1 策略案例覆盖检查结论
+  - 自测检查点 L1 覆盖现状
+  - 需补充单测清单
+  - 最终决策（通过/不通过/阻塞）
+
+**L2/L3/M 测试（重新分析）**：
+- 从 `reports/test-strategy/requirement-{scope}-测试策略与覆盖分析.md` 提取：
+  - L2/L3/M 策略和测试案例编号
+- 检索最新 L2 API 测试文件，分析执行结果和覆盖状态
+- 检索最新 L3 UI 测试文件和 playwright-report，分析执行结果和截图证据
+- 检索人工测试证据目录 `evidence/{scope}/`，读取 summary.md 和截图
+
+**其他数据来源**：
 ```
-1. Vitest Coverage Report
-   ├── coverage/.tmp/coverage-*.json （覆盖率数据）
-   ├── coverage/coverage-final.json （覆盖率数据）
-   └── coverage/index.html          （HTML报告）
-
-2. Vitest Test Results
-   └── 运行 vitest --coverage 的命令输出
-
-3. Playwright Report（如果存在）
-   ├── playwright-report/index.html （HTML报告）
-   ├── test-results/**/*.png         （截图）
-   └── test-results/**/*.webm        （视频）
-
-4. Git 分支信息
+1. Git 分支信息
    ├── 当前分支名
    ├── 当前Commit
    └── 相对于 main 的变更文件
 
-5. 测试策略文档
-   └── RT-T*-分层测试策略_*.md
-
-6. 测试案例文档
-   └── RT-T*-测试案例_*.md
-
-7. 自测检查点映射（可选）
-   └── 读取 references/self-test-checkpoints.md；只汇总上游策略报告或单测治理报告中已有的检查点映射，不重新判定
+2. 策略对照表附件
+   └── reports/test-strategy/appendix-{scope}-测试案例测试方式对照表.md
 ```
 
-### Step 2: 输出确认清单
+### Step 2: 生成报告
 
-分析前输出以下清单，一次性确认：
+用户确认输入范围后，开始分析并生成报告。
 
-```markdown
-## 待确认信息清单
-
-### 1. 测试策略文档
-| 项目 | 内容 |
-|------|------|
-| 文档路径 | RT-T1-需求池管理-分层测试策略_v1.0.md |
-
-### 2. 测试案例文档
-| 项目 | 内容 |
-|------|------|
-| 文档路径 | RT-T1-需求池管理-测试案例_v1.0.md |
-| 案例总数 | 124 |
-
-### 3. 代码分析范围
-| 类型 | 文件 | 说明 |
-|------|------|------|
-| Service | requirements/service.ts | 需求 CRUD 逻辑 |
-
-### 4. 数据来源
-| 数据类型 | 路径 | 状态 |
-|----------|------|------|
-| Coverage JSON | coverage/coverage-final.json | ✅ 存在 |
-| Coverage HTML | coverage/index.html | ✅ 存在 |
-| Playwright Report | playwright-report/index.html | ⚠️ 未找到 |
-
-请确认以上信息，确认后生成报告。
-```
-
-### Step 3: 生成报告
-
-用户确认后，生成以下报告文件：
+**分析流程**：
+1. 直接引用 unit-test-governance 报告的 L1 门禁结论
+2. 检索并分析 L2 API 测试文件执行结果
+3. 检索并分析 L3 UI 测试文件和 playwright 报告
+4. 检索并汇总 M 人工验证证据
+5. 整合策略对照表，生成测试结果明细
+6. 基于测试结果判定 L2/L3/M 检查点覆盖状态
 
 **报告文件名规范**：
 ```
-RT-{TaskName}-自测报告_{版本}_{日期}.md
+reports/test-report/RT-{scope}-自测报告_{版本}_{日期}.md
 ```
 
 **报告内容结构**：
 
 ```markdown
-# 版本火车 - 自测报告
+# RT-{scope}-自测报告_{版本}_{日期}.md
 
 ## 基本信息
 | 项目 | 内容 |
 |------|------|
-| 报告编号 | RT-TEST-20260626-001 |
-| 生成时间 | 2026-06-26 15:30:00 |
-| 执行环境 | Node.js v22.22.2 / macOS |
-| Git 分支/Commit | feature/task1@abc123 |
-| 测试人员 | 当前用户 |
+| 报告编号 | RT-TEST-{日期}-001 |
+| 生成时间 | {时间} |
+| 执行环境 | Node.js / macOS |
+| Git 分支/Commit | {分支}@{commit} |
+| 测试人员 | 开发人员 |
 
 ## 测试策略概览
-本次测试基于 **Task 1: 需求池管理 - 分层测试策略**，采用三层叠加覆盖策略：
+本次测试基于 **test-strategy-planner 主报告**，采用三层叠加覆盖策略：
 
-| 层级 | 工具 | 覆盖范围 |
-|------|------|---------|
-| L1 单元测试 | Vitest | service.ts 纯函数、校验逻辑 |
-| L2 接口自动化 | Vitest + Supertest | API 请求/响应、状态流转 |
-| L3 Playwright | Playwright | 关键用户旅程、UI 交互 |
+| 层级 | 工具 | 覆盖范围 | 目标 |
+|------|------|---------|------|
+| **L1 单元测试** | Vitest | service.ts 纯函数、校验逻辑 | 增量覆盖率 >80%，通过率 100% |
+| **L2 接口自动化** | Vitest + Supertest | API 契约、鉴权、参数、状态流转 | API 自动化覆盖率 ≥90% |
+| **L3 UI 自动化** | Playwright | 关键用户旅程、UI 交互 | 覆盖核心用户旅程 |
+| **M 人工验证** | SIT 环境 + 截图 | 低频 UI、截图确认 | 保留可审计证据 |
 
 ### 覆盖率目标
 | 指标 | 目标值 |
 |------|-------|
-| 增量覆盖率 | ≥80% |
+| L1 增量覆盖率 | >80% |
+| L1 单测通过率 | 100% |
 
-## 分支变更范围
-当前分支 `feature/task1` 相对于 `main`（merge-base: abc1234）的变更文件：
+## L1 单元测试门禁结论
+（直接引用 unit-test-governance 报告）
 
-### modules/requirements
-- service.ts
-- index.ts
+| 门禁项 | 当前值 | 达标要求 | 状态 |
+|--------|--------|----------|------|
+| 单测通过率 | xx% | 100% | ✅/⚠️ |
+| 增量覆盖率 | xx% | >80% | ✅/⚠️ |
+| 最终决策 | 通过/不通过/阻塞 | - | ✅/⚠️/⏸️ |
 
-### 变更文件覆盖率（增量覆盖率）
-| 指标 | 值 | 目标 | 状态 |
-|------|-----|------|------|
-| 语句覆盖率 | 85.3% | ≥80% | ✅ |
+**需补充单测清单**（来自 unit-test-governance）：
+| 优先级 | 文件 | 变更逻辑 | 建议用例名 |
+|--------|------|----------|------------|
 
-## 测试范围
-本次测试覆盖以下模块：
+## L2 接口自动化覆盖分析
+（检索最新 API 测试文件，分析执行结果）
 
-### common
-- 文件数: 9
+| API 路径 | 测试文件 | 测试状态 | 覆盖逻辑 |
+|----------|----------|----------|----------|
 
-### modules
-- 文件数: 24
+## L3 UI 自动化覆盖分析
+（检索最新 Playwright 测试文件和报告）
 
-## L1 单元测试覆盖情况
+| Journey | 测试文件 | 测试状态 | 截图证据 |
+|---------|----------|----------|----------|
 
-### 策略要求覆盖的函数
-| 函数名 | 行号 | 复杂度 | 优先级 | 覆盖状态 |
-|--------|------|--------|--------|---------|
-| `sanitizeDescription` | 63-65 | 低 | P0 | ✅ |
+## M 人工验证证据汇总
+（读取 evidence/{scope}/ 目录）
+
+| 验证项 | 证据文件 | 验证结果 |
+|--------|----------|----------|
+
+## 测试结果明细
+（整合策略对照表 + 最新测试文件覆盖分析 + 人工验证证据）
+
+| 测试案例编号 | 测试方式 | 测试文件 | 执行结果 | 覆盖状态 |
+|--------------|----------|----------|----------|----------|
+
+## 自测检查点覆盖摘要（双报告整合）
+| 检查点 | 层级 | 优先级 | 覆盖状态 | 证据来源 |
+|--------|------|--------|----------|----------|
+
+（L1 检查点来自 unit-test-governance；L2/L3/M 检查点基于上述测试分析结果判定）
 
 ## 执行概要
 | 指标 | 值 | 状态 |
 |------|-----|------|
-| 总测试数 | 156 | ✅ |
-| 通过数 | 156 | ✅ |
-| 失败数 | 0 | ✅ |
-| 通过率 | 100% | ✅ |
-
-## 覆盖率报告
-### 总体覆盖率
-| 指标 | 值 | 目标 | 状态 |
-|------|-----|------|------|
-| 语句覆盖率 | 85.3% | ≥80% | ✅ |
-| 分支覆盖率 | 78.2% | ≥70% | ✅ |
-| 函数覆盖率 | 92.1% | ≥85% | ✅ |
-
-### 模块覆盖率明细
-| 文件 | 语句% | 分支% | 函数% |
-|------|-------|-------|-------|
-| service.ts | 88.5% | 82.3% | 95.0% |
-
-## 测试结果明细
-### US1.1 需求录入
-| 案例 | 测试方式 | 结果 |
-|------|---------|------|
-| TC1.1.1 | L2 API自动化 | ✅ 通过 |
-
-## 自测检查点覆盖摘要
-| 检查点来源 | 应覆盖项 | 已通过 | 未覆盖 | 证据来源 |
-|------------|----------|--------|--------|----------|
-
-## 失败测试说明
-| 序号 | 测试模块 | 失败数量 | 原因 |
-|------|---------|---------|------|
+| L1 总测试数 | xx | ✅/⚠️ |
+| L1 通过数 | xx | ✅/⚠️ |
+| L2 API 测试数 | xx | ✅/⚠️ |
+| L3 UI 测试数 | xx | ✅/⚠️ |
+| M 人工验证数 | xx | ✅/⚠️ |
 
 ## 结论
-✅ 自测通过，覆盖率达标，可提交代码审查。
+| 项目 | 状态 |
+|------|------|
+| L1 单测门禁 | ✅ 通过 / ⚠️ 未通过 / ⏸️ 阻塞 |
+| L2 API 自动化 | ✅ 已覆盖 / ⚠️ 部分覆盖 / ❌ 缺失 |
+| L3 UI 自动化 | ✅ 已覆盖 / ⚠️ 部分覆盖 / ❌ 缺失 |
+| M 人工验证 | ✅ 已完成 / ⚠️ 部分完成 / ❌ 未执行 |
+| 整体交付建议 | 可提测 / 有条件提测 / 不建议提测 |
 ```
 
 ## 数据提取规则
-
-### 覆盖率数据提取
-
-从 `coverage/.tmp/coverage-*.json` 或 `coverage/coverage-final.json` 中提取：
-- 总体覆盖率（statements, branches, functions）
-- 指定文件的覆盖率明细
-- 未覆盖的行号
-
-### 测试结果提取
-
-从 vitest 命令输出中提取：
-- 通过/失败数量
-- 每个测试的耗时
-- 失败测试的错误信息
 
 ### 分支变更范围提取
 
@@ -255,16 +234,23 @@ git diff --name-only <base> HEAD  # 获取变更文件
 
 ### 测试策略解析
 
-从分层测试策略文档中解析：
+从测试策略报告 `reports/test-strategy/requirement-{scope}-测试策略与覆盖分析.md` 中解析：
 - 策略标题
-- L1 单元测试覆盖的函数清单
-- L2 接口自动化覆盖的 API 清单
+- L1/L2/L3/M 策略和测试案例编号
 - 覆盖率目标
 
+### 单测治理报告解析
 
-### 自测检查点映射解析
+从单测治理报告 `reports/unit-test-governance/requirement-{scope}-unit-test-governance.md` 中提取：
+- 单测门禁摘要（通过率、覆盖率）
+- L1 策略案例覆盖检查结论
+- 自测检查点 L1 覆盖现状
+- 需补充单测清单
+- 最终决策（通过/不通过/阻塞）
 
-读取 eferences/self-test-checkpoints.md。只从上游测试策略报告、单测治理报告或执行证据中提取已经形成结论的自测检查点映射；不要直接根据快照新增覆盖结论。
+### 自测检查点覆盖判定
+
+L1 检查点直接引用 unit-test-governance 报告；L2/L3/M 检查点基于测试文件分析结果判定覆盖状态。不重新分析代码，只基于上游报告和执行证据汇总。
 
 ### Playwright 截图提取
 
@@ -274,21 +260,6 @@ git diff --name-only <base> HEAD  # 获取变更文件
 - 视频录制文件路径
 
 ## 环境配置要求
-
-### Vitest 配置
-
-```typescript
-// vitest.config.ts
-export default defineConfig({
-  test: {
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html', 'clover'],
-      reportsDirectory: 'coverage',
-    },
-  },
-});
-```
 
 ### Playwright 配置
 
@@ -309,18 +280,18 @@ export default defineConfig({
 ## 输出文件名规范
 
 ```
-RT-{TaskName}-自测报告_{版本}_{日期}.md
+reports/test-report/RT-{scope}-自测报告_{版本}_{日期}.md
 ```
 
 ## 扩展能力
 
-- 支持结合测试策略文档生成分层报告
+- 支持整合 test-strategy-planner 和 unit-test-governance 报告
+- L1 单测门禁直接引用 unit-test-governance 结论
+- L2/L3/M 测试基于最新测试文件和人工证据重新分析
 - 支持基于分支变更范围计算增量覆盖率
-- 支持指定多个模块的测试报告
-- 支持对比两次测试的覆盖率变化
 - 支持生成 PDF 格式报告（需安装 puppeteer）
 - 支持发送飞书/钉钉通知
 
 ---
 
-*Version 1.2 | 2026-06-27*
+*Version 1.3 | 2026-06-30*

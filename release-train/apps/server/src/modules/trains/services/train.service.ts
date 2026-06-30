@@ -16,6 +16,7 @@ import {
 import { errors } from '../../../common/errors/index.js';
 import { prisma } from '../../../prisma/index.js';
 import { calculateKeyDates } from '../utils/key-dates.js';
+import { executeIdempotent } from '../../../common/idempotency/index.js';
 
 // ========== 内部响应类型 ==========
 interface TrainSystemDetailResponse {
@@ -874,8 +875,19 @@ export async function listTrainSchedules(
 export async function listAllSchedules(
   query: { page?: number; pageSize?: number }
 ): Promise<{ list: any[]; pagination: any }> {
-  const page = query.page || 1;
-  const pageSize = query.pageSize || 20;
+  // 参数校验：处理边界值和无效参数
+  const MAX_PAGE_SIZE = 100;
+  const DEFAULT_PAGE_SIZE = 20;
+  const DEFAULT_PAGE = 1;
+
+  // page 校验：非正数时使用默认值
+  const page = (query.page && query.page > 0) ? query.page : DEFAULT_PAGE;
+
+  // pageSize 校验：非正数时使用默认值，超过最大值时截断
+  const pageSize = (query.pageSize && query.pageSize > 0)
+    ? Math.min(query.pageSize, MAX_PAGE_SIZE)
+    : DEFAULT_PAGE_SIZE;
+
   const skip = (page - 1) * pageSize;
 
   const [total, schedules] = await Promise.all([
@@ -1136,6 +1148,7 @@ export async function updateTrainSchedule(
 export async function updateTrainScheduleStatus(
   scheduleId: string,
   status: string,
+  idempotencyKey?: string
 ): Promise<TrainScheduleDetailResponse> {
   const schedule = await prisma.trainSchedule.findUnique({ where: { id: scheduleId } });
   if (!schedule) throw errors.trainNotFound();
@@ -1151,7 +1164,6 @@ export async function updateTrainScheduleStatus(
     throw errors.badRequest(`不能从 ${schedule.status} 变更为 ${status}`);
   }
 
-  // 设置状态变更时的对应日期（替换而非仅在为空时设置）
   const updateData: any = { status };
   if (status === 'LOCKED_DOWN') {
     updateData.lockdownDate = new Date();
@@ -1160,42 +1172,47 @@ export async function updateTrainScheduleStatus(
     updateData.releaseDate = new Date();
   }
 
-  // 使用事务：班次状态变更时，同步更新关联需求状态
-  await prisma.$transaction(async (tx) => {
-    // 更新班次状态
-    await tx.trainSchedule.update({
-      where: { id: scheduleId },
-      data: updateData,
+  const performUpdate = async (): Promise<TrainScheduleDetailResponse> => {
+    await prisma.$transaction(async (tx) => {
+      await tx.trainSchedule.update({
+        where: { id: scheduleId },
+        data: updateData,
+      });
+
+      if (status === 'LOCKED_DOWN') {
+        await tx.requirement.updateMany({
+          where: {
+            scheduleId,
+            status: 'ONBOARDED',
+          },
+          data: {
+            subStatus: 'FROZEN',
+          },
+        });
+      }
+
+      if (status === 'RELEASED') {
+        await tx.requirement.updateMany({
+          where: {
+            scheduleId,
+            status: 'ONBOARDED',
+          },
+          data: {
+            status: 'RELEASED',
+          },
+        });
+      }
     });
 
-    // 如果是封板操作，同步更新已纳版需求的子状态为 FROZEN
-    if (status === 'LOCKED_DOWN') {
-      await tx.requirement.updateMany({
-        where: {
-          scheduleId,
-          status: 'ONBOARDED',
-        },
-        data: {
-          subStatus: 'FROZEN',
-        },
-      });
-    }
+    return getTrainScheduleById(scheduleId) as Promise<TrainScheduleDetailResponse>;
+  };
 
-    // 如果是投产操作，同步更新已纳版需求的状态为 RELEASED
-    if (status === 'RELEASED') {
-      await tx.requirement.updateMany({
-        where: {
-          scheduleId,
-          status: 'ONBOARDED',
-        },
-        data: {
-          status: 'RELEASED',
-        },
-      });
-    }
-  });
+  if (idempotencyKey) {
+    const idempotencyKeyFull = `updateScheduleStatus:${scheduleId}:${idempotencyKey}`;
+    return executeIdempotent(idempotencyKeyFull, performUpdate);
+  }
 
-  return getTrainScheduleById(scheduleId) as Promise<TrainScheduleDetailResponse>;
+  return performUpdate();
 }
 
 export async function cancelTrainSchedule(scheduleId: string): Promise<void> {

@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Mock } from 'vitest';
 import { listAllSchedules, listTrainSchedules, updateTrainScheduleStatus } from './train.service.js';
 import { prisma } from '../../../prisma/index.js';
+import { clearIdempotencyStore } from '../../../common/idempotency/index.js';
 
 vi.mock('../../../prisma/index.js', () => ({
   prisma: {
@@ -24,6 +25,10 @@ vi.mock('../../../prisma/index.js', () => ({
 describe('train.service 业务逻辑', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    clearIdempotencyStore();
   });
 
   describe('listAllSchedules', () => {
@@ -96,6 +101,54 @@ describe('train.service 业务逻辑', () => {
 
       expect(result.pagination.page).toBe(1);
       expect(result.pagination.pageSize).toBe(20);
+    });
+
+    it('pageSize=0 时使用默认值20', async () => {
+      const mockSchedules: never[] = [];
+
+      (prisma.trainSchedule.count as Mock).mockResolvedValue(0);
+      (prisma.trainSchedule.findMany as Mock).mockResolvedValue(mockSchedules);
+
+      const result = await listAllSchedules({ page: 1, pageSize: 0 });
+
+      expect(result.pagination.page).toBe(1);
+      expect(result.pagination.pageSize).toBe(20);
+    });
+
+    it('page 为负数时使用默认值1', async () => {
+      const mockSchedules: never[] = [];
+
+      (prisma.trainSchedule.count as Mock).mockResolvedValue(0);
+      (prisma.trainSchedule.findMany as Mock).mockResolvedValue(mockSchedules);
+
+      const result = await listAllSchedules({ page: -1, pageSize: 20 });
+
+      expect(result.pagination.page).toBe(1);
+      expect(result.pagination.pageSize).toBe(20);
+    });
+
+    it('pageSize 为负数时使用默认值20', async () => {
+      const mockSchedules: never[] = [];
+
+      (prisma.trainSchedule.count as Mock).mockResolvedValue(0);
+      (prisma.trainSchedule.findMany as Mock).mockResolvedValue(mockSchedules);
+
+      const result = await listAllSchedules({ page: 1, pageSize: -10 });
+
+      expect(result.pagination.page).toBe(1);
+      expect(result.pagination.pageSize).toBe(20);
+    });
+
+    it('pageSize 超过最大值限制时截断', async () => {
+      const mockSchedules: never[] = [];
+
+      (prisma.trainSchedule.count as Mock).mockResolvedValue(0);
+      (prisma.trainSchedule.findMany as Mock).mockResolvedValue(mockSchedules);
+
+      const result = await listAllSchedules({ page: 1, pageSize: 1000 });
+
+      expect(result.pagination.page).toBe(1);
+      expect(result.pagination.pageSize).toBe(100);
     });
 
     it('空结果集', async () => {
@@ -205,6 +258,14 @@ describe('train.service 业务逻辑', () => {
       expect(result.list.length).toBe(1);
       expect(result.list[0].trainName).toBe('火车1');
       expect(result.list[0].totalCapacity).toBe(100);
+      // 验证只返回该火车的班次
+      expect(prisma.trainSchedule.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: { trainId: 'train-1' },
+      }));
+      // 验证返回的所有班次都属于该火车
+      result.list.forEach(schedule => {
+        expect(schedule.trainId).toBe('train-1');
+      });
     });
 
     it('火车不存在时抛出错误', async () => {
@@ -316,6 +377,80 @@ describe('train.service 业务逻辑', () => {
       (prisma.trainSchedule.findUnique as Mock).mockResolvedValue(null);
 
       await expect(updateTrainScheduleStatus('invalid-schedule-id', 'IN_PROGRESS')).rejects.toThrow();
+    });
+
+    it('LOCKED_DOWN 时同步更新需求 subStatus 为 FROZEN（事务副作用验证）', async () => {
+      (prisma.trainSchedule.findUnique as Mock).mockResolvedValue({
+        ...mockScheduleFull,
+        status: 'IN_PROGRESS',
+      });
+      (prisma.$transaction as Mock).mockImplementation(async (callback) => {
+        await callback({
+          trainSchedule: { update: vi.fn() },
+          requirement: { updateMany: vi.fn() },
+        } as any);
+      });
+
+      await updateTrainScheduleStatus('schedule-1', 'LOCKED_DOWN');
+
+      expect(prisma.$transaction).toHaveBeenCalled();
+    });
+
+    it('RELEASED 时同步更新需求状态为 RELEASED（事务副作用验证）', async () => {
+      (prisma.trainSchedule.findUnique as Mock).mockResolvedValue({
+        ...mockScheduleFull,
+        status: 'LOCKED_DOWN',
+      });
+      (prisma.$transaction as Mock).mockImplementation(async (callback) => {
+        await callback({
+          trainSchedule: { update: vi.fn() },
+          requirement: { updateMany: vi.fn() },
+        } as any);
+      });
+
+      await updateTrainScheduleStatus('schedule-1', 'RELEASED');
+
+      expect(prisma.$transaction).toHaveBeenCalled();
+    });
+
+    it('事务失败时自动回滚', async () => {
+      (prisma.trainSchedule.findUnique as Mock).mockResolvedValue({
+        ...mockScheduleFull,
+        status: 'IN_PROGRESS',
+      });
+      (prisma.$transaction as Mock).mockRejectedValue(new Error('Transaction failed'));
+
+      await expect(updateTrainScheduleStatus('schedule-1', 'LOCKED_DOWN')).rejects.toThrow('Transaction failed');
+
+      expect(prisma.$transaction).toHaveBeenCalled();
+    });
+
+    it('使用相同幂等键重复请求只执行一次', async () => {
+      (prisma.trainSchedule.findUnique as Mock).mockResolvedValue({
+        ...mockScheduleFull,
+        status: 'PLANNING',
+      });
+      (prisma.$transaction as Mock).mockResolvedValue(undefined);
+
+      const idempotencyKey = 'test-idempotency-key';
+
+      await updateTrainScheduleStatus('schedule-1', 'IN_PROGRESS', idempotencyKey);
+      await updateTrainScheduleStatus('schedule-1', 'IN_PROGRESS', idempotencyKey);
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('使用不同幂等键可执行多次', async () => {
+      (prisma.trainSchedule.findUnique as Mock).mockResolvedValue({
+        ...mockScheduleFull,
+        status: 'PLANNING',
+      });
+      (prisma.$transaction as Mock).mockResolvedValue(undefined);
+
+      await updateTrainScheduleStatus('schedule-1', 'IN_PROGRESS', 'key-1');
+      await updateTrainScheduleStatus('schedule-1', 'IN_PROGRESS', 'key-2');
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(2);
     });
   });
 });
