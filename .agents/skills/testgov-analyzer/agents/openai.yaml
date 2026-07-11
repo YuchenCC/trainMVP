@@ -1,4 +1,0 @@
-interface:
-  display_name: "TestGov 覆盖分析"
-  short_description: "基于 specs 分析需求、案例、代码和测试资产覆盖缺口"
-  default_prompt: "请使用 testgov-analyzer 分析本次需求覆盖情况"

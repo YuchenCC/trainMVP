@@ -1,4 +1,0 @@
-interface:
-  display_name: "TestGov UI 流程"
-  short_description: "治理 L3 UI 自动化路径覆盖和人工替代建议"
-  default_prompt: "请使用 testgov-ui-flow 分析 UI 自动化覆盖"
