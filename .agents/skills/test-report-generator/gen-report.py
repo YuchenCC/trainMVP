@@ -107,12 +107,13 @@ def get_changed_files(repo_root: str, current_branch: str, base_branch: str = 'm
             capture_output=True, text=True, cwd=repo_root
         ).strip()
         files = [f.strip() for f in diff_output.split('\n') if f.strip()]
-        # 过滤出源代码文件（排除测试文件）
+        # 保留前后端及其他应用源代码，排除测试资产；不能只统计后端。
         src_files = [
             f for f in files
-            if f.startswith('release-train/apps/server/src/')
-            and f.endswith('.ts')
+            if '/src/' in f
+            and f.endswith(('.ts', '.tsx', '.js', '.jsx', '.java', '.kt'))
             and '.test.' not in f
+            and '.spec.' not in f
         ]
         return src_files, merged_base[:8]
     except Exception:
@@ -139,12 +140,13 @@ def parse_unit_test_governance(report_path: str) -> Optional[Dict]:
         'gate_summary': [],
         'l1_coverage_status': [],
         'need_supplement': [],
-        'final_decision': '未知'
+        'final_decision': '未知',
+        'report_stage': '未知'
     }
     
-    # 提取单测门禁摘要
-    # 格式：| 门禁项 | 当前值 | 达标要求 | 状态 |
-    gate_pattern = re.compile(r'\| (.+) \| (.+) \| (.+) \| (.+) \|')
+    # 兼容旧四列表格和当前治理模板的两列表格。
+    gate_pattern = re.compile(r'^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*$')
+    summary_pattern = re.compile(r'^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*$')
     in_gate_section = False
     for line in content.split('\n'):
         if '## 1. 单测门禁摘要' in line or '## 单测门禁摘要' in line:
@@ -154,16 +156,31 @@ def parse_unit_test_governance(report_path: str) -> Optional[Dict]:
             in_gate_section = False
         if in_gate_section and line.startswith('|'):
             match = gate_pattern.match(line)
-            if match and '门禁项' not in line:
+            if match and '门禁项' not in line and '项目' not in line:
                 result['gate_summary'].append({
                     'item': match.group(1),
                     'current': match.group(2),
                     'required': match.group(3),
                     'status': match.group(4)
                 })
+                continue
+            summary_match = summary_pattern.match(line)
+            if summary_match and summary_match.group(1).strip() == '报告阶段':
+                result['report_stage'] = summary_match.group(2).strip()
+                continue
+            if summary_match and summary_match.group(1) in ('单测通过率', '增量覆盖率', '覆盖率门禁', '最终结论'):
+                item = summary_match.group(1).strip()
+                current = summary_match.group(2).strip()
+                required = {'单测通过率': '100%', '增量覆盖率': '>80%'}.get(item, '-')
+                result['gate_summary'].append({
+                    'item': item,
+                    'current': current,
+                    'required': required,
+                    'status': '待复核'
+                })
     
     # 提取最终决策
-    decision_match = re.search(r'最终决策[：:\s]*\|?\s*([^|\n]+)', content)
+    decision_match = re.search(r'(?:最终决策|决策|最终结论)[：:\s]*\|?\s*([^|\n]+)', content)
     if decision_match:
         result['final_decision'] = decision_match.group(1).strip()
     
@@ -229,6 +246,7 @@ def parse_test_strategy(report_path: str) -> Optional[Dict]:
     
     result = {
         'title': '',
+        'l1_cases': [],
         'l2_apis': [],
         'l3_journeys': [],
         'm_manual': [],
@@ -239,6 +257,28 @@ def parse_test_strategy(report_path: str) -> Optional[Dict]:
     title_match = re.search(r'^#\s*(.+)$', content, re.MULTILINE)
     if title_match:
         result['title'] = title_match.group(1)
+
+    # 解析 planner 当前主报告第 3 节案例矩阵，避免依赖旧的 L2/L3 独立章节。
+    in_case_matrix = False
+    for line in content.split('\n'):
+        if '## 3. 测试案例分层策略与需求-案例覆盖矩阵' in line:
+            in_case_matrix = True
+            continue
+        if in_case_matrix and line.startswith('##'):
+            in_case_matrix = False
+        if in_case_matrix and line.startswith('|'):
+            cells = [cell.strip() for cell in line.strip().strip('|').split('|')]
+            if len(cells) >= 8 and '测试案例' not in cells[1] and '---' not in cells[0]:
+                level = cells[3]
+                case = {'case': cells[1], 'goal': cells[2], 'level': level, 'coverage': cells[6]}
+                if 'L1 后端单测' in level:
+                    result['l1_cases'].append(case)
+                if 'L2' in level:
+                    result['l2_apis'].append({'path': cells[1], 'method': level, 'test_file': '', 'coverage': cells[6]})
+                if 'L3' in level:
+                    result['l3_journeys'].append({'name': cells[1], 'test_file': '', 'status': cells[6], 'evidence': cells[4]})
+                if 'M' in level:
+                    result['m_manual'].append({'item': cells[1], 'evidence_file': '', 'result': cells[6]})
     
     # 提取 L2 API 测试范围
     # 格式：| API 路径 | 测试方式 | 测试文件 | 覆盖逻辑 |
@@ -307,7 +347,7 @@ def parse_test_strategy(report_path: str) -> Optional[Dict]:
     return result
 
 
-def find_l2_api_tests(project_root: str) -> List[str]:
+def find_l2_api_tests(project_root: str, configured_patterns: Optional[List[str]] = None) -> List[str]:
     """
     检索 L2 API 测试文件
     
@@ -317,11 +357,8 @@ def find_l2_api_tests(project_root: str) -> List[str]:
     Returns:
         List[str]: API 测试文件路径列表
     """
-    patterns = [
-        '**/*.api.test.ts',
-        '**/*.api.spec.ts',
-        '**/api/**/*.test.ts',
-        '**/__tests__/api*.ts'
+    patterns = configured_patterns or [
+        '**/*.api.test.ts', '**/*.api.spec.ts', '**/api/**/*.test.ts', '**/__tests__/api*.ts'
     ]
     
     test_files = []
@@ -332,7 +369,7 @@ def find_l2_api_tests(project_root: str) -> List[str]:
     return list(set(test_files))
 
 
-def find_l3_ui_tests(project_root: str) -> Tuple[List[str], Optional[str]]:
+def find_l3_ui_tests(project_root: str, configured_patterns: Optional[List[str]] = None, result_dir: Optional[str] = None) -> Tuple[List[str], Optional[str]]:
     """
     检索 L3 UI 测试文件和 playwright 报告
     
@@ -342,10 +379,7 @@ def find_l3_ui_tests(project_root: str) -> Tuple[List[str], Optional[str]]:
     Returns:
         Tuple[List[str], Optional[str]]: (UI测试文件列表, playwright报告路径)
     """
-    patterns = [
-        '**/*.e2e.test.ts',
-        '**/*.e2e.spec.ts'
-    ]
+    patterns = configured_patterns or ['**/*.e2e.test.ts', '**/*.e2e.spec.ts']
     
     test_files = []
     for pattern in patterns:
@@ -353,9 +387,13 @@ def find_l3_ui_tests(project_root: str) -> Tuple[List[str], Optional[str]]:
         test_files.extend(files)
     
     playwright_report = None
-    report_path = os.path.join(project_root, 'playwright-report', 'index.html')
-    if os.path.exists(report_path):
-        playwright_report = report_path
+    report_candidates = [os.path.join(project_root, 'playwright-report', 'index.html')]
+    if result_dir:
+        report_candidates.append(os.path.join(project_root, result_dir, 'playwright-report', 'index.html'))
+    for report_path in report_candidates:
+        if os.path.exists(report_path):
+            playwright_report = report_path
+            break
     
     return list(set(test_files)), playwright_report
 
@@ -377,7 +415,8 @@ def find_manual_evidence(scope: str, project_root: str, evidence_base_dir: str =
     result = {
         'summary': None,
         'screenshots': [],
-        'logs': []
+        'logs': [],
+        'status': '待复核'
     }
     
     if not os.path.exists(evidence_dir):
@@ -387,6 +426,15 @@ def find_manual_evidence(scope: str, project_root: str, evidence_base_dir: str =
     summary_files = glob.glob(os.path.join(evidence_dir, '**', 'summary.md'), recursive=True)
     if summary_files:
         result['summary'] = summary_files[0]
+        try:
+            with open(summary_files[0], 'r', encoding='utf-8') as summary_file:
+                summary = summary_file.read()
+            if re.search(r'(?:结论|验证结果|状态)\s*[：:]\s*(?:通过|已通过)', summary):
+                result['status'] = '已通过'
+            elif re.search(r'(?:结论|验证结果|状态)\s*[：:]\s*(?:不通过|失败|阻塞)', summary):
+                result['status'] = '未通过'
+        except OSError:
+            result['status'] = '待复核'
     
     # 检索截图
     screenshot_files = glob.glob(os.path.join(evidence_dir, '**', '*.png'), recursive=True)
@@ -434,7 +482,7 @@ def generate_report(
     date_str = now.strftime('%Y%m%d')
     time_str = now.strftime('%Y-%m-%d %H:%M:%S')
     
-    report = f"""# ST-{scope}-自测报告_v1.0_{date_str}.md
+    report = f"""# ST-{scope}-自测报告_{date_str}
 
 ## 基本信息
 
@@ -457,7 +505,7 @@ def generate_report(
 | 层级 | 工具 | 覆盖范围 | 目标 |
 |------|------|---------|------|
 | **L1 单元测试** | Vitest | service.ts 纯函数、校验逻辑 | 增量覆盖率 >80%，通过率 100% |
-| **L2 接口自动化** | Vitest + Supertest | API 契约、鉴权、参数、状态流转 | API 自动化覆盖率 ≥90% |
+| **L2 接口自动化** | Vitest + Supertest | API 契约、鉴权、参数、状态流转 | 按策略和真实执行结果判定 |
 | **L3 UI 自动化** | Playwright | 关键用户旅程、UI 交互 | 覆盖核心用户旅程 |
 | **M 人工验证** | SIT 环境 + 截图 | 低频 UI、截图确认 | 保留可审计证据 |
 
@@ -469,10 +517,10 @@ def generate_report(
 
 """
     
-    # L1 单元测试门禁结论（直接引用 unit-test-governance）
+    # L1 单元测试门禁结论（直接引用最终版 unit-test-governance）
     if unit_gov:
         report += """## L1 单元测试门禁结论
-（直接引用 unit-test-governance 报告）
+（直接引用最终版 unit-test-governance 报告）
 
 | 门禁项 | 当前值 | 达标要求 | 状态 |
 |--------|--------|----------|------|
@@ -480,7 +528,9 @@ def generate_report(
         for gate in unit_gov['gate_summary']:
             report += f"| {gate['item']} | {gate['current']} | {gate['required']} | {gate['status']} |\n"
         
-        report += f"| 最终决策 | {unit_gov['final_decision']} | - | {unit_gov['final_decision'].startswith('✅') if unit_gov['final_decision'] != '未知' else '⚠️'} |\n"
+        decision = unit_gov['final_decision']
+        decision_status = '✅' if decision in ('通过', '✅ 通过') and unit_gov.get('report_stage') == '最终版' else '⚠️'
+        report += f"| 最终决策 | {decision} | - | {decision_status} |\n"
         
         # 需补充单测清单
         if unit_gov['need_supplement']:
@@ -510,7 +560,7 @@ def generate_report(
         report += "|----------|----------|----------|----------|\n"
         for test_file in l2_tests:
             short_path = test_file.split('/src/')[-1] if '/src/' in test_file else test_file
-            report += f"| 待分析 | {short_path} | ✅ 存在 | 待执行分析 |\n"
+            report += f"| 待分析 | {short_path} | ⚠️ 已发现文件，未取得执行结果 | 待复核 |\n"
     elif test_strategy and test_strategy['l2_apis']:
         report += "| API 路径 | 测试文件 | 测试状态 | 覆盖逻辑 |\n"
         report += "|----------|----------|----------|----------|\n"
@@ -528,9 +578,9 @@ def generate_report(
         report += "|---------|----------|----------|----------|\n"
         for test_file in l3_tests:
             short_path = test_file.split('/src/')[-1] if '/src/' in test_file else test_file
-            report += f"| 待分析 | {short_path} | ✅ 存在 | 待执行 |\n"
+            report += f"| 待分析 | {short_path} | ⚠️ 已发现文件，未取得执行结果 | 待复核 |\n"
         if playwright_report:
-            report += f"| Playwright 报告 | {playwright_report.split('/')[-2]} | ✅ 已生成 | playwright-report/ |\n"
+            report += f"| Playwright 报告 | {playwright_report.split('/')[-2]} | ⚠️ 已发现报告，未取得执行结论 | 待复核 |\n"
     elif test_strategy and test_strategy['l3_journeys']:
         report += "| Journey | 测试文件 | 测试状态 | 截图证据 |\n"
         report += "|---------|----------|----------|----------|\n"
@@ -547,7 +597,7 @@ def generate_report(
         report += "| 验证项 | 证据文件 | 验证结果 |\n"
         report += "|--------|----------|----------|\n"
         if manual_evidence['summary']:
-            report += f"| 人工验证摘要 | summary.md | ✅ 已记录 |\n"
+            report += f"| 人工验证摘要 | summary.md | {manual_evidence['status']} |\n"
         if manual_evidence['screenshots']:
             for screenshot in manual_evidence['screenshots']:
                 # 从任意 evidence_base_dir 中提取相对路径
@@ -557,7 +607,7 @@ def generate_report(
                     short_path = '/'.join(parts[idx+1:])
                 else:
                     short_path = os.path.basename(screenshot)
-                report += f"| 截图证据 | {short_path} | ✅ 已截图 |\n"
+                report += f"| 截图证据 | {short_path} | 已提供证据，结论待复核 |\n"
         if manual_evidence['logs']:
             for log in manual_evidence['logs']:
                 parts = log.split('/')
@@ -566,7 +616,7 @@ def generate_report(
                     short_path = '/'.join(parts[idx+1:])
                 else:
                     short_path = os.path.basename(log)
-                report += f"| 日志证据 | {short_path} | ✅ 已记录 |\n"
+                report += f"| 日志证据 | {short_path} | 已提供证据，结论待复核 |\n"
     elif test_strategy and test_strategy['m_manual']:
         report += "| 验证项 | 证据文件 | 验证结果 |\n"
         report += "|--------|----------|----------|\n"
@@ -615,10 +665,12 @@ def generate_report(
     report += "| 项目 | 状态 |\n"
     report += "|------|------|\n"
     
-    l1_status = '✅ 通过' if unit_gov and unit_gov['final_decision'].startswith('✅') else '⚠️ 未通过/阻塞'
-    l2_status = '✅ 已覆盖' if l2_tests else '⚠️ 部分覆盖/缺失'
-    l3_status = '✅ 已覆盖' if l3_tests or playwright_report else '⚠️ 部分覆盖/缺失'
-    m_status = '✅ 已完成' if manual_evidence['summary'] else '⚠️ 部分完成/未执行'
+    l1_passed = bool(unit_gov and unit_gov.get('report_stage') == '最终版' and unit_gov.get('final_decision') in ('通过', '✅ 通过'))
+    l1_pending = bool(unit_gov and unit_gov.get('report_stage') != '最终版')
+    l1_status = '✅ 通过' if l1_passed else ('⚠️ 待复核' if l1_pending else '⚠️ 未通过/阻塞')
+    l2_status = '⚠️ 待复核' if l2_tests else '⚠️ 缺失'
+    l3_status = '⚠️ 待复核' if l3_tests or playwright_report else '⚠️ 缺失'
+    m_status = '✅ 已完成' if manual_evidence['status'] == '已通过' else ('⚠️ 未通过' if manual_evidence['status'] == '未通过' else '⚠️ 待复核')
     
     report += f"| L1 单测门禁 | {l1_status} |\n"
     report += f"| L2 API 自动化 | {l2_status} |\n"
@@ -626,7 +678,13 @@ def generate_report(
     report += f"| M 人工验证 | {m_status} |\n"
     
     # 整体交付建议
-    if l1_status.startswith('✅') and l2_status.startswith('✅'):
+    has_l2_strategy = bool(test_strategy and test_strategy['l2_apis'])
+    has_l3_strategy = bool(test_strategy and test_strategy['l3_journeys'])
+    has_m_strategy = bool(test_strategy and test_strategy['m_manual'])
+    optional_layers_clear = ((not has_l2_strategy or l2_status.startswith('✅')) and
+                             (not has_l3_strategy or l3_status.startswith('✅')) and
+                             (not has_m_strategy or m_status.startswith('✅')))
+    if l1_status.startswith('✅') and optional_layers_clear:
         delivery = '可提测'
     elif l1_status.startswith('⚠️'):
         delivery = '不建议提测'
@@ -636,6 +694,60 @@ def generate_report(
     report += f"| 整体交付建议 | {delivery} |\n"
     
     return report
+
+
+def select_latest_report(paths: List[str]) -> Optional[str]:
+    """按版本、日期和文件修改时间选择最新报告，避免随机取第一个文件。"""
+    if not paths:
+        return None
+
+    def key(path: str) -> Tuple[float, str, float]:
+        name = os.path.basename(path)
+        version_match = re.search(r'_v(\d+(?:\.\d+)?)_', name)
+        date_match = re.search(r'_(\d{8})\.md$', name)
+        version = float(version_match.group(1)) if version_match else 0.0
+        date = date_match.group(1) if date_match else ''
+        return version, date, os.path.getmtime(path)
+
+    return max(paths, key=key)
+
+
+def next_report_path(output_dir: str, scope: str, date_str: str) -> str:
+    """生成不覆盖旧文件的递增版本路径。"""
+    pattern = os.path.join(output_dir, f'ST-{scope}-自测报告_v*_{date_str}.md')
+    versions = []
+    for path in glob.glob(pattern):
+        match = re.search(r'_v(\d+(?:\.\d+)?)_', os.path.basename(path))
+        if match:
+            versions.append(float(match.group(1)))
+    next_version = (max(versions) + 0.1) if versions else 1.0
+    return os.path.join(output_dir, f'ST-{scope}-自测报告_v{next_version:.1f}_{date_str}.md')
+
+
+def validate_generated_report(path: str) -> List[str]:
+    """验证报告已落盘且包含固定输出结构。"""
+    errors = []
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        return ['报告文件不存在或为空']
+    try:
+        with open(path, 'r', encoding='utf-8') as report_file:
+            content = report_file.read()
+    except (OSError, UnicodeError) as exc:
+        return [f'报告读取失败: {exc}']
+
+    required_sections = [
+        '## 基本信息', '## 测试策略概览', '## L1 单元测试门禁结论',
+        '## L2 接口自动化覆盖分析', '## L3 UI 自动化覆盖分析',
+        '## M 人工验证证据汇总', '## 测试结果明细',
+        '## 自测检查点覆盖摘要（双报告整合）', '## 执行概要', '## 结论'
+    ]
+    for section in required_sections:
+        if section not in content:
+            errors.append(f'缺少章节: {section}')
+    for header in ('| 门禁项 | 当前值 | 达标要求 | 状态 |', '| 测试案例编号 | 测试方式 | 测试文件 | 执行结果 | 覆盖状态 |'):
+        if header not in content:
+            errors.append(f'缺少关键表头: {header}')
+    return errors
 
 
 def main():
@@ -671,17 +783,21 @@ def main():
     
     # 检索测试策略报告
     strategy_files = glob.glob(test_strategy_pattern)
-    if strategy_files:
-        test_strategy_path = strategy_files[0]
+    test_strategy_path = select_latest_report(strategy_files)
     
     # 检索单测治理报告
     gov_files = glob.glob(unit_gov_pattern)
-    if gov_files:
-        unit_gov_path = gov_files[0]
+    unit_gov_path = select_latest_report(gov_files)
     
     # 检索 L2/L3 测试文件
-    l2_tests = find_l2_api_tests(repo_root)
-    l3_tests, playwright_report = find_l3_ui_tests(repo_root)
+    backend_config = paths.get('backend', {})
+    frontend_config = paths.get('frontend', {})
+    l2_tests = find_l2_api_tests(repo_root, backend_config.get('api_tests'))
+    l3_tests, playwright_report = find_l3_ui_tests(
+        repo_root,
+        frontend_config.get('ui_tests'),
+        frontend_config.get('test_results')
+    )
     
     # 检索人工验证证据
     manual_evidence = find_manual_evidence(scope, repo_root, evidence_dir)
@@ -726,12 +842,18 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
     
     date_str = datetime.now().strftime('%Y%m%d')
-    output_path = os.path.join(output_dir, f"ST-{scope}-自测报告_v1.0_{date_str}.md")
+    output_path = next_report_path(output_dir, scope, date_str)
     
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(report)
     
-    print(f"\n报告已生成: {output_path}")
+    validation_errors = validate_generated_report(output_path)
+    if validation_errors:
+        print(f"\n报告已生成但输出自检失败: {output_path}")
+        for error in validation_errors:
+            print(f"- {error}")
+        sys.exit(2)
+    print(f"\n报告已生成并通过输出自检: {output_path}")
 
 
 if __name__ == '__main__':

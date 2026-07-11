@@ -1,4 +1,4 @@
 interface:
   display_name: "Unit Test Governance"
   short_description: "Enforce unit-test gates for changed code."
-  default_prompt: "Check whether this change meets unit-test governance: incremental coverage at least 80%, pass rate 100%, and documented risk for uncovered logic."
+  default_prompt: "Check unit-test governance for changed code, identify missing L1 tests, and ask whether to auto-generate confirmed unit-test additions."
