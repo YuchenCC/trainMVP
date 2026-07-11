@@ -69,5 +69,7 @@ pg16/
 # ========== 大型文件（不提交到仓库） ==========
 *.pptx
 *.ppt
-release-train/apps/web/test-results/.last-run.json
+
+# ========== 测试临时文件 ==========
+release-train/apps/web/test-results/
 release-train/apps/server/dev.db

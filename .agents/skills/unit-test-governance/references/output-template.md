@@ -23,7 +23,7 @@
 
 ## 3. L1 策略案例覆盖检查
 
-从 `reports/test-strategy/requirement-{scope}-测试策略与覆盖分析.md` 的「3.1 L1 后端单测」章节提取推荐的单测案例，检查每个案例是否已被现有单测覆盖。
+从 `{paths.governance.test_strategy}/ST-{scope}-测试策略_v{version}_{date}.md`（路径和命名从配置读取）的「3.1 L1 后端单测」章节提取推荐的单测案例，检查每个案例是否已被现有单测覆盖。
 
 | 覆盖重点 | 策略建议 | 现有覆盖 | 缺口 | 检查结论 |
 |---|---|---|---|---|
@@ -114,4 +114,4 @@
 
 ## Markdown 报告文件
 
-文件名规则：提交范围使用 `commit-{短hash}-unit-test-governance.md`；分支范围使用 `branch-{分支名}-unit-test-governance.md`；需求或任务范围使用 `requirement-{需求编号或名称}-unit-test-governance.md`。将 `/` 和空格替换为 `-`。生成的 Markdown 文件必须使用中文，并包含以上完整模板和下游报告提示。
+文件名规则（统一格式 `ST-{scope}-单测治理_v{version}_{date}.md`）：提交范围使用 `ST-{短hash}-单测治理_v{version}_{date}.md`；分支范围使用 `ST-{分支名}-单测治理_v{version}_{date}.md`；需求或任务范围使用 `ST-{需求编号或名称}-单测治理_v{version}_{date}.md`。将 `/` 和空格替换为 `-`。生成的 Markdown 文件必须使用中文，并包含以上完整模板和下游报告提示。
