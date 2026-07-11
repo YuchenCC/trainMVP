@@ -1,4 +1,0 @@
-interface:
-  display_name: "TestGov 规划"
-  short_description: "提测前检查多角色输入清单并生成统一 specs"
-  default_prompt: "请使用 testgov-planner 为本次提测生成 specs"

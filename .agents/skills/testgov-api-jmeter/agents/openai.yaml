@@ -1,4 +1,0 @@
-interface:
-  display_name: "TestGov API/JMeter"
-  short_description: "治理 L2 API/JMeter 自动化覆盖范围和执行证据"
-  default_prompt: "请使用 testgov-api-jmeter 分析 API 自动化覆盖"
