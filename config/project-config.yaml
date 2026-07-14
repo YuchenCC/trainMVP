@@ -1,6 +1,5 @@
 project:
   name: 版本火车需求管理系统
-  scope: T2-US2.3
 
 tech_stack:
   backend: nodejs-typescript
