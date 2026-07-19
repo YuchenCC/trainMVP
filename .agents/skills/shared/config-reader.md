@@ -111,14 +111,14 @@ paths:
     requirements: 03-需求与设计
     test_cases: 03-需求与设计/**/测试案例
 
+  governance:
+    reports: reports
+    evidence: evidence
+    test_strategy: reports/test-strategy
+    unit_test_governance: reports/unit-test-governance
+    test_report: reports/test-report
+
 patterns:
   test_case_files: "**/*测试案例*.md"
   design_docs: "**/*详细设计*.md"
-
-governance:
-  reports: reports
-  evidence: evidence
-  test_strategy: reports/test-strategy
-  unit_test_governance: reports/unit-test-governance
-  test_report: reports/test-report
 ```
