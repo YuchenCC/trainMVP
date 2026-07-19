@@ -270,15 +270,34 @@ def parse_test_strategy(report_path: str) -> Optional[Dict]:
             cells = [cell.strip() for cell in line.strip().strip('|').split('|')]
             if len(cells) >= 8 and '测试案例' not in cells[1] and '---' not in cells[0]:
                 level = cells[3]
-                case = {'case': cells[1], 'goal': cells[2], 'level': level, 'coverage': cells[6]}
+                # planner 的第 3 节只提供策略与执行准备，不能把优先级或待办当作执行覆盖证据。
+                case = {
+                    'case': cells[1],
+                    'goal': cells[2],
+                    'level': level,
+                    'execution_preparation': cells[5]
+                }
                 if 'L1 后端单测' in level:
                     result['l1_cases'].append(case)
                 if 'L2' in level:
-                    result['l2_apis'].append({'path': cells[1], 'method': level, 'test_file': '', 'coverage': cells[6]})
+                    result['l2_apis'].append({
+                        'path': cells[1],
+                        'method': level,
+                        'test_file': '',
+                        'execution_preparation': cells[5]
+                    })
                 if 'L3' in level:
-                    result['l3_journeys'].append({'name': cells[1], 'test_file': '', 'status': cells[6], 'evidence': cells[4]})
+                    result['l3_journeys'].append({
+                        'name': cells[1],
+                        'test_file': '',
+                        'execution_preparation': cells[5]
+                    })
                 if 'M' in level:
-                    result['m_manual'].append({'item': cells[1], 'evidence_file': '', 'result': cells[6]})
+                    result['m_manual'].append({
+                        'item': cells[1],
+                        'evidence_file': '',
+                        'execution_preparation': cells[5]
+                    })
     
     # 提取 L2 API 测试范围
     # 格式：| API 路径 | 测试方式 | 测试文件 | 覆盖逻辑 |
@@ -565,7 +584,7 @@ def generate_report(
         report += "| API 路径 | 测试文件 | 测试状态 | 覆盖逻辑 |\n"
         report += "|----------|----------|----------|----------|\n"
         for api in test_strategy['l2_apis']:
-            report += f"| `{api['path']}` | {api['test_file']} | {api['coverage']} | 策略要求 |\n"
+            report += f"| `{api['path']}` | {api['test_file']} | ⚠️ 仅有测试策略，未取得执行证据 | {api['execution_preparation']} |\n"
     else:
         report += "⚠️ 未找到 L2 API 测试文件。\n"
     
@@ -585,7 +604,7 @@ def generate_report(
         report += "| Journey | 测试文件 | 测试状态 | 截图证据 |\n"
         report += "|---------|----------|----------|----------|\n"
         for journey in test_strategy['l3_journeys']:
-            report += f"| {journey['name']} | {journey['test_file']} | {journey['status']} | {journey['evidence']} |\n"
+            report += f"| {journey['name']} | {journey['test_file']} | ⚠️ 仅有测试策略，未取得执行证据 | {journey['execution_preparation']} |\n"
     else:
         report += "⚠️ 未找到 L3 UI 测试文件或 Playwright 报告。\n"
     
@@ -621,7 +640,7 @@ def generate_report(
         report += "| 验证项 | 证据文件 | 验证结果 |\n"
         report += "|--------|----------|----------|\n"
         for item in test_strategy['m_manual']:
-            report += f"| {item['item']} | {item['evidence_file']} | {item['result']} |\n"
+            report += f"| {item['item']} | {item['evidence_file']} | ⚠️ 仅有测试策略，未取得执行证据 |\n"
     else:
         report += "⚠️ 未找到人工验证证据目录。\n"
     
@@ -644,11 +663,11 @@ def generate_report(
     # L2/L3/M 检查点（基于测试分析判定）
     if test_strategy:
         for api in test_strategy['l2_apis']:
-            report += f"| API: {api['path']} | L2 | P1 | 待判定 | {api['coverage']} |\n"
+            report += f"| API: {api['path']} | L2 | P1 | 待判定 | 策略待执行：{api['execution_preparation']} |\n"
         for journey in test_strategy['l3_journeys']:
-            report += f"| UI: {journey['name']} | L3 | P1 | {journey['status']} | {journey['evidence']} |\n"
+            report += f"| UI: {journey['name']} | L3 | P1 | 待判定 | 策略待执行：{journey['execution_preparation']} |\n"
         for item in test_strategy['m_manual']:
-            report += f"| 人工: {item['item']} | M | P2 | {item['result']} | {item['evidence_file']} |\n"
+            report += f"| 人工: {item['item']} | M | P2 | 待判定 | 策略待执行：{item['execution_preparation']} |\n"
     
     # 执行概要
     report += "\n## 执行概要\n\n"

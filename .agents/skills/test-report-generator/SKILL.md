@@ -122,6 +122,7 @@ cd release-train/apps/web && pnpm playwright test
 **L2/L3/M 测试（重新分析）**：
 - 从 `{paths.governance.test_strategy}/ST-{scope}-测试策略_v{version}_{date}.md`（路径和命名从配置读取）提取：
   - L2/L3/M 策略和测试案例编号
+- planner 默认只提供策略和执行准备；不得把其表格字段当作 L2/L3/M 的覆盖或执行证据。
 - 检索最新 L2 API 测试文件（路径从配置 `paths.backend.api_tests` 读取），分析执行结果和覆盖状态
 - 检索最新 L3 UI 测试文件（路径从配置 `paths.frontend.ui_tests` 读取）和 playwright-report，分析执行结果和截图证据
 - 检索人工测试证据目录 `{paths.governance.evidence}/{scope}/`（路径从配置读取），读取 summary.md 和截图
